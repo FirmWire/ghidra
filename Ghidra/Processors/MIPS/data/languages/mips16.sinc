@@ -62,9 +62,18 @@ define token m16instr (16)
   m16_tgt_2016=(5,9)
   m16_jal=(10,10)
   m16_code=(5,10)
+  # mips16e2
+  # m16_alyssa_2016=(0,4)
+  # m16_alyssa_0201=(5,5)
+  # m16_alyssa_2622=(6,10)
+  # m16_alyssa_rb=(0,2)
+  # m16_alyssa_2019=(3,4)
+  m16_alyssa_i8_ry=(5,7)
+  m16_alyssa_sel_0507=(5,7)
+  m16_alyssa_sel_0204=(2,4)
 ;
-  
-attach variables [ m16_rx m16_ry m16_rz m16_mv_rz ]
+
+attach variables [ m16_rx m16_ry m16_rz m16_mv_rz m16_alyssa_i8_ry ext_rb ]
                  [ s0 s1 v0 v1 a0 a1 a2 a3 ];
                  
 attach variables [ ext_m16r32 m16_i8_r32 ] [ 
@@ -129,9 +138,13 @@ Rel16_m16: reloc            		is ext_is_ext=0 & m16_b_off [ reloc=inst_start+2+2
 CRel16_m16: reloc            		is ext_is_ext=1 & m16_cb_z=0 & m16_b_imm & ext_value_1005 & ext_value_1511s [ reloc=inst_start+4+2*((ext_value_1511s << 11) | (ext_value_1005 << 5) | m16_b_imm); ] { export *:$(ADDRSIZE) reloc; }                 
 CRel16_m16: reloc            		is ext_is_ext=0 & m16_cb_off [ reloc=inst_start+2+2*m16_cb_off; ]   { export *:$(ADDRSIZE) reloc; }                 
 
+# alyssa notes:
+# 11110 is EXTEND, the first half of mips16
+# so m16_ext_val is the bits in the first instruction word (bits 26-16)
+# the m16_alyssa_XX ones are for bitfield XX, should tidy this up :/
 :^instruction						is ISA_MODE=1 & RELP=1 & m16_op=0b11110 & ext_done=0 & ext_isjal=0 & m16_ext_val; instruction [ext_value=m16_ext_val; ext_is_ext=1; ext_done=1; ] { build instruction; }
 :^instruction						is ISA_MODE=1 & RELP=1 & m16_op=0b00011 & ext_done=0 & ext_isjal=0 & m16_jal & m16_tgt_2016 & m16_tgt_2521; instruction [ext_tgt_2016=m16_tgt_2016; ext_tgt_2521=m16_tgt_2521; ext_tgt_x=m16_jal; ext_isjal=1; ext_done=1; ] { build instruction; }
-                 
+
 EXT_I: val							is m16_i_imm [ val = m16_i_imm << 2; ] { export *[const]:2 val; }
 EXT_IS0: val						is m16_i_imm [ val = m16_i_imm << 0; ] { export *[const]:2 val; }
 EXT_IS1: val						is m16_i_imm [ val = m16_i_imm << 1; ] { export *[const]:2 val; }
@@ -143,11 +156,13 @@ EXT_IS8: val						is ext_is_ext=1 & ext_value_1511s & ext_value_1005 & m16_i8_im
 EXT_IS8: m16_is8_imm				is ext_is_ext=0 & m16_is8_imm { export *[const]:2 m16_is8_imm; }
 EXT_IS8L3: val						is ext_is_ext=0 & ext_value_1511 & ext_value_1005 & m16_is8_imm [val = m16_is8_imm << 3; ] { export *[const]:2 val; }
 
-EXT_IU8: val						is ext_is_ext=1 & ext_value_1511 & ext_value_1005 & m16_i8_imm [val = (ext_value_1511 << 11) | (ext_value_1005 << 5) | m16_i8_imm; ] { export *[const]:2 val; }
+EXT_IU8: val						is ext_is_ext=1 & m16_ri_z=0 & ext_value_1511 & ext_value_1005 & m16_i8_imm [val = (ext_value_1511 << 11) | (ext_value_1005 << 5) | m16_i8_imm; ] { export *[const]:2 val; }
 EXT_IU8: val						is ext_is_ext=0 & m16_iu8_imm [val = m16_iu8_imm << 2; ] { export *[const]:2 val; }
 
-EXT_LIU8: val						is ext_is_ext=1 & m16_ri_z=0 & ext_value_1511 & ext_value_1005 & m16_i8_imm [val = (ext_value_1511 << 11) | (ext_value_1005 << 5) | m16_i8_imm; ] { export *[const]:2 val; }
+EXT_LIU8: val						is ext_is_ext=1 & ext_value_1511 & ext_value_1005 & m16_i8_imm [val = (ext_value_1511 << 11) | (ext_value_1005 << 5) | m16_i8_imm; ] { export *[const]:2 val; }
 EXT_LIU8: m16_iu8_imm				is ext_is_ext=0 & m16_iu8_imm { export *[const]:2 m16_iu8_imm; }
+
+EXT_IMM_SW: val                     is ext_is_ext=1 & ext_value_0805 & m16_i8_imm [val = (ext_value_0805 << 5) | m16_i8_imm; ] { export *[const]:2 val; }
 
 EXT_SHIFT: ext_value_sa40			is ext_is_ext=1 & ext_value_saz=0 & m16_shft_sa=0 & ext_value_sa40 { export *[const]:1 ext_value_sa40;}
 EXT_SHIFT: val						is ext_is_ext=0 & m16_shft_sa=0 				   [val = 8; ] { export *[const]:1 val;}
@@ -392,6 +407,359 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 	sp = sp - zext(tmp);
 }
 
+# MIPS16e2 - alyssa
+# prefixed with 'A_' for now to make it clear they're special/broken
+# TODO:
+#  - check everything
+#  - add constraints to the later instruction definitions to remove conflicts (pass -l to sleigh to find these, but doesn't work for me..?)
+#  - merge with the other ext_ or m16_ fields where useful (careful of the register mapping!!!)
+#  - remove the A_ prefixes and alyssa_ naming
+
+# always true(?): ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1
+# m16_shft_f is lower 2 bits (1..0)
+# m16_shft_sa is 4..2
+# m16_rx is 10..8
+# m16_ry is 7..5
+
+# SWSP instructions
+# Matching: Done
+# Disass formatting: done
+# Functionality: TODO
+
+:A_sb m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=3 & EXT_IS8 & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	*[ram]:1 effectiveAddr = m16_rx:1;
+}
+
+:A_sh m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=2 & EXT_IS8 & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	*[ram]:2 effectiveAddr = m16_rx:2;
+}
+
+:A_sw m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=1 & EXT_IS8 & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	*[ram]:4 effectiveAddr = m16_rx:4;
+}
+
+# & ext_alyssa_2625=0b00 & ext_alyssa_2019=0b00
+:A_sc m16_rx, EXT_IMM_SW(ext_rb)    is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b11010 & m16_alyssa_sel_0507=6 & m16_rx & ext_rb & EXT_IMM_SW {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IMM_SW);
+	*[ram]:4 effectiveAddr = m16_rx:4;
+    # TODO: The docs require atomic handling
+}
+
+# & ext_alyssa_2625=0b00
+:A_swr m16_rx, EXT_IMM_SW(ext_rb)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=7 & ext_alyssa_2019=0b10 & ext_rb & EXT_IMM_SW {
+    # Daniel
+    effectiveAddr:$(ADDRSIZE) = sext(EXT_IMM_SW) + ext_rb;
+    shift:$(ADDRSIZE) = effectiveAddr & 0x3;
+    addr:$(ADDRSIZE) = effectiveAddr - shift;
+@if ENDIAN == "big"
+    valOrig:4 = *[ram]:4 addr & (0xffffffff >> ((shift+1) * 8));
+    valStore:4 = m16_rx:4 << ((3-shift)*8);
+@else
+    valOrig:4 = *[ram]:4 addr & (0xffffffff >> ((4-shift) * 8));
+    valStore:4 = m16_rx:4 << (shift*8);
+@endif
+    *[ram]:4 addr = valOrig | valStore;
+}
+
+# & ext_alyssa_2625=0b00
+:A_swl m16_rx, EXT_IMM_SW(ext_rb)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=7 & ext_alyssa_2019=0b00 & ext_rb & EXT_IMM_SW {
+    # Daniel
+    effectiveAddr:$(ADDRSIZE) = sext(EXT_IMM_SW) + ext_rb;
+    shift:$(ADDRSIZE) = effectiveAddr & 0x3;
+    addr:$(ADDRSIZE) = effectiveAddr - shift;
+@if ENDIAN == "big"
+    valOrig:4 = *[ram]:4 addr & (0xffffffff << ((4-shift) * 8));
+    valStore:4 = m16_rx:4 >> (shift * 8);
+@else
+    valOrig:4 = *[ram]:4 addr & (0xffffffff << ((shift+1) * 8));
+    valStore:4 = m16_rx:4 >> ((3-shift) * 8);
+@endif
+    *[ram]:4 addr = valOrig | valStore;
+}
+
+# Pair instruction to simplify sequences of swl and swr. Requires that the access is aligned
+:A_swl m16_rx, EXT_IMM_SW(ext_rb)            is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=7 & ext_alyssa_2019=0b00 & ext_rb & EXT_IMM_SW & PAIR_INSTRUCTION_FLAG=1 [ PAIR_INSTRUCTION_FLAG = 1; globalset(inst_next, PAIR_INSTRUCTION_FLAG);] {
+@if ENDIAN == "big"
+    effectiveAddr:$(ADDRSIZE) = sext(EXT_IMM_SW) + ext_rb;
+    *[ram]:4 effectiveAddr = m16_rx:4;
+@endif
+}
+:A_swr m16_rx, EXT_IMM_SW(ext_rb)            is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=7 & ext_alyssa_2019=0b10 & ext_rb & EXT_IMM_SW & PAIR_INSTRUCTION_FLAG=1 [ PAIR_INSTRUCTION_FLAG = 0; ]{
+@if ENDIAN == "little"
+    effectiveAddr:$(ADDRSIZE) = sext(EXT_IMM_SW) + ext_rb;
+    *[ram]:4 effectiveAddr = m16_rx:4;
+@endif
+}
+
+:A_pref ext_alyssa_pref_hint, EXT_IMM_SW(m16_rx)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=4 & ext_alyssa_2625=0b00 & EXT_IMM_SW & ext_alyssa_pref_hint {
+    # Daniel
+    prefetch(sext(EXT_IMM_SW) + m16_rx, ext_alyssa_pref_hint:1);
+}
+
+# Remark by Daniel: Whats this for?
+# & ext_alyssa_2625=0b00
+:A_cache ext_alyssa_cache_op, EXT_IMM_SW(m16_rx)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=5 & EXT_IMM_SW & ext_alyssa_cache_op {
+# TODO
+}
+
+# LWSP instructions: m16_alyssa_i8_ry is the sel, m16_rx is the rx
+
+:A_lb m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=3 & EXT_IS8 & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	m16_rx = sext(*[ram]:1 effectiveAddr);
+}
+
+:A_lbu m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=5 & EXT_IS8 & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	m16_rx = zext(*[ram]:1 effectiveAddr);
+}
+
+:A_lh m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=2 & EXT_IS8 & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	m16_rx = sext(*[ram]:2 effectiveAddr);
+}
+
+:A_lhu m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=4 & EXT_IS8 & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	m16_rx = zext(*[ram]:2 effectiveAddr);
+}
+
+:A_ll m16_rx, EXT_IMM_SW(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_alyssa_sel_0507=6 & EXT_IMM_SW & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IMM_SW);
+	m16_rx = *[ram]:4 effectiveAddr;
+    # TODO: The docs require atomic handling
+}
+
+:A_lw m16_rx, EXT_IS8(gp)				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b10010 & m16_alyssa_sel_0507=1 & m16_rx & EXT_IS8 & gp {
+    # Daniel
+	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	m16_rx = *[ram]:4 effectiveAddr;
+}
+
+:A_lwl m16_rx, EXT_IMM_SW(ext_rb)				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b10010 & m16_alyssa_sel_0507=7 & ext_alyssa_2019=0b00 & m16_rx & EXT_IMM_SW & ext_rb {
+    # Daniel
+    effectiveAddr:$(ADDRSIZE) = sext(EXT_IMM_SW) + ext_rb;
+    shift:$(ADDRSIZE) = effectiveAddr & 0x3;
+    addr:$(ADDRSIZE) = effectiveAddr - shift;
+@if ENDIAN == "big"
+    valOrig:4 = m16_rx:4 & (0xffffffff >> ((4-shift) * 8));
+    valLoad:4 = (*[ram] addr) << (shift * 8);
+@else
+    valOrig:4 = m16_rx:4 & (0xffffffff >> ((shift+1) * 8));
+    valLoad:4 = (*[ram] addr) << ((3-shift) * 8);
+@endif
+    m16_rx = sext( valLoad | valOrig );
+}
+
+:A_lwr m16_rx, EXT_IMM_SW(ext_rb)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b10010 & m16_alyssa_sel_0507=7 & ext_alyssa_2019=0b10 & m16_rx & EXT_IMM_SW& ext_rb {
+    # Daniel
+    effectiveAddr:$(ADDRSIZE) = sext(EXT_IMM_SW) + ext_rb;
+    shift:$(ADDRSIZE) = effectiveAddr & 0x3;
+    addr:$(ADDRSIZE) = effectiveAddr - shift;
+@if ENDIAN == "big"
+    valOrig:4 = m16_rx:4 & (0xffffffff << ((shift+1) * 8));
+    valLoad:4 = (*[ram] addr) >> ((3-shift) * 8);
+@else
+    valOrig:4 = m16_rx:4 & (0xffffffff << ((4-shift) * 8));
+    valLoad:4 = (*[ram] addr)  >> (shift * 8);
+@endif
+    m16_rx = sext( valLoad | valOrig );
+}
+
+# addiu
+
+:A_addiu m16_rx, gp, EXT_IS8			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b00000 & ext_is_ext=1 & gp & m16_ry=1 & m16_rx & EXT_IS8 {
+	tmp:4 = sext(EXT_IS8);
+	m16_rx = sp:4 + tmp;
+}
+
+# LI instructions: m16_i_imm is 4..0, EXT_LIU8 for the imm, m16_alyssa_i8_ry is the sel
+
+:A_lui m16_rx, EXT_LIU8				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01101 & m16_alyssa_sel_0507=1 & m16_rx & EXT_LIU8 {
+	m16_rx = zext(EXT_LIU8) << 16;
+}
+
+:A_ori m16_rx, EXT_LIU8				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01101 & m16_alyssa_sel_0507=2 & m16_rx & EXT_LIU8 {
+	m16_rx = m16_rx | zext(EXT_LIU8);
+}
+
+:A_andi m16_rx, EXT_LIU8			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01101 & m16_alyssa_sel_0507=3 & m16_rx & EXT_LIU8 {
+	m16_rx = m16_rx & zext(EXT_LIU8);
+}
+
+:A_xori m16_rx, EXT_LIU8			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01101 & m16_alyssa_sel_0507=4 & m16_rx & EXT_LIU8 {
+	m16_rx = m16_rx ^ zext(EXT_LIU8);
+}
+
+# I8 instructions: m16_i8_sw is 10..8, m16_alyssa_i8_ry is 7..5, m16_i_imm is 4..0
+
+# TODO: mfc0, mtc0, dvpe, evpe
+
+:A_di						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_alyssa_2622=0 & ext_alyssa_0201=0 & ext_alyssa_2016=0b00110 & m16_i8_sw=0b111 & m16_alyssa_sel_0507=0 & m16_i_imm=0b01100
+{
+    Status = Status & -2;
+}
+
+:A_di m16_alyssa_i8_ry				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_alyssa_2622=0 & ext_alyssa_0201=0 & ext_alyssa_2016=0b00010 & m16_i8_sw=0b111 & m16_alyssa_i8_ry & m16_i_imm=0b01100
+{
+    m16_alyssa_i8_ry = Status;
+    Status = Status & -2;
+}
+
+:A_ei						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_alyssa_2622=0 & ext_alyssa_0201=0 & ext_alyssa_2016=0b00111 & m16_i8_sw=0b111 & m16_alyssa_i8_ry=0b000 & m16_i_imm=0b01100
+{
+    Status = Status | 2;
+}
+
+:A_ei m16_alyssa_i8_ry				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_alyssa_2622=0 & ext_alyssa_0201=0 & ext_alyssa_2016=0b00011 & m16_i8_sw=0b111 & m16_alyssa_i8_ry & m16_i_imm=0b01100
+{
+    m16_alyssa_i8_ry = Status;
+    Status = Status | 2;
+}
+
+:A_dmt						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_alyssa_2622=0 & ext_alyssa_0201=1 & ext_alyssa_2016=0b00110 & m16_i8_sw=0b111 & m16_alyssa_i8_ry=0b000 & m16_i_imm=0b00001
+{
+# TODO
+}
+
+:A_dmt m16_alyssa_i8_ry				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_alyssa_2622=0 & ext_alyssa_0201=1 & ext_alyssa_2016=0b00010 & m16_i8_sw=0b111 & m16_alyssa_i8_ry & m16_i_imm=0b00001
+{
+# TODO
+}
+
+:A_emt						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_alyssa_2622=0 & ext_alyssa_0201=1 & ext_alyssa_2016=0b00111 & m16_i8_sw=0b111 & m16_alyssa_i8_ry=0b000 & m16_i_imm=0b00001
+{
+# TODO
+}
+
+:A_emt m16_alyssa_i8_ry				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_alyssa_2622=0 & ext_alyssa_0201=1 & ext_alyssa_2016=0b00011 & m16_i8_sw=0b111 & m16_alyssa_i8_ry & m16_i_imm=0b00001
+{
+# TODO
+}
+
+# SHIFT instructions: m16_shft_sa is SEL
+
+:A_ehb						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=4 & m16_rx=0 & m16_ry=0 & ext_alyssa_2016=0b00000 & ext_alyssa_0201=0b0 & ext_alyssa_2622=0b00011
+{
+}
+
+:A_pause						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=6 & m16_rx=0 & m16_ry=0 & ext_alyssa_2016=0b00000 & ext_alyssa_0201=0b0 & ext_alyssa_2622=0b00101
+{
+    # Daniel
+    wait();
+}
+
+:A_sync ext_alyssa_2622				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=5 & m16_rx=0 & m16_ry=0 & ext_alyssa_2016=0b00000 & ext_alyssa_0201=0b0 & ext_alyssa_2622
+{
+# TODO
+}
+
+:A_rdhwr m16_ry, ext_alyssa_2016		is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=3 & m16_rx=0 & m16_ry & ext_alyssa_2016 & ext_alyssa_0201=0b0 & ext_alyssa_2622=0b00000
+{
+    # Daniel
+    m16_ry = getHWRegister(ext_alyssa_2016:5);
+}
+
+:A_ext m16_ry, m16_rx, ext_alyssa_2622, sizefield is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=2 & m16_rx & m16_ry & ext_alyssa_2622 & ext_alyssa_2016 & ext_alyssa_0201=1 [ sizefield = ext_alyssa_2016+1; ]
+{
+    # Daniel
+    tmp:4 = m16_rx << (32 - (sizefield + ext_alyssa_2622));
+    tmp = tmp >> (32 - sizefield);
+    m16_ry = zext(tmp);
+}
+
+:A_ins m16_ry, m16_rx, ext_alyssa_2622, possizefield is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=1 & m16_rx & m16_ry & ext_alyssa_2622 & ext_alyssa_2016 & ext_alyssa_0201=1 [ possizefield = ext_alyssa_2016-ext_alyssa_2622+1; ]
+{
+    # Daniel
+    tmpa:4 = -1;
+    tmpa = tmpa >> (4 - possizefield);
+    tmpb:4 = m16_rx & tmpa;
+    tmpa = tmpa << ext_alyssa_2622;
+    tmpa = ~tmpa;
+    tmpb = tmpb << ext_alyssa_2622;
+    m16_ry = (m16_ry & tmpa) | tmpb;
+}
+
+:A_ins m16_ry, 0, ext_alyssa_2622, possizefield is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=1 & m16_rx=0 & m16_ry & ext_alyssa_2622 & ext_alyssa_2016 & ext_alyssa_0201=0 [ possizefield = ext_alyssa_2016-ext_alyssa_2622+1; ]
+ {
+    # Daniel
+    tmpa:4 = -1;
+    tmpa = tmpa >> (4 - possizefield);
+    tmpa = tmpa << ext_alyssa_2622;
+    tmpa = ~tmpa;
+    m16_ry = m16_ry & tmpa;
+ }
+
+:A_movz	m16_rx, 0, m16_ry			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b10 & m16_shft_sa=1 & m16_rx & m16_ry & ext_rb=0 & ext_alyssa_2019=0b00 & ext_alyssa_0201=0 & ext_alyssa_2622=0b00000
+{
+     if (m16_ry != 0) goto <done>;
+       m16_rx = 0;
+     <done>
+}
+
+:A_movz m16_rx, ext_rb, m16_ry		is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b10 & m16_shft_sa=1 & m16_rx & m16_ry & ext_rb & ext_alyssa_2019=0b00 & ext_alyssa_0201=1 & ext_alyssa_2622=0b00000
+{
+     if (m16_ry != 0) goto <done>;
+       m16_rx = ext_rb;
+     <done>
+}
+
+:A_movn	m16_rx, 0, m16_ry			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b10 & m16_shft_sa=2 & m16_rx & m16_ry & ext_rb=0 & ext_alyssa_2019=0b00 & ext_alyssa_0201=0 & ext_alyssa_2622=0b00000
+{
+     if (m16_ry == 0) goto <done>;
+       m16_rx = 0;
+     <done>
+}
+
+:A_movn	m16_rx, ext_rb, m16_ry		is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b10 & m16_shft_sa=2 & m16_rx & m16_ry & ext_rb & ext_alyssa_2019=0b00 & ext_alyssa_0201=1 & ext_alyssa_2622=0b00000
+{
+     if (m16_ry == 0) goto <done>;
+       m16_rx = ext_rb;
+     <done>
+}
+
+:A_movtn m16_rx, 0				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b10 & m16_shft_sa=6 & m16_rx & m16_ry=0 & ext_rb=0 & ext_alyssa_2019=0b00 & ext_alyssa_0201=0 & ext_alyssa_2622=0b00000
+{
+     if (t8 == 0) goto <done>;
+       m16_rx = 0;
+     <done>
+}
+
+:A_movtn m16_rx, ext_rb			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b10 & m16_shft_sa=6 & m16_rx & m16_ry=0 & ext_rb & ext_alyssa_2019=0b00 & ext_alyssa_0201=1 & ext_alyssa_2622=0b00000
+{
+     if (t8 == 0) goto <done>;
+       m16_rx = ext_rb;
+     <done>
+}
+
+:A_movtz m16_rx, 0				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b10 & m16_shft_sa=5 & m16_rx & m16_ry=0 & ext_rb=0 & ext_alyssa_2019=0b00 & ext_alyssa_0201=0 & ext_alyssa_2622=0b00000
+{
+     if (t8 != 0) goto <done>;
+       m16_rx = 0;
+     <done>
+}
+
+:A_movtz m16_rx, ext_rb			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b10 & m16_shft_sa=5 & m16_rx & m16_ry=0 & ext_rb & ext_alyssa_2019=0b00 & ext_alyssa_0201=1 & ext_alyssa_2622=0b00000
+{
+     if (t8 != 0) goto <done>;
+       m16_rx = ext_rb;
+     <done>
+}
+
+# MIPS16e2 end
+
 # The non-extended PC relative clears the lower 2 bits *after* the add.
 # The extended version clears the lower 2 bits *before* the add.  The difference in how they do it is correct
 :addiu RX32, pc, EXT_IU8			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b00001 & ext_is_ext=0 & RX32 & EXT_IU8 & pc & ext_delay & RX {
@@ -480,7 +848,9 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 
 :break m16_code						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11101 & m16_rr_f=0b00101 & m16_code {
     tmp:4=m16_code; 
-    trap(tmp); 
+    trap(tmp);
+    # TODO: make analysis believe that we are not coming back from this instruction
+    goto inst_start;
 }
 
 :bteqz CRel16_m16					is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b01100 & m16_i8_f=0b000 & CRel16_m16 {
@@ -586,7 +956,7 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
     m16_ry = zext(*[ram]:2 OFF_M16S1);  
 }
 
-:li m16_rx, EXT_LIU8				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b01101 & m16_rx & EXT_LIU8 {
+:li m16_rx, EXT_LIU8				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b01101 & m16_rx & EXT_LIU8 & (ext_is_ext=0 | m16_alyssa_sel_0507=0) {
 	m16_rx = zext(EXT_LIU8);
 }
 

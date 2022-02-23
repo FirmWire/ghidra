@@ -370,7 +370,13 @@ define context contextreg
   LowBitCodeMode = (1,1)				  # =1 if low bit of instruction address is set on a branch
 #below here is for mips16e. Overlaps with micromips   
   ext_isjal=(2,2) noflow
+  # bits 16..26 of the EXTEND word map to bits 3..13 of the context
+  # this is done by copying ext_value to m16_ext_val which is (0,10) of the first word (i.e. (16,26)
   ext_value=(3,13) noflow
+  # BEWARE: ghidra inverts the bits!
+  # for example: select is (26,24), i.e. (10,8) of the second word
+  #   it is NOT at (10+3,8+3)=(13,11)
+  #   it is at (10-10+3,10-8+3)=(3,5)
   ext_value_select=(3,5) noflow
   ext_value_1005=(3,8) noflow
   ext_value_1004=(3,9) noflow
@@ -390,6 +396,18 @@ define context contextreg
   ext_tgt_2521=(3,7) noflow
   ext_tgt_2016=(8,12) noflow
   ext_tgt_x=(13,13) noflow
+  # start mips16e2
+  ext_value_0805=(5,8) noflow
+  ext_alyssa_2016=(9,13) noflow
+  ext_alyssa_2016s=(9,13) signed noflow
+  ext_alyssa_0201=(8,8) noflow
+  ext_alyssa_2622=(3,7) noflow
+  ext_alyssa_2625=(6,7) noflow
+  ext_rb=(11,13) noflow
+  ext_alyssa_2019=(9,10) noflow
+  ext_alyssa_pref_hint=(9,13) noflow
+  ext_alyssa_cache_op=(9,13) noflow
+  # end mips16e2
   ext_is_ext=(14,14) noflow
   ext_m16r32=(15,19) noflow
   ext_m16r32a=(15,19) noflow
@@ -440,6 +458,7 @@ define context contextreg
 define token instr(32)
     prime       = (26,31)
     bit25       = (25,25)
+    zero2425    = (24,25)
     zero2325    = (23,25)
     zero1       = (22,25)
     rs32        = (21,25)
@@ -450,6 +469,12 @@ define token instr(32)
     format      = (21,25)
     copop       = (21,25)
     mfmc0       = (21,25)
+    extp_size   = (21,25)
+    extp_shift  = (21,25)
+    sa_2125     = (21,25)
+    sa_2124     = (21,24)
+    sa_2123     = (21,23)
+    shilo_shift = (20,25)
     zero21	= (21,25)
     jsub	= (21,25)
     acflo       = (21,22)
@@ -466,6 +491,8 @@ define token instr(32)
     pcrel	= (19,20)
     pcrel2	= (18,20)
     cc          = (18,20)
+    bits_2516   = (16,25)
+    bits_2316   = (16,25)
     rt32        = (16,20)
     rt          = (16,20)
     ftD         = (16,20)
@@ -477,11 +504,14 @@ define token instr(32)
     cond        = (16,20)
     op          = (16,20)
     zero1620    = (16,20)
+    bits_2016   = (16,20)
+    zero1619    = (16,19)
     nd          = (17,17)
     tf          = (16,16)
     zero1320    = (13,20)
     zero1315    = (13,15)
     szero       = (11,25)
+    mask_2011   = (11,20)
     baser6	= (11,15)
     rd32        = (11,15)
     rd          = (11,15)
@@ -503,12 +533,15 @@ define token instr(32)
     cp2cprSel7	= (11,15)
     fsD         = (11,15)
     fs          = (11,15)
+    zero1511    = (11,15)
     fs_unk	= (11,15)
     fs_fcr	= (11,15)
     zero4       = (11,15)
     msbd        = (11,15)
+    bits_1511   = (11,15)
     aclo        = (11,12)
     achi        = (11,12)
+    ac          = (11,12)
     code        = (6,15)
     bit10       = (10,10)
     spec2	= (9,10)
@@ -523,6 +556,8 @@ define token instr(32)
     fct2        = (6,10)
     zero5       = (6,10)
     wsbh        = (6,10)
+    bits_1006   = (6,10)
+    rx          = (6,10)
     bp3			= (6,8)
     sa2			= (6,7)
     bp2			= (6,7)
@@ -530,10 +565,16 @@ define token instr(32)
     bigfunct    = (0,10)
     fct         = (0,5)
     bshfl       = (0,5)
+    bits_0500   = (0,5)
     bit6        = (6,6)
     zero3       = (0,4)
     bit5        = (5,5)
+    sc          = (5,5)
+    bit4        = (4,4)
+    bits_0403   = (3,4)
     op4         = (3,5)
+    bit3        = (3,3)
+    bits_0200   = (0,2)
     sel         = (0,2)
     format1X    = (0,2)
     simmed19	= (0,18) signed
