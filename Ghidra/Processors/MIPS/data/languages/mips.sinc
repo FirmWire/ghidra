@@ -370,8 +370,6 @@ define context contextreg
   LowBitCodeMode = (1,1)				  # =1 if low bit of instruction address is set on a branch
 #below here is for mips16e. Overlaps with micromips   
   ext_isjal=(2,2) noflow
-  # bits 16..26 of the EXTEND word map to bits 3..13 of the context
-  # this is done by copying ext_value to m16_ext_val which is (0,10) of the first word (i.e. (16,26)
   ext_value=(3,13) noflow
   ext_value_select=(3,5) noflow
   ext_value_1005=(3,8) noflow
@@ -888,6 +886,7 @@ define pcodeop TLB_read_indexed_entryLo1;
 define pcodeop TLB_read_indexed_entryPageMask;
 define pcodeop TLB_write_indexed_entry;
 define pcodeop TLB_write_random_entry;
+define pcodeop clearExecutionHazards;
 
 # prefetch(vaddr, hint); 
 define pcodeop prefetch;

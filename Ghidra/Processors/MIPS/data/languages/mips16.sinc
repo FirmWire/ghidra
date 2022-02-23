@@ -474,10 +474,8 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
     prefetch(sext(EXT_IMM_SW) + m16_rx, ext_pref_hint:1);
 }
 
-# Remark by Daniel: Whats this for?
-# & ext_2625=0b00
 :cache ext_cache_op, EXT_IMM_SW(m16_rx)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_sel_0507=5 & EXT_IMM_SW & ext_cache_op {
-# TODO
+    cacheOp(ext_cache_op, m16_rx);
 }
 
 # LWSP instructions: m16_i8_ry is the sel, m16_rx is the rx
@@ -581,7 +579,7 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
     Status = Status & -2;
 }
 
-:ei						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_2622=0 & ext_0201=0 & ext_2016=0b00111 & m16_i8_sw=0b111 & m16_i8_ry=0b000 & m16_i_imm=0b01100
+:ei	    					is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_2622=0 & ext_0201=0 & ext_2016=0b00111 & m16_i8_sw=0b111 & m16_i8_ry=0b000 & m16_i_imm=0b01100
 {
     Status = Status | 2;
 }
@@ -594,28 +592,31 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 
 :dmt						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_2622=0 & ext_0201=1 & ext_2016=0b00110 & m16_i8_sw=0b111 & m16_i8_ry=0b000 & m16_i_imm=0b00001
 {
-# TODO
+    VPEControl = VPEControl & ~(1 << 15);
 }
 
 :dmt m16_i8_ry				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_2622=0 & ext_0201=1 & ext_2016=0b00010 & m16_i8_sw=0b111 & m16_i8_ry & m16_i_imm=0b00001
 {
-# TODO
+    m16_i8_ry = VPEControl;
+    VPEControl = VPEControl & ~(1 << 15);
 }
 
 :emt						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_2622=0 & ext_0201=1 & ext_2016=0b00111 & m16_i8_sw=0b111 & m16_i8_ry=0b000 & m16_i_imm=0b00001
 {
-# TODO
+    VPEControl = VPEControl | (1 << 15);
 }
 
 :emt m16_i8_ry				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_2622=0 & ext_0201=1 & ext_2016=0b00011 & m16_i8_sw=0b111 & m16_i8_ry & m16_i_imm=0b00001
 {
-# TODO
+    m16_i8_ry = VPEControl;
+    VPEControl = VPEControl | (1 << 15);
 }
 
 # SHIFT instructions: m16_shft_sa is SEL
 
 :ehb						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=4 & m16_rx=0 & m16_ry=0 & ext_2016=0b00000 & ext_0201=0b0 & ext_2622=0b00011
 {
+    clearExecutionHazards();
 }
 
 :pause						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=6 & m16_rx=0 & m16_ry=0 & ext_2016=0b00000 & ext_0201=0b0 & ext_2622=0b00101
@@ -625,7 +626,7 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 
 :sync ext_2622				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=5 & m16_rx=0 & m16_ry=0 & ext_2016=0b00000 & ext_0201=0b0 & ext_2622
 {
-# TODO
+    synch(ext_2622);
 }
 
 :rdhwr m16_ry, ext_2016		is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=3 & m16_rx=0 & m16_ry & ext_2016 & ext_0201=0b0 & ext_2622=0b00000

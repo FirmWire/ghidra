@@ -68,6 +68,7 @@ public class MIPSEmulateInstructionStateModifier extends EmulateInstructionState
 		 * TLB_read_indexed_entryHi; TLB_read_indexed_entryLo0;
 		 * TLB_read_indexed_entryLo1; TLB_read_indexed_entryPageMask;
 		 * TLB_write_indexed_entry; TLB_write_random_entry; mipsFloatPS;
+		 * clearExecutionHazards;
 		 *
 		 */
 	}
