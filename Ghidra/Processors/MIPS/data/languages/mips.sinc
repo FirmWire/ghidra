@@ -373,10 +373,6 @@ define context contextreg
   # bits 16..26 of the EXTEND word map to bits 3..13 of the context
   # this is done by copying ext_value to m16_ext_val which is (0,10) of the first word (i.e. (16,26)
   ext_value=(3,13) noflow
-  # BEWARE: ghidra inverts the bits!
-  # for example: select is (26,24), i.e. (10,8) of the second word
-  #   it is NOT at (10+3,8+3)=(13,11)
-  #   it is at (10-10+3,10-8+3)=(3,5)
   ext_value_select=(3,5) noflow
   ext_value_1005=(3,8) noflow
   ext_value_1004=(3,9) noflow
@@ -398,15 +394,15 @@ define context contextreg
   ext_tgt_x=(13,13) noflow
   # start mips16e2
   ext_value_0805=(5,8) noflow
-  ext_alyssa_2016=(9,13) noflow
-  ext_alyssa_2016s=(9,13) signed noflow
-  ext_alyssa_0201=(8,8) noflow
-  ext_alyssa_2622=(3,7) noflow
-  ext_alyssa_2625=(6,7) noflow
+  ext_2016=(9,13) noflow
+  ext_2016s=(9,13) signed noflow
+  ext_0201=(8,8) noflow
+  ext_2622=(3,7) noflow
+  ext_2625=(6,7) noflow
   ext_rb=(11,13) noflow
-  ext_alyssa_2019=(9,10) noflow
-  ext_alyssa_pref_hint=(9,13) noflow
-  ext_alyssa_cache_op=(9,13) noflow
+  ext_2019=(9,10) noflow
+  ext_pref_hint=(9,13) noflow
+  ext_cache_op=(9,13) noflow
   # end mips16e2
   ext_is_ext=(14,14) noflow
   ext_m16r32=(15,19) noflow
