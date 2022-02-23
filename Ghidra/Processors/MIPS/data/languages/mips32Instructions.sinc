@@ -1757,4 +1757,526 @@ define pcodeop SYNC;
 }
 
 
+# MIPS Architecture for Programmers Volume MT Module for the MIPS32 Architecture
+
+# DMT
+:dmt rt                         is $(AMODE) & prime=0b010000 & mfmc0 = 0b01011 & rt & bits_1511=0b00001 & bits_1006=0b01111 & sc=0 & bits_0403=0b00 & bits_0200=0b001 {
+    #TODO
+}
+
+# DVPE
+:dvpe rt                         is $(AMODE) & prime=0b010000 & mfmc0 = 0b01011 & rt & bits_1511=0b00000 & bits_1006=0b00000 & sc=0 & bits_0403=0b00 & bits_0200=0b001 {
+    #TODO
+}
+
+# EMT
+:emt rt                         is $(AMODE) & prime=0b010000 & mfmc0 = 0b01011 & rt & bits_1511=0b00001 & bits_1006=0b01111 & sc=1 & bits_0403=0b00 & bits_0200=0b001 {
+    #TODO
+}
+
+# EVPE
+:evpe rt                         is $(AMODE) & prime=0b010000 & mfmc0 = 0b01011 & rt & bits_1511=0b00000 & bits_1006=0b00000 & sc=1 & bits_0403=0b00 & bits_0200=0b001 {
+    #TODO
+}
+
+# FORK
+:fork rd, rs, rt                 is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00000 & bits_0500=0b001000 {
+    #TODO
+}
+
+# MFTR
+# FORK
+:mftr rd, rt, bit5, sel, bit4                 is $(AMODE) & prime=0b010000 & mfmc0=0b01000 & rt & rd & rx & bit5 & bit4 & bit3=0 & sel {
+    #TODO
+}
+
+# MTTR
+:mttr rt, rd, bit5, sel, bit4                 is $(AMODE) & prime=0b010000 & mfmc0=0b01100 & rt & rd & rx & bit5 & bit4 & bit3=0 & sel {
+    #TODO
+}
+
+# YIELD
+:yield rd, rs                         is $(AMODE) & prime=0b011111 & rs & zero1620=0b00000 & rd & bits_1006=0b00000 & bits_0500=0b001001 {
+    #TODO
+}
+
+# MIPS Architecture for Programmers Volume IV-e: MIPS DSP Module for the MIPS32 Architecture
+
+# ABSQ_S.PH
+:absq_s.ph rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b01001 & bits_0500=0b010010 {
+    #TODO
+}
+
+# ABSQ_S.W
+:absq_s.w rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b10001 & bits_0500=0b010010 {
+    #TODO
+}
+
+# ADDQ_S.W
+:addq_s.w rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10110 & bits_0500=0b010000 {
+    #TODO
+}
+
+# ADDQ[_S].PH
+:addq.ph rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01010 & bits_0500=0b010000 {
+    #TODO
+}
+
+# ADDSC
+:addsc rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10000 & bits_0500=0b010000 {
+    #TODO
+}
+
+# ADDU[_S].QB
+:addu.QB rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00000 & bits_0500=0b010000 {
+    #TODO
+}
+:addu_s.QB rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00100 & bits_0500=0b010000 {
+    #TODO
+}
+
+# ADDWC
+:addwc rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10001 & bits_0500=0b010000 {
+    #TODO
+}
+
+# BITREV
+# ABSQ_S.W
+:bitrev rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b11011 & bits_0500=0b010010 {
+    #TODO
+}
+
+# BPOSGE32
+:bposge32 off16                         is $(AMODE) & prime=0b000001 & zero21=0b0000 & bits_2016=0b11100 & off16 {
+    #TODO
+}
+
+# CMP.cond.PH
+:cmp.eq.ph rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1511=0 & bits_1006=0b01000 & bits_0500=0b010001 {
+    #TODO
+}
+:cmp.lt.ph rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1511=0 & bits_1006=0b01001 & bits_0500=0b010001 {
+    #TODO
+}
+:cmp.le.ph rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1511=0 & bits_1006=0b01010 & bits_0500=0b010001 {
+    #TODO
+}
+
+# CMPGU.cond.QB
+:cmpgu.eq.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00100 & bits_0500=0b010001 {
+    #TODO
+}
+:cmpgu.lt.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00101 & bits_0500=0b010001 {
+    #TODO
+}
+:cmpgu.le.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00110 & bits_0500=0b010001 {
+    #TODO
+}
+
+# CMPU.cond.QB
+:cmpu.eq.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00000 & bits_0500=0b010001 {
+    #TODO
+}
+:cmpu.lt.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00001 & bits_0500=0b010001 {
+    #TODO
+}
+:cmpu.le.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00010 & bits_0500=0b010001 {
+    #TODO
+}
+
+# DPAQ_S.W.PH
+:dpaq_s.w.ph ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b00100 & bits_0500=0b110000 {
+    #TODO
+}
+
+# DPAQ_SA.L.W
+:dpaq_sa.l.w ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b01100 & bits_0500=0b110000 {
+    #TODO
+}
+
+# DPAU.H.QBL
+:dpaq.h.qbl ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b00011 & bits_0500=0b110000 {
+    #TODO
+}
+
+# DPAU.H.QBR
+:dpau.h.qbr ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b00111 & bits_0500=0b110000 {
+    #TODO
+}
+
+# DPSQ_SA.L.W
+:dpsq_sa.l.w ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b01101 & bits_0500=0b110000 {
+    #TODO
+}
+
+# DPSQ_S.W.PH
+:dpsq_s.w.ph ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b00101 & bits_0500=0b110000 {
+    #TODO
+}
+
+# DPSU.H.QBL
+:dpsu.h.qbl ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b01011 & bits_0500=0b110000 {
+    #TODO
+}
+
+# DPSU.H.QBR
+:dpsu.h.qbr ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b01111 & bits_0500=0b110000 {
+    #TODO
+}
+
+# EXTP
+:extp rt, ac, extp_size                         is $(AMODE) & prime=0b011111 & extp_size & rt & zero1315=0 & ac & bits_1006=0b00010 & bits_0500=0b111000 {
+    #TODO
+}
+
+# EXTPDP
+:extpdp rt, ac, extp_size                         is $(AMODE) & prime=0b011111 & extp_size & rt & zero1315=0 & ac & bits_1006=0b01010 & bits_0500=0b111000 {
+    #TODO
+}
+
+# EXTPDPV
+:extpdpv rt, ac, extp_size                         is $(AMODE) & prime=0b011111 & extp_size & rt & zero1315=0 & ac & bits_1006=0b01011 & bits_0500=0b111000 {
+    #TODO
+}
+
+# EXTPV
+:extpv rt, ac, extp_size                         is $(AMODE) & prime=0b011111 & extp_size & rt & zero1315=0 & ac & bits_1006=0b00011 & bits_0500=0b111000 {
+    #TODO
+}
+
+# EXTR[_R/RS].W
+# TODO: Modes correct? seems to be an overlap with extp
+:extr.w rt, ac, extp_shift                         is $(AMODE) & prime=0b011111 & extp_shift & rt & zero1315=0 & ac & bits_1006=0b00000 & bits_0500=0b111000 {
+    #TODO
+}
+:extr_r.w rt, ac, extp_shift                         is $(AMODE) & prime=0b011111 & extp_shift & rt & zero1315=0 & ac & bits_1006=0b00100 & bits_0500=0b111000 {
+    #TODO
+}
+:extr_rs.w rt, ac, extp_shift                         is $(AMODE) & prime=0b011111 & extp_shift & rt & zero1315=0 & ac & bits_1006=0b00110 & bits_0500=0b111000 {
+    #TODO
+}
+
+# EXTR_S.H
+:extr_s.h rt, ac, extp_shift                         is $(AMODE) & prime=0b011111 & extp_shift & rt & zero1315=0 & ac & bits_1006=0b01110 & bits_0500=0b111000 {
+    #TODO
+}
+
+# EXTRV[_R/RS].W
+# TODO: Modes correct? seems to be an overlap with extpv
+:extrv.w rt, ac, rs                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b00001 & bits_0500=0b111000 {
+    #TODO
+}
+:extrv_r.w rt, ac, rs                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b00101 & bits_0500=0b111000 {
+    #TODO
+}
+:extrv_rs.w rt, ac, rs                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b00111 & bits_0500=0b111000 {
+    #TODO
+}
+
+# EXTRV_S.H
+:extrv_s.h rt, ac, rs                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b01111 & bits_0500=0b111000 {
+    #TODO
+}
+
+# INSV
+:insv rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & zero1511=0 & bits_1006=0b00000 & bits_0500=0b001100 {
+    #TODO
+}
+
+# Already implemented!?
+# LBUX
+# LHX
+# LWX
+
+# MAQ_S[A].W.PHL
+:maq_s.w.phl ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b10100 & bits_0500=0b110000 {
+    #TODO
+}
+:maq_sa.w.phl ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b10000 & bits_0500=0b110000 {
+    #TODO
+}
+
+# MAQ_S[A].W.PHR
+:maq_s.w.phr ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b10110 & bits_0500=0b110000 {
+    #TODO
+}
+:maq_sa.w.phr ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b10010 & bits_0500=0b110000 {
+    #TODO
+}
+
+# Already implemented!?
+# MFHI
+# MFLO
+
+# MODSUB
+:modsub rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10010 & bits_0500=0b010000 {
+    #TODO
+}
+
+# Already implemented!?
+# MTHI
+
+# MTHLIP
+:mthlip rs, ac                         is $(AMODE) & prime=0b011111 & rs & zero1320=0 & ac & bits_1006=0b11111 & bits_0500=0b111000 {
+    #TODO
+}
+
+# Already implemented!?
+# MTLO
+
+# MULEQ_S.W.PHL
+:muleq_s.w.phl rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b11100 & bits_0500=0b010000 {
+    #TODO
+}
+
+# MULEQ_S.W.PHR
+:muleq_s.w.phr rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b11101 & bits_0500=0b010000 {
+    #TODO
+}
+
+# MULEU_S.PH.QBL
+:muleu_s.ph.qbl rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00110 & bits_0500=0b010000 {
+    #TODO
+}
+
+# MULEU_S.PH.QBR
+:muleu_s.ph.qbr rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00111 & bits_0500=0b010000 {
+    #TODO
+}
+
+# MULQ_RS.PH
+:mulq_s.rs.ph rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b11111 & bits_0500=0b010000 {
+    #TODO
+}
+
+# MUSAQ_S.W.PH
+:musaq_s.w.ph ac, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & zero1315=0 & ac & bits_1006=0b00110 & bits_0500=0b110000 {
+    #TODO
+}
+
+# PACKRL.PH
+:packrl.ph rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01110 & bits_0500=0b010001 {
+    #TODO
+}
+
+# PICK.PH
+:pick.ph rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01011 & bits_0500=0b010001 {
+    #TODO
+}
+
+# PICK.QB
+:pick.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00011 & bits_0500=0b010001 {
+    #TODO
+}
+
+# PRECEQ.W.PHL
+:preceq.w.phl rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b01100 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEQ.W.PHR
+:preceq.w.phr rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b01101 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEQU.PH.QBL
+:precequ.ph.qbl rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b00100 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEQU.PH.QBLA
+:precequ.ph.qbla rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b00110 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEQU.PH.QBR
+:precequ.ph.qbr rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b00101 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEQU.PH.QBRA
+:precequ.ph.qbra rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b00111 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEU.PH.QBL
+:preceu.ph.qbl rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b11100 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEU.PH.QBLA
+:preceu.ph.qbla rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b11110 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEU.PH.QBR
+:preceu.ph.qbr rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b11101 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECEU.PH.QBRA
+:preceu.ph.qbra rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b11111 & bits_0500=0b010010 {
+    #TODO
+}
+
+# PRECRQ.PH.W
+:precrq.ph.w rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10100 & bits_0500=0b010001 {
+    #TODO
+}
+
+# PRECRQ.QB.PH
+:precrq.qb.ph rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01100 & bits_0500=0b010001 {
+    #TODO
+}
+
+# PRECRQ_RS.PH.W
+:precrq.rs.ph.w rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10101 & bits_0500=0b010001 {
+    #TODO
+}
+
+# PRECRQU_S.QB.PH
+:precrqu.rs.qb.ph rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01111 & bits_0500=0b010001 {
+    #TODO
+}
+
+# RADDU.W.QB
+:raddu.w.qb rd, rs                         is $(AMODE) & prime=0b011111 & rs & zero1620=0 & rd & bits_1006=0b10100 & bits_0500=0b010000 {
+    #TODO
+}
+
+# RDDSP
+:rddsp rd, bits_2516                         is $(AMODE) & prime=0b011111 & bits_2516 & rd & bits_1006=0b10010 & bits_0500=0b111000 {
+    #TODO
+}
+
+# REPL.PH
+:repl.ph rd, bits_2516                         is $(AMODE) & prime=0b011111 & bits_2516 & rd & bits_1006=0b01010 & bits_0500=0b010010 {
+    #TODO
+}
+
+# REPL.QB
+:repl.qb rd, bits_2316                         is $(AMODE) & prime=0b011111 & zero2425=0 & bits_2316 & rd & bits_1006=0b00010 & bits_0500=0b010010 {
+    #TODO
+}
+
+# REPLV.PH
+:replv.ph rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b01011 & bits_0500=0b010010 {
+    #TODO
+}
+
+# REPLV.QB
+:replv.qb rd, rt                         is $(AMODE) & prime=0b011111 & zero21=0 & rt & rd & bits_1006=0b00011 & bits_0500=0b010010 {
+    #TODO
+}
+
+# SHILO
+:shilo ac, shilo_shift                         is $(AMODE) & prime=0b011111 & shilo_shift & zero1619=0 & zero1315=0 & ac & bits_1006=0b11010 & bits_0500=0b111000 {
+    #TODO
+}
+
+# SHILOV
+:shilo ac, rs                         is $(AMODE) & prime=0b011111 & rs & zero1620=0 & zero1315=0 & ac & bits_1006=0b11011 & bits_0500=0b111000 {
+    #TODO
+}
+
+# SHLL[_S].PH
+:shll.ph rd, rt, sa_2124                         is $(AMODE) & prime=0b011111 & bit25=0 & sa_2124 & rt & rd & bits_1006=0b01000 & bits_0500=0b010011 {
+    #TODO
+}
+:shll_s.ph rd, rt, sa_2124                         is $(AMODE) & prime=0b011111 & bit25=0 & sa_2124 & rt & rd & bits_1006=0b01100 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHLLV[_S].PH
+:shllv.ph rd, rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01010 & bits_0500=0b010011 {
+    #TODO
+}
+:shllv_s.ph rd, rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01110 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHLL.QB
+:shll.qb rd, rt, sa_2123                         is $(AMODE) & prime=0b011111 & zero2425=0 & sa_2123 & rt & rd & bits_1006=0b00000 & bits_0500=0b010011 {
+    #TODO
+}
+
+
+# SHLLV.QB
+:shllv.qb rd, rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00010 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHLL_S.W
+:shllv_s.w rd, rt, sa_2125                         is $(AMODE) & prime=0b011111 & sa_2125 & rt & rd & bits_1006=0b10100 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHLLV_S.W
+:shllv_s.w rd, rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10110 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHRA[_R].PH
+:shll.ph rd, rt, sa_2124                         is $(AMODE) & prime=0b011111 & bit25=0 & sa_2124 & rt & rd & bits_1006=0b01001 & bits_0500=0b010011 {
+    #TODO
+}
+:shll_r.ph rd, rt, sa_2124                         is $(AMODE) & prime=0b011111 & bit25=0 & sa_2124 & rt & rd & bits_1006=0b01101 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHRAV[_R].PH
+:shrav.ph rd, rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01011 & bits_0500=0b010011 {
+    #TODO
+}
+:shrav_r.ph rd, rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01111 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHRA_R.W
+:shra_r.w rd, rt, sa_2125                         is $(AMODE) & prime=0b011111 & sa_2125 & rt & rd & bits_1006=0b10101 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHRAV_R.W
+:shrav_r.w rd, rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10111 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHRL.QB
+:shrl.qb rd, rt, sa_2123                         is $(AMODE) & prime=0b011111 & zero2425=0 & sa_2123 & rt & rd & bits_1006=0b00001 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SHRLV.QB
+:shrlv.qb rd, rt, rs                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00011 & bits_0500=0b010011 {
+    #TODO
+}
+
+# SUBQ[_S].PH
+:subq.ph rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01011 & bits_0500=0b010000 {
+    #TODO
+}
+:subq_s.ph rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b01111 & bits_0500=0b010000 {
+    #TODO
+}
+
+# SUBQ_S.W
+:subq_s.w rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b10111 & bits_0500=0b010000 {
+    #TODO
+}
+
+# SUBU[_S].QB
+:subu.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00001 & bits_0500=0b010000 {
+    #TODO
+}
+:subu_s.qb rd, rs, rt                         is $(AMODE) & prime=0b011111 & rs & rt & rd & bits_1006=0b00101 & bits_0500=0b010000 {
+    #TODO
+}
+
+# WRDSP
+:wrdsp rs, mask_2011                         is $(AMODE) & prime=0b011111 & rs & mask_2011 & bits_1006=0b10011 & bits_0500=0b111000 {
+    #TODO
+}
+
+
 @include "mipsfloat.sinc"
