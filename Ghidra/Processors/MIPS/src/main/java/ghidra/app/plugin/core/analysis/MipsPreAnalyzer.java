@@ -15,10 +15,13 @@
  */
 package ghidra.app.plugin.core.analysis;
 
+import java.lang.reflect.Field;
 import java.math.BigInteger;
+import java.util.*;
 
 import ghidra.app.services.*;
 import ghidra.app.util.importer.MessageLog;
+import ghidra.app.cmd.disassemble.MipsDisassembleCommand;
 import ghidra.program.disassemble.Disassembler;
 import ghidra.program.model.address.*;
 import ghidra.program.model.lang.Processor;
@@ -95,9 +98,32 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 				count++;
 			}
 
+			if ((addr.getOffset() & 0x1) != 0) {
+				continue;
+			}
+
+			try {
+				byte b = 0;
+				if (program.getLanguage().isBigEndian()) {
+					b = program.getMemory().getByte(addr);
+				} else {
+					b = program.getMemory().getByte(addr.add(1));
+				}
+
+				if ((addr.getOffset() & 0x3) != 0 && (b & 0b11110000) != 0b11110000) {
+					continue;
+				}
+			}
+			catch (MemoryAccessException exc) {
 			if ((addr.getOffset() & 0x3) != 0) {
 				continue;
 			}
+		}
+		catch (AddressOutOfBoundsException exc) {
+			if ((addr.getOffset() & 0x3) != 0) {
+				continue;
+			}
+		}
 
 			if (pairSet.contains(addr)) {
 				continue;
@@ -134,10 +160,6 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 				: program.getProgramContext().getValue(micro16bit, start_inst.getMinAddress(),
 					false));
 
-		if ((curval1 != null) && (curval4 != null) && (curval1.intValue() == 1) &&
-			(curval4.intValue() == 1)) {
-			rval = true;
-		}
 		if ((curval2 != null) && (curval4 != null) && (curval2.intValue() == 1) &&
 			(curval4.intValue() == 1)) {
 			rval = true;
@@ -152,6 +174,47 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 	private boolean checkPossiblePairInstruction(Program program, Address addr) {
 		int primeOpcode = 0;
 
+		if (this.is16eMode(program, addr)) {
+			// This block handles MIPS16 exclusively.
+			// Only its instruction set extensions contain pairable instructions.
+			int sel = 0;
+			try {
+				byte b = 0;
+				if (program.getLanguage().isBigEndian()) {
+					b = program.getMemory().getByte(addr);
+				} else {
+					b = program.getMemory().getByte(addr.add(1));
+				}
+				// Check EXTEND for MIPS16e2
+				if ((b & 0b11110000) != 0b11110000) {
+					// Not a MIPS16e2 instruction, but regular MIPS16
+					return false;
+				}
+				if (program.getLanguage().isBigEndian()) {
+					addr = addr.add(2);
+				} else {
+					addr = addr.add(3);
+				}
+				b = program.getMemory().getByte(addr);
+				primeOpcode = (b >> 3) & 0x1f;
+				if (program.getLanguage().isBigEndian()) {
+					addr = addr.add(1);
+				} else {
+					addr = addr.add(-1);
+				}
+				b = program.getMemory().getByte(addr);
+				sel = (b >> 5) & 0x07;
+			}
+			catch (MemoryAccessException exc) {
+				return false;
+			}
+			catch (AddressOutOfBoundsException exc) {
+				return false;
+			}
+			// LWL/R || SWL/R
+			return (primeOpcode == 18 && sel == 7) || (primeOpcode == 26 && sel == 7);
+		}
+		// Not MIPS16 from here on
 		try {
 			byte b = 0;
 			// LE binary has primary op-code at different location
@@ -336,6 +399,26 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 		return pairInstr;
 	}
 
+	/**
+	 * Checks if the program context at a given instruction signals Mips16e mode.
+	 * This is the case if isaMode and RELP are 1 for the instruction at the given address.
+	 * Note that this does not mean that the instruction at addr is an extension instruction.
+	 * It just means that the context is in the right mode to contain extension opcodes.
+	 *
+	 * @param program The program containing the relevant context
+	 * @param addr    The address to check the context for Mips16e support
+	 * @return True if the program context is in MIPS16e mode at addr, False otherwise.
+	 */
+	private boolean is16eMode(Program program, Address addr) {
+		if (isamode != null && micro16bit != null) {
+			BigInteger isaModeValue = program.getProgramContext().getValue(isamode, addr, false);
+			BigInteger micro16BitValue = program.getProgramContext().getValue(micro16bit, addr, false);
+			return isaModeValue != null && isaModeValue.equals(new BigInteger("1"))
+				&& micro16BitValue != null && micro16BitValue.equals(new BigInteger("1"));
+		}
+		return false;
+	}
+
 	private void redoAllPairs(Program program, AddressSet pairSet, TaskMonitor monitor)
 			throws CancelledException {
 
@@ -345,7 +428,6 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 			monitor.initialize(locationCount);
 		}
 
-		Disassembler dis = Disassembler.getDisassembler(program, monitor, null);
 		for (AddressRange addressRange : pairSet) {
 			monitor.checkCanceled();
 			if (locationCount > NOTIFICATION_INTERVAL) {
@@ -356,6 +438,7 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 				}
 				count++;
 			}
+			boolean is16eMode = this.is16eMode(program, addressRange.getMinAddress());
 
 			program.getListing().clearCodeUnits(addressRange.getMinAddress(),
 				addressRange.getMaxAddress(), false);
@@ -367,8 +450,20 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 
 				// Disassemble all again
 				AddressSet rangeSet = new AddressSet(addressRange);
-				dis.disassemble(rangeSet, rangeSet, false);
-				// don't notify anyone of new code, since this analyzer should run very early on all new code
+				MipsDisassembleCommand disassembleCommand = new MipsDisassembleCommand(rangeSet, rangeSet, is16eMode);
+				try {
+					// Disable flow following, as that could propagate ISAMode/RELP settings into calls, undoing any
+					// corrections that have been made by scripts that heuristically determine these settings.
+					// These scripts must run BEFORE this script, as otherwise ISAMode setting would be incorrect,
+					Field flowField = disassembleCommand.getClass().getSuperclass().getDeclaredField("followFlow");
+					flowField.setAccessible(true);
+					flowField.set(disassembleCommand, false);
+				} catch (NoSuchFieldException e) {
+					Msg.error(this, "Cannot find followFlow field", e);
+				} catch (IllegalAccessException e) {
+					Msg.error(this, "Cannot access followFlow field", e);
+				}
+				disassembleCommand.applyTo(program, monitor);
 			}
 			catch (ContextChangeException e) {
 				Msg.error(this, "Unexpected Exception", e);
@@ -390,7 +485,11 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 		}
 		retObjs[0] = outputs[0];
 
-		Object[] obj = inst.getOpObjects(1);
+		List<Object> obj = new ArrayList<Object>(Arrays.asList(inst.getOpObjects(1)));
+		for (int i=2; i < inst.getNumOperands(); i++) {
+			obj.addAll(Arrays.asList(inst.getOpObjects(i)));
+		}
+
 		for (Object element : obj) {
 			if (element instanceof Register) {
 				retObjs[1] = element;
