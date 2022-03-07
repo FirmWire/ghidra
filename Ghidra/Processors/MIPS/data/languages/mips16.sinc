@@ -406,23 +406,23 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 #  - merge with the other ext_ or m16_ fields where useful (careful of the register mapping!!!)
 
 :sb m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_sel_0507=3 & EXT_IS8 & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IS8);
 	*[ram]:1 effectiveAddr = m16_rx:1;
 }
 
 :sh m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_sel_0507=2 & EXT_IS8 & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IS8);
 	*[ram]:2 effectiveAddr = m16_rx:2;
 }
 
 :sw m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_sel_0507=1 & EXT_IS8 & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IS8);
 	*[ram]:4 effectiveAddr = m16_rx:4;
 }
 
 # & ext_2625=0b00 & ext_2019=0b00
 :sc m16_rx, EXT_IMM_SW(ext_rb)    is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b11010 & m16_sel_0507=6 & m16_rx & ext_rb & EXT_IMM_SW {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IMM_SW);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IMM_SW);
 	*[ram]:4 effectiveAddr = m16_rx:4;
     # TODO: The docs require atomic handling
 }
@@ -476,39 +476,39 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 }
 
 :cache ext_cache_op, EXT_IMM_SW(m16_rx)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b11010 & ext_is_ext=1 & m16_rx & m16_sel_0507=5 & EXT_IMM_SW & ext_cache_op {
-    cacheOp(ext_cache_op, m16_rx);
+    cacheOp();
 }
 
 # LWSP instructions: m16_i8_ry is the sel, m16_rx is the rx
 
 :lb m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_sel_0507=3 & EXT_IS8 & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IS8);
 	m16_rx = sext(*[ram]:1 effectiveAddr);
 }
 
 :lbu m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_sel_0507=5 & EXT_IS8 & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IS8);
 	m16_rx = zext(*[ram]:1 effectiveAddr);
 }
 
 :lh m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_sel_0507=2 & EXT_IS8 & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IS8);
 	m16_rx = sext(*[ram]:2 effectiveAddr);
 }
 
 :lhu m16_rx, EXT_IS8(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_sel_0507=4 & EXT_IS8 & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IS8);
 	m16_rx = zext(*[ram]:2 effectiveAddr);
 }
 
 :ll m16_rx, EXT_IMM_SW(gp)			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b10010 & ext_is_ext=1 & m16_rx & m16_sel_0507=6 & EXT_IMM_SW & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IMM_SW);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IMM_SW);
 	m16_rx = *[ram]:4 effectiveAddr;
     # TODO: The docs require atomic handling
 }
 
 :lw m16_rx, EXT_IS8(gp)				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b10010 & m16_sel_0507=1 & m16_rx & EXT_IS8 & gp {
-	effectiveAddr:$(ADDRSIZE) = sp:4 + sext(EXT_IS8);
+	effectiveAddr:$(ADDRSIZE) = sp:$(REGSIZE) + sext(EXT_IS8);
 	m16_rx = *[ram]:4 effectiveAddr;
 }
 
@@ -543,8 +543,8 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 # addiu
 
 :addiu m16_rx, gp, EXT_IS8			is ISA_MODE=1 & RELP=1 & ext_isjal=0 & m16_op=0b00000 & ext_is_ext=1 & gp & m16_ry=1 & m16_rx & EXT_IS8 {
-	tmp:4 = sext(EXT_IS8);
-	m16_rx = sp:4 + tmp;
+	tmp = sp:$(REGSIZE) + sext(EXT_IS8);
+	m16_rx = tmp;
 }
 
 # LI instructions: m16_i_imm is 4..0, EXT_LIU8 for the imm, m16_i8_ry is the sel
@@ -625,7 +625,7 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 
 :sync ext_2622				is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=5 & m16_rx=0 & m16_ry=0 & ext_2016=0b00000 & ext_0201=0b0 & ext_2622
 {
-    synch(ext_2622);
+    synch();
 }
 
 :rdhwr m16_ry, ext_2016		is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=3 & m16_rx=0 & m16_ry & ext_2016 & ext_0201=0b0 & ext_2622=0b00000
@@ -635,16 +635,16 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 
 :ext m16_ry, m16_rx, ext_2622, sizefield is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=2 & m16_rx & m16_ry & ext_2622 & ext_2016 & ext_0201=1 [ sizefield = ext_2016+1; ]
 {
-    tmp:4 = m16_rx << (32 - (sizefield + ext_2622));
+    tmp:$(REGSIZE) = m16_rx << (32 - (sizefield + ext_2622));
     tmp = tmp >> (32 - sizefield);
     m16_ry = zext(tmp);
 }
 
 :ins m16_ry, m16_rx, ext_2622, possizefield is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=1 & m16_rx & m16_ry & ext_2622 & ext_2016 & ext_0201=1 [ possizefield = ext_2016-ext_2622+1; ]
 {
-    tmpa:4 = -1;
+    tmpa:$(REGSIZE) = -1;
     tmpa = tmpa >> (4 - possizefield);
-    tmpb:4 = m16_rx & tmpa;
+    tmpb:$(REGSIZE) = m16_rx & tmpa;
     tmpa = tmpa << ext_2622;
     tmpa = ~tmpa;
     tmpb = tmpb << ext_2622;
@@ -653,7 +653,7 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 
 :ins m16_ry, 0, ext_2622, possizefield is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=1 & m16_rx=0 & m16_ry & ext_2622 & ext_2016 & ext_0201=0 [ possizefield = ext_2016-ext_2622+1; ]
  {
-    tmpa:4 = -1;
+    tmpa:$(REGSIZE) = -1;
     tmpa = tmpa >> (4 - possizefield);
     tmpa = tmpa << ext_2622;
     tmpa = ~tmpa;
