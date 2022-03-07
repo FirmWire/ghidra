@@ -400,6 +400,7 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 }
 
 # TODO for upstreaming MIPS16e2:
+#  - Add missing instructions: mfc0, mtc0, dvpe, evpe
 #  - check everything
 #  - add constraints to the later instruction definitions to remove conflicts (pass -l to sleigh to find these, but doesn't work for me..?)
 #  - merge with the other ext_ or m16_ fields where useful (careful of the register mapping!!!)
@@ -565,8 +566,6 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 }
 
 # I8 instructions: m16_i8_sw is 10..8, m16_i8_ry is 7..5, m16_i_imm is 4..0
-
-# TODO: mfc0, mtc0, dvpe, evpe
 
 :di						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b01100 & ext_2622=0 & ext_0201=0 & ext_2016=0b00110 & m16_i8_sw=0b111 & m16_sel_0507=0 & m16_i_imm=0b01100
 {
