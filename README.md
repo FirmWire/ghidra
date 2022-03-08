@@ -1,5 +1,39 @@
 <img src="Ghidra/Features/Base/src/main/resources/images/GHIDRA_3.png" width="400">
 
+# Analyzing MediaTek Baseband Firmware Images in Ghidra
+
+## Unpacking the update file
+
+To prepare the image for the analysis in Ghidra, we first require two files from from the firmware update.
+
+Given a CP_A415FXX*_user_low_ship_MULTI_CERT.tar.md5 file, we need:
+1. `md1rom`: The binary ROM image which contains the actual firmware code
+2. `md1_dbginfo.csv`: A CSV-based export of the debug infos which are shipped as part of the firmware update
+
+Both of these files are obtained from the the firmware update using the script [unpack_mtk_cp_update.py](unpack_mtk_cp_update.py):
+```
+python3 unpack_mtk_cp_update.py CP_A415FXXU1ATE1_CP15883562_CL18317596_QB31188168_REV00_user_low_ship_MULTI_CERT.tar.md5
+python3 unpack_mtk_cp_update.py CP_A415FXXU1BUA1_CP17952712_CL20194519_QB37484013_REV00_user_low_ship_MULTI_CERT.tar.md5
+```
+
+The script will create two directories:
+- `CP_A415FXXU1ATE1_CP15883562_CL18317596_QB31188168_REV00_user_low_ship_MULTI_CERT`
+- `CP_A415FXXU1BUA1_CP17952712_CL20194519_QB37484013_REV00_user_low_ship_MULTI_CERT`
+
+These directories will contain all files contained within the firmware update, including the two required files `md1rom` and `md1_dbginfo.csv`.
+
+## Loading the Firmware Image Into Ghidra
+
+Given the two files `md1rom` and `md1_dbginfo.csv`, we can start loading the Mediatek Firmware image into Ghidra.
+
+To achieve this, take the following steps:
+1. First, import the `md1rom` into Ghidra using `File->import file...` (hotkey: `i`)
+2. As loading options, choose `Format: Raw Binary`, `Language: MIPS:LE:32:default:default (MIPS default 32 little default)`
+3. Confirm, and when prompted for the initial auto analysis, decline (make sure the initial analysis is not performed)
+4. Within the script manager (`Window->Script Manager`), choose `analyze_mtk_image.py` within the `FirmWire` category.
+5. In case you are prompted for a debug file, choose `md1_dbginfo.csv`.
+6. Wait for the analysis to finish. This will take a considerable amount of time (in the order of 60 minutes).
+
 # Ghidra Software Reverse Engineering Framework
 
 Ghidra is a software reverse engineering (SRE) framework created and maintained by the 
