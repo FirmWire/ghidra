@@ -6,21 +6,18 @@
 
 To prepare the image for the analysis in Ghidra, we first require two files from from the firmware update.
 
-Given a CP_A415FXX*_user_low_ship_MULTI_CERT.tar.md5 file, we need:
+Given a `CP_A415FXX*_user_low_ship_MULTI_CERT.tar.md5` file, we need:
 1. `md1rom`: The binary ROM image which contains the actual firmware code
 2. `md1_dbginfo.csv`: A CSV-based export of the debug infos which are shipped as part of the firmware update
 
-Both of these files are obtained from the the firmware update using the script [unpack_mtk_cp_update.py](unpack_mtk_cp_update.py):
+Both of these files are obtained from the the firmware update using the script [unpack_mtk_cp_update.py](unpack_mtk_cp_update.py), e.g.:
 ```
 python3 unpack_mtk_cp_update.py CP_A415FXXU1ATE1_CP15883562_CL18317596_QB31188168_REV00_user_low_ship_MULTI_CERT.tar.md5
-python3 unpack_mtk_cp_update.py CP_A415FXXU1BUA1_CP17952712_CL20194519_QB37484013_REV00_user_low_ship_MULTI_CERT.tar.md5
 ```
 
-The script will create two directories:
-- `CP_A415FXXU1ATE1_CP15883562_CL18317596_QB31188168_REV00_user_low_ship_MULTI_CERT`
-- `CP_A415FXXU1BUA1_CP17952712_CL20194519_QB37484013_REV00_user_low_ship_MULTI_CERT`
+The script will create the following directory: `CP_A415FXXU1ATE1_CP15883562_CL18317596_QB31188168_REV00_user_low_ship_MULTI_CERT`
 
-These directories will contain all files contained within the firmware update, including the two required files `md1rom` and `md1_dbginfo.csv`.
+The directory will contain all files contained within the firmware update, including the two required files `md1rom` and `md1_dbginfo.csv`.
 
 ## Loading the Firmware Image Into Ghidra
 
