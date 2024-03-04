@@ -30,13 +30,10 @@ eclipse.project.name = 'Features PDB'
  *********************************************************************************/
 dependencies {
 	api project(":Base")
-    
-    testImplementation "org.jmockit:jmockit:1.44"	
-	
+    	
     // Demangler Analyzer needs to find MicrosoftDemangler
     api project(":MicrosoftDemangler")
-	helpPath project(path: ':Base', configuration: 'helpPath')  // this module's help has links to Base help files
-
+ 
     testImplementation project(path: ':Base', configuration: 'testArtifacts')
     testImplementation project(path: ':SoftwareModeling', configuration: 'testArtifacts')
 }

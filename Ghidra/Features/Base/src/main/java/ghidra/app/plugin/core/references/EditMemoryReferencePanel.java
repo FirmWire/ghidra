@@ -19,21 +19,24 @@ import java.awt.*;
 import java.awt.event.*;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.WeakHashMap;
 
 import javax.swing.*;
 import javax.swing.border.LineBorder;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 import javax.swing.table.AbstractTableModel;
 
 import org.jdom.Element;
 
+import docking.DropDownMenuIcon;
+import docking.widgets.button.GButton;
 import docking.widgets.checkbox.GCheckBox;
 import docking.widgets.combobox.GhidraComboBox;
 import docking.widgets.label.GDLabel;
 import docking.widgets.label.GLabel;
+import generic.theme.GColor;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.app.util.AddressInput;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.*;
@@ -41,12 +44,13 @@ import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.*;
 import ghidra.program.util.OperandFieldLocation;
 import ghidra.program.util.ProgramLocation;
+import ghidra.util.Swing;
 import ghidra.util.layout.PairLayout;
-import resources.ResourceManager;
 
 class EditMemoryReferencePanel extends EditReferencePanel {
 
-	private static ImageIcon PULLDOWN_ICON = ResourceManager.loadImage("images/menu16.gif");
+	private static final Color BUTTON_COLOR = new GColor("color.fg.button");
+	private static final Icon MENU_ICON = new DropDownMenuIcon(BUTTON_COLOR);
 
 	private static final RefType[] MEM_REF_TYPES = RefTypeFactory.getMemoryRefTypes();
 
@@ -83,13 +87,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 
 	@Override
 	public void requestFocus() {
-		SwingUtilities.invokeLater(new Runnable() {
-			@Override
-			public void run() {
-				// do later to override the default later nature of focus
-				toAddressField.requestFocus();
-			}
-		});
+		Swing.runLater(() -> toAddressField.requestFocus());
 	}
 
 	private void buildPanel() {
@@ -97,12 +95,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 
 		offsetCheckbox = new GCheckBox("Offset:");
 		offsetCheckbox.setHorizontalAlignment(SwingConstants.RIGHT);
-		offsetCheckbox.addChangeListener(new ChangeListener() {
-			@Override
-			public void stateChanged(ChangeEvent e) {
-				enableOffsetField(offsetCheckbox.isSelected());
-			}
-		});
+		offsetCheckbox.addChangeListener(e -> enableOffsetField(offsetCheckbox.isSelected()));
 		offsetField = new JTextField();
 
 		addrLabel = new GDLabel("Base Address:");
@@ -112,7 +105,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 
 		toAddressField = new AddressInput();
 
-		addrHistoryButton = new JButton(PULLDOWN_ICON);
+		addrHistoryButton = new GButton(MENU_ICON);
 		addrHistoryButton.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
@@ -150,11 +143,11 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 		enableOffsetField(false);
 	}
 
-	private void enableOffsetField(boolean state) {
-		offsetCheckbox.setSelected(state);
-		offsetField.setEnabled(state);
-		offsetField.setBackground(state ? Color.WHITE : getBackground());
-		if (!state) {
+	private void enableOffsetField(boolean enabled) {
+		offsetCheckbox.setSelected(enabled);
+		offsetField.setEnabled(enabled);
+		offsetField.setBackground(enabled ? Colors.BACKGROUND : getBackground());
+		if (!enabled) {
 			offsetField.setText("0x0");
 		}
 		else {
@@ -173,7 +166,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 				}
 			}
 		}
-		addrLabel.setText(state ? "Base Address:" : "To Address:");
+		addrLabel.setText(enabled ? "Base Address:" : "To Address:");
 	}
 
 	private void populateRefTypes(RefType adhocType) {
@@ -206,7 +199,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 			toAddr = toAddr.subtractWrap(defaultOffset);
 		}
 
-		toAddressField.setAddressFactory(fromCu.getProgram().getAddressFactory(), false, false);
+		toAddressField.setAddressFactory(fromCu.getProgram().getAddressFactory());
 		toAddressField.setAddress(toAddr);
 		enableOffsetField(editReference.isOffsetReference());
 
@@ -231,7 +224,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 
 		addrHistoryButton.setEnabled(getAddressHistorySize(p) != 0);
 
-		toAddressField.setAddressFactory(p.getAddressFactory(), false, false);
+		toAddressField.setAddressFactory(p.getAddressFactory());
 
 		Address cuAddr = fromCu.getMinAddress();
 
@@ -239,7 +232,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 		populateRefTypes(rt);
 		refTypes.setSelectedItem(rt);
 
-		if (fromSubIndex < 0) {
+		if (fromOpIndex < 0) {
 			Program program = plugin.getCurrentProgram();
 			ProgramLocation location = plugin.getCurrentLocation();
 			Address toAddr = null;
@@ -273,7 +266,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 		}
 		else if (fromOpIndex >= 0) {
 			Scalar s = fromCu.getScalar(fromOpIndex);
-			if (s == null) {
+			if (s == null && fromSubIndex >= 0) {
 				List<?> objs =
 					((Instruction) fromCu).getDefaultOperandRepresentationList(fromOpIndex);
 				if (objs != null) {
@@ -304,8 +297,8 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 				toAddr = fromCu.getAddress(fromOpIndex);
 			}
 			if (toAddr != null) {
-				Reference r = p.getReferenceManager().getReference(fromCu.getMinAddress(), toAddr,
-					fromOpIndex);
+				Reference r = p.getReferenceManager()
+						.getReference(fromCu.getMinAddress(), toAddr, fromOpIndex);
 				if (r != null) {
 					toAddr = null;
 					if (r.isOffsetReference()) {
@@ -540,7 +533,7 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 		model = new HistoryTableModel(fromCodeUnit.getProgram());
 		displayTable = new JTable(model);
 		displayTable.setTableHeader(null);
-		displayTable.setBorder(new LineBorder(Color.BLACK));
+		displayTable.setBorder(new LineBorder(Colors.BORDER));
 		displayTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
 		displayTable.addMouseListener(new MouseAdapter() {
@@ -588,24 +581,24 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 		p.y += toAddressField.getHeight();
 		historyWin.setLocation(p);
 
-		KeyboardFocusManager.getCurrentKeyboardFocusManager().addPropertyChangeListener(
-			"focusOwner", new PropertyChangeListener() {
-				boolean hasFocus = false;
+		KeyboardFocusManager.getCurrentKeyboardFocusManager()
+				.addPropertyChangeListener("focusOwner", new PropertyChangeListener() {
+					boolean hasFocus = false;
 
-				@Override
-				public void propertyChange(PropertyChangeEvent evt) {
-					Object focusOwner = evt.getNewValue();
-					if (focusOwner == displayTable || focusOwner == historyWin) {
-						hasFocus = true;
+					@Override
+					public void propertyChange(PropertyChangeEvent evt) {
+						Object focusOwner = evt.getNewValue();
+						if (focusOwner == displayTable || focusOwner == historyWin) {
+							hasFocus = true;
+						}
+						else if (hasFocus) {
+							hasFocus = false;
+							KeyboardFocusManager.getCurrentKeyboardFocusManager()
+									.removePropertyChangeListener("focusOwner", this);
+							hideAddressHistoryPopup();
+						}
 					}
-					else if (hasFocus) {
-						hasFocus = false;
-						KeyboardFocusManager.getCurrentKeyboardFocusManager().removePropertyChangeListener(
-							"focusOwner", this);
-						hideAddressHistoryPopup();
-					}
-				}
-			});
+				});
 
 		historyWin.setVisible(true);
 
@@ -627,19 +620,9 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 
 			@Override
 			public void componentShown(ComponentEvent e) {
+				// stub
 			}
 		});
-
-		//displayList.requestFocus();
-
-//		historyWin.addFocusListener(new FocusListener() {
-//			public void focusGained(FocusEvent e) {
-//			}
-//			public void focusLost(FocusEvent e) {
-//				toggleAddressHistoryPopup();
-//			}
-//		});
-
 	}
 
 	private void updateTableSelectionForEvent(MouseEvent anEvent) {
@@ -684,17 +667,13 @@ class EditMemoryReferencePanel extends EditReferencePanel {
 	@SuppressWarnings("unchecked")
 	void readXmlDataState(Element element) {
 		List<Element> programElements = element.getChildren("ADDR_HISTORY");
-		Iterator<Element> iter = programElements.iterator();
-		while (iter.hasNext()) {
-			Element programElement = iter.next();
+		for (Element programElement : programElements) {
 			String programName = programElement.getAttributeValue("PROGRAM");
 			Program program = getOpenProgram(programName);
 			if (program != null) {
 				AddressFactory addrFactory = program.getAddressFactory();
 				List<Element> addrElements = programElement.getChildren("ADDRESS");
-				Iterator<Element> addrIter = addrElements.iterator();
-				while (addrIter.hasNext()) {
-					Element addrElement = addrIter.next();
+				for (Element addrElement : addrElements) {
 					String addrStr = addrElement.getAttributeValue("VALUE");
 					if (addrStr != null) {
 						Address addr = addrFactory.getAddress(addrStr);

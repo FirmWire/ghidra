@@ -20,10 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import generic.continues.RethrowContinuesFactory;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.StructConverter;
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
 import ghidra.app.util.bin.format.macho.CpuTypes;
 import ghidra.app.util.bin.format.macho.MachConstants;
 import ghidra.app.util.bin.format.macho.commands.NList;
@@ -40,7 +38,7 @@ import ghidra.util.task.TaskMonitor;
 /**
  * Represents a dyld_cache_local_symbols_info structure.
  * 
- * @see <a href="https://opensource.apple.com/source/dyld/dyld-852.2/dyld3/shared-cache/dyld_cache_format.h.auto.html">dyld3/shared-cache/dyld_cache_format.h</a> 
+ * @see <a href="https://github.com/apple-oss-distributions/dyld/blob/main/cache-builder/dyld_cache_format.h">dyld_cache_format.h</a> 
  */
 @SuppressWarnings("unused")
 public class DyldCacheLocalSymbolsInfo implements StructConverter {
@@ -58,16 +56,19 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 	private List<NList> nlistList;
 	private List<DyldCacheLocalSymbolsEntry> localSymbolsEntryList;
 	private boolean is32bit;
+	private boolean use64bitOffsets;
 
 	/**
 	 * Create a new {@link DyldCacheLocalSymbolsInfo}.
 	 * 
 	 * @param reader A {@link BinaryReader} positioned at the start of a DYLD local symbols info
 	 * @param architecture The {@link DyldArchitecture}
+	 * @param use64bitOffsets True if the DYLD local symbol entries use 64-bit dylib offsets; false
+	 *   if they use 32-bit 
 	 * @throws IOException if there was an IO-related problem creating the DYLD local symbols info
 	 */
-	public DyldCacheLocalSymbolsInfo(BinaryReader reader, DyldArchitecture architecture)
-			throws IOException {
+	public DyldCacheLocalSymbolsInfo(BinaryReader reader, DyldArchitecture architecture,
+			boolean use64bitOffsets) throws IOException {
 		this.reader = reader;
 		this.startIndex = reader.getPointerIndex();
 
@@ -83,6 +84,8 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 
 		is32bit = !(architecture.getCpuType() == CpuTypes.CPU_TYPE_ARM_64 ||
 			architecture.getCpuType() == CpuTypes.CPU_TYPE_X86_64);
+
+		this.use64bitOffsets = use64bitOffsets;
 	}
 
 	/**
@@ -108,8 +111,17 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 	 */
 	public void markup(Program program, Address localSymbolsInfoAddr, TaskMonitor monitor,
 			MessageLog log) throws CancelledException {
-		markupNList(program, localSymbolsInfoAddr, monitor, log);
 		markupLocalSymbols(program, localSymbolsInfoAddr, monitor, log);
+		markupNList(program, localSymbolsInfoAddr, monitor, log);
+	}
+
+	/**
+	 * Gets the {@link List} of {@link DyldCacheLocalSymbolsEntry}s.
+	 * 
+	 * @return The {@link List} of {@link DyldCacheLocalSymbolsEntry}
+	 */
+	public List<DyldCacheLocalSymbolsEntry> getLocalSymbolsEntries() {
+		return localSymbolsEntryList;
 	}
 
 	/**
@@ -122,12 +134,20 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 	}
 
 	/**
-	 * Gets the {@link List} of {@link DyldCacheLocalSymbolsEntry}s.
+	 * Gets the {@link List} of {@link NList} for the given dylib offset.
 	 * 
-	 * @return The {@link List} of {@link DyldCacheLocalSymbolsEntry}
+	 * @param dylibOffset The offset of dylib in the DYLD Cache
+	 * @return The {@link List} of {@link NList} for the given dylib offset
 	 */
-	public List<DyldCacheLocalSymbolsEntry> getLocalSymbols() {
-		return localSymbolsEntryList;
+	public List<NList> getNList(long dylibOffset) {
+		for (DyldCacheLocalSymbolsEntry entry : localSymbolsEntryList) {
+			int index = entry.getNListStartIndex();
+			int count = entry.getNListCount();
+			if (dylibOffset == entry.getDylibOffset()) {
+				return nlistList.subList(index, index + count);
+			}
+		}
+		return List.of();
 	}
 
 	@Override
@@ -146,16 +166,16 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 	}
 
 	private void parseNList(MessageLog log, TaskMonitor monitor) throws CancelledException {
-		FactoryBundledWithBinaryReader nListReader = new FactoryBundledWithBinaryReader(
-			RethrowContinuesFactory.INSTANCE, reader.getByteProvider(), reader.isLittleEndian());
-		monitor.setMessage("Parsing DYLD nlist symbol table...");
+		BinaryReader nListReader =
+			new BinaryReader(reader.getByteProvider(), reader.isLittleEndian());
+		monitor.setMessage("Parsing DYLD local symbol nlists...");
 		monitor.initialize(nlistCount * 2);
 		nListReader.setPointerIndex(startIndex + nlistOffset);
 		try {
 
 			for (int i = 0; i < nlistCount; ++i) {
-				nlistList.add(NList.createNList(nListReader, is32bit));
-				monitor.checkCanceled();
+				nlistList.add(new NList(nListReader, is32bit));
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 			}
 			// sort the entries by the index in the string table, so don't jump around reading
@@ -167,7 +187,7 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 			// initialize the NList strings from string table
 			long stringTableOffset = startIndex + stringsOffset;
 			for (NList nList : sortedList) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 				nList.initString(nListReader, stringTableOffset);
 			}
@@ -177,14 +197,15 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 		}
 	}
 
-	private void parseLocalSymbols(MessageLog log, TaskMonitor monitor) throws CancelledException {
+	private void parseLocalSymbols(MessageLog log, TaskMonitor monitor)
+			throws CancelledException {
 		monitor.setMessage("Parsing DYLD local symbol entries...");
 		monitor.initialize(entriesCount);
 		reader.setPointerIndex(startIndex + entriesOffset);
 		try {
 			for (int i = 0; i < entriesCount; ++i) {
-				localSymbolsEntryList.add(new DyldCacheLocalSymbolsEntry(reader));
-				monitor.checkCanceled();
+				localSymbolsEntryList.add(new DyldCacheLocalSymbolsEntry(reader, use64bitOffsets));
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 			}
 		}
@@ -196,14 +217,14 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 
 	private void markupNList(Program program, Address localSymbolsInfoAddr, TaskMonitor monitor,
 			MessageLog log) throws CancelledException {
-		monitor.setMessage("Marking up DYLD nlist symbol table...");
+		monitor.setMessage("Marking up DYLD local symbol nlists...");
 		monitor.initialize(nlistCount);
 		try {
 			Address addr = localSymbolsInfoAddr.add(nlistOffset);
 			for (NList nlist : nlistList) {
 				Data d = program.getListing().createData(addr, nlist.toDataType());
 				addr = addr.add(d.getLength());
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 			}
 		}
@@ -221,7 +242,7 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 			for (DyldCacheLocalSymbolsEntry localSymbolsEntry : localSymbolsEntryList) {
 				Data d = program.getListing().createData(addr, localSymbolsEntry.toDataType());
 				addr = addr.add(d.getLength());
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 			}
 		}

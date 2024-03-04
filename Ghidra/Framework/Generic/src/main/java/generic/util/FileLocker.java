@@ -20,11 +20,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Properties;
-
-import ghidra.util.HTMLUtilities;
-import ghidra.util.SystemUtilities;
+import java.util.*;
 
 public class FileLocker {
 
@@ -91,27 +87,15 @@ public class FileLocker {
 
 		Properties properties = new Properties();
 
-		InputStream is = null;
-		try {
-			is = new FileInputStream(lockFile);
+		try (InputStream is = new FileInputStream(lockFile)) {
 			properties.load(is);
 			return properties;
 		}
 		catch (FileNotFoundException e) {
-			// should never happen
+			// should not happen
 		}
 		catch (IOException e) {
 			// ignore
-		}
-		finally {
-			if (is != null) {
-				try {
-					is.close();
-				}
-				catch (IOException e) {
-					// we tried!
-				}
-			}
 		}
 		return null;
 	}
@@ -125,10 +109,10 @@ public class FileLocker {
 		for (String name : PROPERTY_KEYS) {
 			buf.append("<tr><td>");
 			buf.append("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;");
-			buf.append(HTMLUtilities.escapeHTML(name));
+			buf.append(name);
 			buf.append(": ");
 			buf.append("</td><td>");
-			buf.append(HTMLUtilities.escapeHTML(existingLockProperties.get(name).toString()));
+			buf.append(existingLockProperties.get(name).toString());
 			buf.append("</td></tr>");
 		}
 		buf.append("</table>");
@@ -178,24 +162,12 @@ public class FileLocker {
 
 	private boolean storeProperties(Properties properties) {
 
-		OutputStream os = null;
-		try {
-			os = new FileOutputStream(lockFile);
+		try (OutputStream os = new FileOutputStream(lockFile)) {
 			properties.store(os, "Ghidra Lock File");
 			return true;
 		}
 		catch (IOException e) {
 			return false;
-		}
-		finally {
-			if (os != null) {
-				try {
-					os.close();
-				}
-				catch (IOException e) {
-					// don't care; we tried
-				}
-			}
 		}
 	}
 
@@ -212,7 +184,7 @@ public class FileLocker {
 		for (String key : PROPERTY_KEYS) {
 			String originalProperty = createdLockProperties.getProperty(key);
 			String currentProperty = currentLockProperties.getProperty(key);
-			if (!SystemUtilities.isEqual(originalProperty, currentProperty)) {
+			if (!Objects.equals(originalProperty, currentProperty)) {
 				return false;
 			}
 		}

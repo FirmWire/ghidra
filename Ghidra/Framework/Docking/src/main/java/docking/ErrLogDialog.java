@@ -18,17 +18,13 @@ package docking;
 import java.awt.*;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Date;
+import java.util.*;
 import java.util.List;
 
 import javax.swing.*;
 
 import docking.widgets.ScrollableTextArea;
-import docking.widgets.label.GHtmlLabel;
-import docking.widgets.label.GIconLabel;
+import docking.widgets.label.*;
 import docking.widgets.table.*;
 import generic.json.Json;
 import generic.util.WindowUtilities;
@@ -117,22 +113,33 @@ public class ErrLogDialog extends AbstractErrDialog {
 		sb.append(" ");
 		sb.append(System.getProperty("os.arch"));
 		sb.append(EOL);
-		sb.append("Workstation: ");
-		sb.append(getHostname());
-		sb.append(EOL);
+
+		String hostname = getHostnameString();
+		if (hostname != null) {
+			sb.append(hostname);
+			sb.append(EOL);
+		}
 		return sb.toString();
 	}
 
-	private Object getHostname() {
-		String hostname = "<unknown>";
-		try {
-			InetAddress addr = InetAddress.getLocalHost();
-			hostname = addr.getCanonicalHostName();
+	private String getHostnameString() {
+		//
+		// Note: we avoid use of InetAddress; using that to get the host name can timeout
+		//
+		String name = null;
+		Map<String, String> env = System.getenv();
+		if (env.containsKey("COMPUTERNAME")) {
+			name = env.get("COMPUTERNAME");
 		}
-		catch (UnknownHostException e) {
-			// ignore
+		else if (env.containsKey("HOSTNAME")) {
+			name = env.get("HOSTNAME");
 		}
-		return hostname;
+
+		if (name == null) {
+			return null;
+		}
+
+		return "Workstation: " + name;
 	}
 
 	public static void setErrorReporter(ErrorReporter errorReporter) {
@@ -149,16 +156,10 @@ public class ErrLogDialog extends AbstractErrDialog {
 		introPanel.add(
 			new GIconLabel(UIManager.getIcon("OptionPane.errorIcon"), SwingConstants.RIGHT),
 			BorderLayout.WEST);
-		String html = HTMLUtilities.toHTML(message);
-		introPanel.add(new GHtmlLabel(html) {
-			@Override
-			public Dimension getPreferredSize() {
-				// rendering HTML the label can expand larger than the screen; keep it reasonable
-				Dimension size = super.getPreferredSize();
-				size.width = 300;
-				return size;
-			}
-		}, BorderLayout.CENTER);
+
+		JLabel messageLabel = createMessageLabel(message);
+
+		introPanel.add(messageLabel, BorderLayout.CENTER);
 
 		mainPanel = new JPanel(new BorderLayout(10, 20));
 		mainPanel.add(introPanel, BorderLayout.NORTH);
@@ -174,14 +175,14 @@ public class ErrLogDialog extends AbstractErrDialog {
 
 		detailsPane = new ErrorDetailsSplitPane();
 
-		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEADING, 5, 5));
-		buttonPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+		JPanel sideButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEADING, 5, 5));
+		sideButtonPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 		if (errorReporter != null) {
-			buttonPanel.add(sendButton);
+			sideButtonPanel.add(sendButton);
 		}
-		buttonPanel.add(detailsButton);
+		sideButtonPanel.add(detailsButton);
 
-		introPanel.add(buttonPanel, BorderLayout.EAST);
+		introPanel.add(sideButtonPanel, BorderLayout.EAST);
 		mainPanel.add(detailsPane, BorderLayout.CENTER);
 
 		addWorkPanel(mainPanel);
@@ -192,6 +193,25 @@ public class ErrLogDialog extends AbstractErrDialog {
 		// show the details panel if it was showing previously
 		detailsPane.setVisible(isShowingDetails);
 		detailsPane.selectFirstError();
+	}
+
+	private JLabel createMessageLabel(String message) {
+
+		if (HTMLUtilities.isHTML(message)) {
+			// Client HTML; keep as-is
+			return new MaxWidthHtmlLabel(message);
+		}
+
+		if (message.indexOf('\n') != 0) {
+			// JLabels do not handle newlines, so we must update the text to reflect the client's
+			// desired newlines.  Escape any content that may have angle brackets so it does not get
+			// removed when we convert the text to HTML.  Convert newlines to break tags so the
+			// label will correctly line wrap as intended by the client.
+			String html = HTMLUtilities.toLiteralHTML(message, 0);
+			return new MaxWidthHtmlLabel(html);
+		}
+
+		return new GLabel(message);
 	}
 
 	@Override
@@ -226,7 +246,7 @@ public class ErrLogDialog extends AbstractErrDialog {
 
 	@Override
 	protected void dialogShown() {
-		WindowUtilities.ensureOnScreen(getDialog());
+		WindowUtilities.ensureEntirelyOnScreen(getDialog());
 		Swing.runLater(() -> okButton.requestFocusInWindow());
 	}
 
@@ -254,6 +274,10 @@ public class ErrLogDialog extends AbstractErrDialog {
 	String getBaseTitle() {
 		return baseTitle;
 	}
+
+//=================================================================================================
+// Inner Classes
+//=================================================================================================
 
 	private class ErrorDetailsSplitPane extends JSplitPane {
 
@@ -567,6 +591,21 @@ public class ErrLogDialog extends AbstractErrDialog {
 			public GColumnRenderer<Date> getColumnRenderer() {
 				return renderer;
 			}
+		}
+	}
+
+	private class MaxWidthHtmlLabel extends GHtmlLabel {
+
+		MaxWidthHtmlLabel(String text) {
+			super(text);
+		}
+
+		@Override
+		public Dimension getPreferredSize() {
+			// rendering HTML can expand larger than the screen; keep it reasonable
+			Dimension size = super.getPreferredSize();
+			size.width = 300;
+			return size;
 		}
 	}
 }

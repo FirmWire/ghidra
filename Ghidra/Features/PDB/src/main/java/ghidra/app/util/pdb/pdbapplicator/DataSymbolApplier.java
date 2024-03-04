@@ -15,11 +15,10 @@
  */
 package ghidra.app.util.pdb.pdbapplicator;
 
+import ghidra.app.util.bin.format.pdb2.pdbreader.MsSymbolIterator;
 import ghidra.app.util.bin.format.pdb2.pdbreader.PdbException;
-import ghidra.app.util.bin.format.pdb2.pdbreader.RecordNumber;
 import ghidra.app.util.bin.format.pdb2.pdbreader.symbol.AbstractDataMsSymbol;
 import ghidra.app.util.bin.format.pdb2.pdbreader.symbol.AbstractMsSymbol;
-import ghidra.app.util.pdb.pdbapplicator.SymbolGroup.AbstractMsSymbolIterator;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.*;
@@ -31,80 +30,61 @@ import ghidra.util.exception.CancelledException;
 /**
  * Applier for {@link AbstractDataMsSymbol} symbols.
  */
-public class DataSymbolApplier extends MsSymbolApplier {
+public class DataSymbolApplier extends MsSymbolApplier
+		implements DirectSymbolApplier, NestableSymbolApplier {
 
 	private AbstractDataMsSymbol symbol;
 
 	/**
 	 * Constructor
-	 * @param applicator the {@link PdbApplicator} for which we are working.
-	 * @param iter the Iterator containing the symbol sequence being processed
+	 * @param applicator the {@link DefaultPdbApplicator} for which we are working.
+	 * @param symbol the symbol for this applier
 	 */
-	public DataSymbolApplier(PdbApplicator applicator, AbstractMsSymbolIterator iter) {
-		super(applicator, iter);
-		AbstractMsSymbol abstractSymbol = iter.next();
-		if (!(abstractSymbol instanceof AbstractDataMsSymbol)) {
-			throw new AssertException(
-				"Invalid symbol type: " + abstractSymbol.getClass().getSimpleName());
-		}
-		symbol = (AbstractDataMsSymbol) abstractSymbol;
+	public DataSymbolApplier(DefaultPdbApplicator applicator, AbstractDataMsSymbol symbol) {
+		super(applicator);
+		this.symbol = symbol;
 	}
 
 	@Override
-	void applyTo(MsSymbolApplier applyToApplier) throws PdbException, CancelledException {
-		if (applyToApplier instanceof FunctionSymbolApplier) {
-			FunctionSymbolApplier functionSymbolApplier = (FunctionSymbolApplier) applyToApplier;
-			MsTypeApplier applier = getTypeApplier();
-			DataType dataType = applier.getDataType();
-			if (dataType == null) { // TODO: check that we can have null here.
-				return; // silently return.
-			}
+	public void apply(MsSymbolIterator iter) throws PdbException, CancelledException {
+		getValidatedSymbol(iter, true);
+		Address address = applicator.getAddress(symbol);
+		if (applicator.isInvalidAddress(address, symbol.getName())) {
+			return;
+		}
+		// createData() can return false on failure, but we want to put the symbol down regardless
+		createData(address);
+		Address symbolAddress = applicator.getAddress(symbol);
+		applicator.createSymbol(symbolAddress, symbol.getName(), false);
+	}
+
+	@Override
+	public void applyTo(NestingSymbolApplier applyToApplier, MsSymbolIterator iter)
+			throws PdbException, CancelledException {
+		getValidatedSymbol(iter, true);
+		if (applyToApplier instanceof FunctionSymbolApplier functionSymbolApplier) {
 			Address address = applicator.getAddress(symbol);
-			if (!createData(address, applier)) {
-				return;
+			if (applicator.isInvalidAddress(address, symbol.getName())) {
+				return; // silently return
 			}
+			// createData() can return false on failure, but we want to put the symbol down regardless
+			createData(address);
+			DataType dataType = applicator.getCompletedDataType(symbol.getTypeRecordNumber());
 			functionSymbolApplier.setLocalVariable(address, symbol.getName(), dataType);
 		}
 	}
 
-	@Override
-	void apply() throws CancelledException, PdbException {
-		Address symbolAddress = applicator.getAddress(symbol);
-		if (applicator.isInvalidAddress(symbolAddress, symbol.getName())) {
-			return;
+	MsTypeApplier getTypeApplier(AbstractMsSymbol abstractSymbol) {
+		if (!(abstractSymbol instanceof AbstractDataMsSymbol dataSymbol)) {
+			throw new AssertException(
+				"Invalid symbol type: " + abstractSymbol.getClass().getSimpleName());
 		}
-		RecordNumber typeRecordNumber = symbol.getTypeRecordNumber();
-		if (!createData(symbolAddress, typeRecordNumber)) {
-			return;
-		}
-		applicator.createSymbol(symbolAddress, symbol.getName(), true);
+		return applicator.getTypeApplier(dataSymbol.getTypeRecordNumber());
 	}
 
-	MsTypeApplier getTypeApplier() {
-		return applicator.getTypeApplier(symbol.getTypeRecordNumber());
-	}
-
-	boolean createData(Address address, RecordNumber typeRecordNumber) {
-		MsTypeApplier applier = applicator.getTypeApplier(typeRecordNumber);
-		if (applier == null) {
-			applicator.appendLogMsg("Error: Failed to resolve datatype RecordNumber " +
-				typeRecordNumber + " at " + address);
-			return false;
-		}
-		return createData(address, applier);
-	}
-
-	boolean createData(Address address, MsTypeApplier applier) {
-		if (applicator.isInvalidAddress(address, symbol.getName())) {
-			return false;
-		}
-		DataType dataType = applier.getDataType();
-		if (dataType == null) {
-			if (!(applier instanceof PrimitiveTypeApplier) ||
-				!((PrimitiveTypeApplier) applier).isNoType()) {
-				applicator.appendLogMsg("Error: Failed to resolve datatype " +
-					applier.getMsType().getName() + " at " + address);
-			}
+	boolean createData(Address address) throws CancelledException, PdbException {
+		DataType dataType = applicator.getCompletedDataType(symbol.getTypeRecordNumber());
+		if (dataType == null) { // TODO: check that we can have null here.
 			return false;
 		}
 		if (applicator.getImageBase().equals(address) &&
@@ -115,7 +95,7 @@ public class DataSymbolApplier extends MsSymbolApplier {
 			//TODO: might want to do an ApplyDatatypeCmd here!!!
 			DumbMemBufferImpl memBuffer =
 				new DumbMemBufferImpl(applicator.getProgram().getMemory(), address);
-			DataTypeInstance dti = DataTypeInstance.getDataTypeInstance(dataType, memBuffer);
+			DataTypeInstance dti = DataTypeInstance.getDataTypeInstance(dataType, memBuffer, false);
 			if (dti == null) {
 				applicator.appendLogMsg(
 					"Error: Failed to apply datatype " + dataType.getName() + " at " + address);
@@ -134,7 +114,7 @@ public class DataSymbolApplier extends MsSymbolApplier {
 		if (cu != null) {
 			if ((cu instanceof Instruction) || !address.equals(cu.getAddress())) {
 				applicator.appendLogMsg("Warning: Did not create data type \"" +
-					dataType.getDisplayName() + "\" at address " + address + " due to conflict");
+					dataType.getName() + "\" at address " + address + " due to conflict");
 				return;
 			}
 			Data d = (Data) cu;
@@ -170,28 +150,31 @@ public class DataSymbolApplier extends MsSymbolApplier {
 		}
 		if (existingData == null) {
 			try {
-				applicator.getProgram().getListing().clearCodeUnits(address,
-					address.add(dataTypeLength - 1), false);
+				applicator.getProgram()
+						.getListing()
+						.clearCodeUnits(address, address.add(dataTypeLength - 1), false);
 				if (dataType.getLength() == -1) {
-					applicator.getProgram().getListing().createData(address, dataType,
-						dataTypeLength);
+					applicator.getProgram()
+							.getListing()
+							.createData(address, dataType, dataTypeLength);
 				}
 				else {
 					applicator.getProgram().getListing().createData(address, dataType);
 				}
 			}
-			catch (CodeUnitInsertionException | DataTypeConflictException e) {
+			catch (CodeUnitInsertionException e) {
 				applicator.appendLogMsg("Unable to create " + dataType.getDisplayName() + " at 0x" +
 					address + ": " + e.getMessage());
 			}
 		}
 		else if (isDataReplaceable(existingData)) {
 			try {
-				applicator.getProgram().getListing().clearCodeUnits(address,
-					address.add(dataTypeLength - 1), false);
+				applicator.getProgram()
+						.getListing()
+						.clearCodeUnits(address, address.add(dataTypeLength - 1), false);
 				applicator.getProgram().getListing().createData(address, dataType, dataTypeLength);
 			}
-			catch (CodeUnitInsertionException | DataTypeConflictException e) {
+			catch (CodeUnitInsertionException e) {
 				applicator.appendLogMsg("Unable to replace " + dataType.getDisplayName() +
 					" at 0x" + address + ": " + e.getMessage());
 			}
@@ -277,6 +260,15 @@ public class DataSymbolApplier extends MsSymbolApplier {
 			}
 		}
 		return datatype1.isEquivalent(datatype2);
+	}
+
+	private AbstractDataMsSymbol getValidatedSymbol(MsSymbolIterator iter, boolean iterate) {
+		AbstractMsSymbol abstractSymbol = iterate ? iter.next() : iter.peek();
+		if (!(abstractSymbol instanceof AbstractDataMsSymbol dataSymbol)) {
+			throw new AssertException(
+				"Invalid symbol type: " + abstractSymbol.getClass().getSimpleName());
+		}
+		return dataSymbol;
 	}
 
 }

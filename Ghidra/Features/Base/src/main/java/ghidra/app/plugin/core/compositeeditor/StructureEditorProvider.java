@@ -15,19 +15,19 @@
  */
 package ghidra.app.plugin.core.compositeeditor;
 
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 
+import generic.theme.GIcon;
 import ghidra.framework.plugintool.Plugin;
 import ghidra.program.model.data.Structure;
-import resources.ResourceManager;
 
 /**
  * Editor for a Structure Data Type.
  */
 public class StructureEditorProvider extends CompositeEditorProvider {
 
-	protected static final ImageIcon STRUCTURE_EDITOR_ICON =
-		ResourceManager.loadImage("images/cstruct.png");
+	protected static final Icon STRUCTURE_EDITOR_ICON =
+		new GIcon("icon.plugin.composite.editor.provider.structure");
 
 	public StructureEditorProvider(Plugin plugin, Structure structureDataType,
 			boolean showHexNumbers) {
@@ -55,24 +55,26 @@ public class StructureEditorProvider extends CompositeEditorProvider {
 		return new CompositeEditorTableAction[] {
 			new ApplyAction(this),
 //			new ToggleLockAction(this),
-			new InsertUndefinedAction(this), 
-			new MoveUpAction(this), 
+			new InsertUndefinedAction(this),
+			new MoveUpAction(this),
 			new MoveDownAction(this),
-			new ClearAction(this), 
-			new DuplicateAction(this), 
+			new ClearAction(this),
+			new DuplicateAction(this),
 			new DuplicateMultipleAction(this),
-			new DeleteAction(this), 
-			new PointerAction(this), 
+			new DeleteAction(this),
+			new PointerAction(this),
 			new ArrayAction(this),
 			new FindReferencesToField(this),
 			new UnpackageAction(this),
-			new EditComponentAction(this), 
-			new EditFieldAction(this), 
+			new EditComponentAction(this),
+			new EditFieldAction(this),
 			new HexNumbersAction(this),
 			new CreateInternalStructureAction(this),
 			new ShowComponentPathAction(this),
 			new AddBitFieldAction(this),
 			new EditBitFieldAction(this),
+			new ShowDataTypeInTreeAction(this),
+
 //			new ViewBitFieldAction(this)
 		};
 		//@formatter:on

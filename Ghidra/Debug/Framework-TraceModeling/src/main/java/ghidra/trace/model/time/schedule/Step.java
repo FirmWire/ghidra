@@ -15,16 +15,23 @@
  */
 package ghidra.trace.model.time.schedule;
 
-import java.util.function.Consumer;
+import java.util.List;
 
 import ghidra.pcode.emu.PcodeMachine;
 import ghidra.pcode.emu.PcodeThread;
+import ghidra.program.model.lang.Language;
 import ghidra.trace.model.thread.TraceThread;
 import ghidra.trace.model.thread.TraceThreadManager;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
 public interface Step extends Comparable<Step> {
+	enum StepType {
+		TICK,
+		SKIP,
+		PATCH,
+	}
+
 	/**
 	 * Parse a step, possibly including a thread prefix, e.g., {@code "t1-..."}
 	 * 
@@ -58,7 +65,7 @@ public interface Step extends Comparable<Step> {
 	 * 
 	 * <p>
 	 * The form of the spec must either be numeric, indicating some number of ticks, or
-	 * brace-enclosed Sleigh code, e.g., {@code "{r0=0x1234;}"}. The latter allows patching machine
+	 * brace-enclosed Sleigh code, e.g., {@code "{r0=0x1234}"}. The latter allows patching machine
 	 * state during execution.
 	 * 
 	 * @param threadKey the thread to step, or -1 for the last thread or event thread
@@ -67,6 +74,9 @@ public interface Step extends Comparable<Step> {
 	 * @throws IllegalArgumentException if the specification is of the wrong form
 	 */
 	static Step parse(long threadKey, String stepSpec) {
+		if (stepSpec.startsWith("s")) {
+			return SkipStep.parse(threadKey, stepSpec);
+		}
 		if (stepSpec.startsWith("{")) {
 			return PatchStep.parse(threadKey, stepSpec);
 		}
@@ -77,7 +87,11 @@ public interface Step extends Comparable<Step> {
 		return new TickStep(-1, 0);
 	}
 
-	int getTypeOrder();
+	StepType getType();
+
+	default int getTypeOrder() {
+		return getType().ordinal();
+	}
 
 	boolean isNop();
 
@@ -156,19 +170,21 @@ public interface Step extends Comparable<Step> {
 		return compareStep(that).compareTo;
 	}
 
-	default <T> TraceThread execute(TraceThreadManager tm, TraceThread eventThread,
-			PcodeMachine<T> machine, Consumer<PcodeThread<T>> stepAction, TaskMonitor monitor)
+	default TraceThread execute(TraceThreadManager tm, TraceThread eventThread,
+			PcodeMachine<?> machine, Stepper stepper, TaskMonitor monitor)
 			throws CancelledException {
 		TraceThread thread = getThread(tm, eventThread);
 		if (machine == null) {
 			// Just performing validation (specifically thread parts)
 			return thread;
 		}
-		PcodeThread<T> emuThread = machine.getThread(thread.getPath(), true);
-		execute(emuThread, stepAction, monitor);
+		PcodeThread<?> emuThread = machine.getThread(thread.getPath(), true);
+		execute(emuThread, stepper, monitor);
 		return thread;
 	}
 
-	<T> void execute(PcodeThread<T> emuThread, Consumer<PcodeThread<T>> stepAction,
-			TaskMonitor monitor) throws CancelledException;
+	<T> void execute(PcodeThread<T> emuThread, Stepper stepper, TaskMonitor monitor)
+			throws CancelledException;
+
+	long coalescePatches(Language language, List<Step> steps);
 }

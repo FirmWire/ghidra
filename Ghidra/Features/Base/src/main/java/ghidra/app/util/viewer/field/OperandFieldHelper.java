@@ -23,10 +23,10 @@ import java.util.List;
 import javax.swing.event.ChangeListener;
 
 import docking.widgets.fieldpanel.field.*;
-import docking.widgets.fieldpanel.support.FieldLocation;
-import docking.widgets.fieldpanel.support.RowColLocation;
+import docking.widgets.fieldpanel.support.*;
 import ghidra.GhidraOptions;
 import ghidra.app.util.*;
+import ghidra.app.util.viewer.field.ListingColors.FunctionColors;
 import ghidra.app.util.viewer.format.FieldFormatModel;
 import ghidra.app.util.viewer.options.OptionsGui;
 import ghidra.app.util.viewer.proxy.ProxyObj;
@@ -49,7 +49,7 @@ import ghidra.util.HelpLocation;
 abstract class OperandFieldHelper extends FieldFactory {
 
 	private final static String ENABLE_WORD_WRAP_MSG =
-		GhidraOptions.OPERAND_GROUP_TITLE + Options.DELIMITER + "Enable Word Wrapping";
+		GhidraOptions.OPERAND_GROUP_TITLE + Options.DELIMITER + FieldUtils.WORD_WRAP_OPTION_NAME;
 	private final static String MAX_DISPLAY_LINES_MSG =
 		GhidraOptions.OPERAND_GROUP_TITLE + Options.DELIMITER + "Maximum Lines To Display";
 	private final static String UNDERLINE_OPTION =
@@ -57,7 +57,7 @@ abstract class OperandFieldHelper extends FieldFactory {
 	private final static String SPACE_AFTER_SEPARATOR_OPTION =
 		GhidraOptions.OPERAND_GROUP_TITLE + Options.DELIMITER + "Add Space After Separator";
 
-	public static enum UNDERLINE_CHOICE {
+	public enum UNDERLINE_CHOICE {
 		Hidden, All, None
 	}
 
@@ -95,7 +95,7 @@ abstract class OperandFieldHelper extends FieldFactory {
 	 * @param displayOptions the Options for display properties.
 	 * @param fieldOptions the Options for field specific properties.
 	 */
-	OperandFieldHelper(String name, FieldFormatModel model, HighlightProvider hlProvider,
+	OperandFieldHelper(String name, FieldFormatModel model, ListingHighlightProvider hlProvider,
 			ToolOptions displayOptions, ToolOptions fieldOptions) {
 		super(name, model, hlProvider, displayOptions, fieldOptions);
 
@@ -183,12 +183,6 @@ abstract class OperandFieldHelper extends FieldFactory {
 		return null;
 	}
 
-	/**
-	 * Returns the FactoryField for the given object at index index.
-	 *
-	 * @param obj           the object whose properties should be displayed.
-	 * @param varWidth      the amount of variable width spacing for any fields before this one.
-	 */
 	ListingField getField(Object obj, ProxyObj<?> proxy, int varWidth) {
 		if (!enabled) {
 			return null;
@@ -222,10 +216,10 @@ abstract class OperandFieldHelper extends FieldFactory {
 
 		ListingTextField btf = (ListingTextField) lf;
 		FieldElement fieldElement = btf.getFieldElement(row, col);
-
 		if (!(fieldElement instanceof OperandFieldElement)) {
 			return null;
 		}
+
 		OperandFieldElement element = (OperandFieldElement) fieldElement;
 		int opIndex = element.getOperandIndex();
 		int subOpIndex = element.getOperandSubIndex();
@@ -276,11 +270,10 @@ abstract class OperandFieldHelper extends FieldFactory {
 		else if (obj instanceof Data) {
 			Data data = (Data) obj;
 			Address refAddr = null;
-			Reference primaryReference =
-				data.getProgram()
-						.getReferenceManager()
-						.getPrimaryReferenceFrom(
-							data.getMinAddress(), 0);
+			Program program = data.getProgram();
+			ReferenceManager referenceManager = program.getReferenceManager();
+			Address minAddress = data.getMinAddress();
+			Reference primaryReference = referenceManager.getPrimaryReferenceFrom(minAddress, 0);
 			Object value = data.getValue();
 			if (primaryReference != null) {
 				refAddr = primaryReference.getToAddress();
@@ -291,20 +284,18 @@ abstract class OperandFieldHelper extends FieldFactory {
 				}
 			}
 
-			Program program = data.getProgram();
 			if (value instanceof Scalar) {
 				Scalar scalar = (Scalar) value;
-				Equate equate = program.getEquateTable()
-						.getEquate(data.getMinAddress(), opIndex,
-							scalar.getValue());
+				EquateTable equateTable = program.getEquateTable();
+				Equate equate = equateTable.getEquate(minAddress, opIndex, scalar.getValue());
 				if (equate != null) {
-					return new EquateOperandFieldLocation(program, data.getMinAddress(), refAddr,
+					return new EquateOperandFieldLocation(program, minAddress, refAddr,
 						equate.getDisplayName(), equate, opIndex, subOpIndex,
 						translatedLocation.col());
 				}
 			}
-			return new OperandFieldLocation(program, data.getMinAddress(), data.getComponentPath(),
-				refAddr, codeUnitFormat.getDataValueRepresentationString(data), 0, col);
+			return new OperandFieldLocation(program, minAddress, data.getComponentPath(), refAddr,
+				codeUnitFormat.getDataValueRepresentationString(data), 0, col);
 		}
 		return null;
 	}
@@ -375,7 +366,7 @@ abstract class OperandFieldHelper extends FieldFactory {
 				: getAttributesForData(data, value);
 		AttributedString as =
 			new AttributedString(dataValueRepresentation.toString(), attributes.colorAttribute,
-				getMetrics(attributes.styleAttribute), underline, underlineColor);
+				getMetrics(attributes.styleAttribute), underline, ListingColors.UNDERLINE);
 		FieldElement field = new OperandFieldElement(as, 0, 0, 0);
 
 		if (shouldWordWrap(data, dataValueRepresentation)) {
@@ -459,7 +450,7 @@ abstract class OperandFieldHelper extends FieldFactory {
 			AttributedString as =
 				new AttributedString(opRepList != null ? opRepList.toString() : "<UNSUPPORTED>",
 					badRefAttributes.colorAttribute, getMetrics(badRefAttributes.styleAttribute),
-					false, underlineColor);
+					false, ListingColors.UNDERLINE);
 			elements.add(new OperandFieldElement(as, opIndex, subOpIndex, characterOffset));
 			characterOffset += as.length();
 		}
@@ -477,9 +468,9 @@ abstract class OperandFieldHelper extends FieldFactory {
 
 	private int addElements(Instruction inst, List<OperandFieldElement> elements, List<?> objList,
 			int opIndex, int subOpIndex, boolean underline, int characterOffset) {
-		for (int i = 0; i < objList.size(); i++) {
-			characterOffset = addElement(inst, elements, objList.get(i), underline, opIndex,
-				subOpIndex, characterOffset);
+		for (Object element : objList) {
+			characterOffset = addElement(inst, elements, element, underline, opIndex, subOpIndex,
+				characterOffset);
 		}
 		return characterOffset;
 	}
@@ -499,8 +490,9 @@ abstract class OperandFieldHelper extends FieldFactory {
 		}
 
 		ColorStyleAttributes attributes = getOpAttributes(opElem, inst, opIndex);
+
 		AttributedString as = new AttributedString(opElem.toString(), attributes.colorAttribute,
-			getMetrics(attributes.styleAttribute), underline, underlineColor);
+			getMetrics(attributes.styleAttribute), underline, ListingColors.UNDERLINE);
 		elements.add(new OperandFieldElement(as, opIndex, subOpIndex, characterOffset));
 		return characterOffset + as.length();
 	}
@@ -679,34 +671,27 @@ abstract class OperandFieldHelper extends FieldFactory {
 	 * changes.  It looks up all the color settings and resets the its values.
 	 */
 	private void setOptions(Options options) {
-		separatorAttributes.colorAttribute = options.getColor(
-			OptionsGui.SEPARATOR.getColorOptionName(), OptionsGui.SEPARATOR.getDefaultColor());
+
+		separatorAttributes.colorAttribute = ListingColors.SEPARATOR;
+		scalarAttributes.colorAttribute = ListingColors.CONSTANT;
+		variableRefAttributes.colorAttribute = FunctionColors.VARIABLE;
+		addressAttributes.colorAttribute = ListingColors.ADDRESS;
+		externalRefAttributes.colorAttribute = ListingColors.EXT_REF_RESOLVED;
+		badRefAttributes.colorAttribute = ListingColors.REF_BAD;
+		registerAttributes.colorAttribute = ListingColors.REGISTER;
+
 		separatorAttributes.styleAttribute =
 			options.getInt(OptionsGui.SEPARATOR.getStyleOptionName(), -1);
-		scalarAttributes.colorAttribute = options.getColor(OptionsGui.CONSTANT.getColorOptionName(),
-			OptionsGui.CONSTANT.getDefaultColor());
 		scalarAttributes.styleAttribute =
 			options.getInt(OptionsGui.CONSTANT.getStyleOptionName(), -1);
-		variableRefAttributes.colorAttribute = options.getColor(
-			OptionsGui.VARIABLE.getColorOptionName(), OptionsGui.VARIABLE.getDefaultColor());
 		variableRefAttributes.styleAttribute =
 			options.getInt(OptionsGui.VARIABLE.getStyleOptionName(), -1);
-		addressAttributes.colorAttribute = options.getColor(OptionsGui.ADDRESS.getColorOptionName(),
-			OptionsGui.ADDRESS.getDefaultColor());
 		addressAttributes.styleAttribute =
 			options.getInt(OptionsGui.ADDRESS.getStyleOptionName(), -1);
-		externalRefAttributes.colorAttribute =
-			options.getColor(OptionsGui.EXT_REF_RESOLVED.getColorOptionName(),
-				OptionsGui.EXT_REF_RESOLVED.getDefaultColor());
 		externalRefAttributes.styleAttribute =
 			options.getInt(OptionsGui.EXT_REF_RESOLVED.getStyleOptionName(), -1);
-		badRefAttributes.colorAttribute =
-			options.getColor(OptionsGui.BAD_REF_ADDR.getColorOptionName(),
-				OptionsGui.BAD_REF_ADDR.getDefaultColor());
 		badRefAttributes.styleAttribute =
 			options.getInt(OptionsGui.BAD_REF_ADDR.getStyleOptionName(), -1);
-		registerAttributes.colorAttribute = options.getColor(
-			OptionsGui.REGISTERS.getColorOptionName(), OptionsGui.REGISTERS.getDefaultColor());
 		registerAttributes.styleAttribute =
 			options.getInt(OptionsGui.REGISTERS.getStyleOptionName(), -1);
 

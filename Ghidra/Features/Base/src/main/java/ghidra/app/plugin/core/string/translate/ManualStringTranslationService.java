@@ -50,7 +50,8 @@ public class ManualStringTranslationService implements StringTranslationService 
 	}
 
 	@Override
-	public void translate(Program program, List<ProgramLocation> stringLocations) {
+	public void translate(Program program, List<ProgramLocation> stringLocations,
+			TranslateOptions options) {
 		TaskLauncher.launchModal("Manually translate strings", monitor -> {
 
 			int id = program.startTransaction("Translate strings");
@@ -106,6 +107,7 @@ public class ManualStringTranslationService implements StringTranslationService 
 			// actual string data instance value.
 			if (newValue.isEmpty() || newValue.equals(sdi.getStringValue())) {
 				TRANSLATION.clear(data);
+				TRANSLATION.setTranslatedValue(data, null);
 			}
 			else {
 				TRANSLATION.setTranslatedValue(data, newValue);

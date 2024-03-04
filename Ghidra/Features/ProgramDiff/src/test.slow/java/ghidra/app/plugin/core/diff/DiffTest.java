@@ -28,7 +28,7 @@ import javax.swing.tree.TreePath;
 
 import org.junit.Test;
 
-import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.DialogComponentProvider;
 import docking.action.DockingActionIf;
 import docking.widgets.fieldpanel.FieldPanel;
@@ -456,7 +456,7 @@ public class DiffTest extends DiffTestAdapter {
 		JTree tree = getProgramTree();
 		selectTreeNodeByText(tree, ".data");
 
-		runSwing(() -> replaceView.actionPerformed(new ActionContext()));
+		runSwing(() -> replaceView.actionPerformed(new DefaultActionContext()));
 
 		topOfFile(fp1);
 		assertEquals(addr("1008000"), cb.getCurrentAddress());
@@ -482,11 +482,11 @@ public class DiffTest extends DiffTestAdapter {
 		JTree tree = getProgramTree();
 		selectTreeNodeByText(tree, ".data");
 
-		runSwing(() -> replaceView.actionPerformed(new ActionContext()));
+		runSwing(() -> replaceView.actionPerformed(new DefaultActionContext()));
 
 		selectTreeNodeByText(tree, ".rsrc");
 
-		runSwing(() -> goToView.actionPerformed(new ActionContext()));
+		runSwing(() -> goToView.actionPerformed(new DefaultActionContext()));
 
 		topOfFile(fp1);
 		assertEquals(addr("1008000"), cb.getCurrentAddress());
@@ -659,7 +659,7 @@ public class DiffTest extends DiffTestAdapter {
 		assertEquals(true, isShowingDiff());
 		// Check action enablement.
 		checkDiffAction("View Program Differences", true, true);
-		checkDiffAction("Open/Close Program View", true, true);
+		checkDiffAction("Open/Close Diff View", true, true);
 		checkDiffAction("Apply Differences", true, false);
 		checkDiffAction("Apply Differences and Goto Next Difference", true, false);
 		checkDiffAction("Ignore Selection and Goto Next Difference", true, false);
@@ -777,13 +777,13 @@ public class DiffTest extends DiffTestAdapter {
 
 		assertEquals(true, isDiffing());
 		assertEquals(true, isShowingDiff());
-		checkDiffAction("Open/Close Program View", true, true);
+		checkDiffAction("Open/Close Diff View", true, true);
 
 		//
 		// Different tab--still enabled
 		//
 		selectTab(panel, program3);
-		checkDiffAction("Open/Close Program View", true, true);
+		checkDiffAction("Open/Close Diff View", true, true);
 
 		clickDiffButton();
 		assertTrue("Not diffing after clicking the diff button when on a non-diff tab",
@@ -794,7 +794,7 @@ public class DiffTest extends DiffTestAdapter {
 		//
 		// Diff tab--still enabled
 		//
-		checkDiffAction("Open/Close Program View", true, true);
+		checkDiffAction("Open/Close Diff View", true, true);
 
 		clickDiffButton();
 
@@ -874,7 +874,7 @@ public class DiffTest extends DiffTestAdapter {
 	private void clickDiffButton() {
 		runSwing(() -> {
 			openClosePgm2.setSelected(!openClosePgm2.isSelected());
-			openClosePgm2.actionPerformed(new ActionContext());
+			openClosePgm2.actionPerformed(new DefaultActionContext());
 		}, false);
 		waitForSwing();
 	}

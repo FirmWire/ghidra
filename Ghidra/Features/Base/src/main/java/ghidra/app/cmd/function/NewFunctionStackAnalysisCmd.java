@@ -149,7 +149,7 @@ public class NewFunctionStackAnalysisCmd extends BackgroundCommand {
 		ArrayList<Function> funcList = new ArrayList<>(); // list of functions needing stack frames created
 		stack.push(f);
 		while (!stack.isEmpty()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			Function func = stack.pop();
 			if (func.isThunk()) {
 				continue;
@@ -183,7 +183,7 @@ public class NewFunctionStackAnalysisCmd extends BackgroundCommand {
 		// Process all the functions identified as needing stack analysis.
 		// The list will have the lowest level functions analyzed first.
 		while (!funcList.isEmpty()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			Function func = funcList.remove(0);
 			SourceType oldSignatureSource = func.getSignatureSource();
 
@@ -298,7 +298,7 @@ public class NewFunctionStackAnalysisCmd extends BackgroundCommand {
 					Address address, int opIndex) {
 				AddressSpace space = address.getAddressSpace();
 				String spaceName = space.getName();
-				if (spaceName.startsWith("track_") || spaceName.equals(stackReg.getName())) {
+				if (spaceName.startsWith("track_") || context.isStackSpaceName(spaceName)) {
 					if (opIndex == -1) {
 						opIndex = getStackOpIndex(context, instr, (int) address.getOffset());
 						// if didn't get the right opIndex, and has a delayslot, check for good stack ref
@@ -576,7 +576,7 @@ public class NewFunctionStackAnalysisCmd extends BackgroundCommand {
 						continue;
 					}
 					String spaceName = vnode.getAddress().getAddressSpace().getName();
-					if (spaceName.startsWith("track_") || spaceName.equals(stackReg.getName())) {
+					if (spaceName.startsWith("track_") || context.isStackSpaceName(spaceName)) {
 //						opLocation = opIndex;
 						local_offset += (int) vnode.getOffset();
 					}
@@ -742,7 +742,7 @@ public class NewFunctionStackAnalysisCmd extends BackgroundCommand {
 	}
 
 	private Variable getVariableContaining(int offset, List<Variable> sortedVariables) {
-		Object key = new Integer(offset);
+		Object key = Integer.valueOf(offset);
 		int index = Collections.binarySearch(sortedVariables, key, StackVariableComparator.get());
 		if (index >= 0) {
 			return sortedVariables.get(index);
@@ -773,7 +773,7 @@ public class NewFunctionStackAnalysisCmd extends BackgroundCommand {
 	 * @param sortedVariables
 	 */
 	private void addVariableToSortedList(Variable var, List<Variable> sortedVariables) {
-		int index = Collections.binarySearch(sortedVariables, new Integer(var.getStackOffset()),
+		int index = Collections.binarySearch(sortedVariables, Integer.valueOf(var.getStackOffset()),
 			StackVariableComparator.get());
 		if (index >= 0) {
 			throw new AssertException("Unexpected variable conflict");

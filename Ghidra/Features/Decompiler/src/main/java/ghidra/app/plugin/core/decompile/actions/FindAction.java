@@ -17,16 +17,12 @@ package ghidra.app.plugin.core.decompile.actions;
 
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 
 import docking.action.KeyBindingData;
 import docking.action.MenuData;
-import docking.widgets.*;
-import docking.widgets.fieldpanel.field.Field;
-import docking.widgets.fieldpanel.support.FieldLocation;
-import ghidra.app.decompiler.component.ClangTextField;
+import docking.widgets.FindDialog;
 import ghidra.app.decompiler.component.DecompilerPanel;
 import ghidra.app.plugin.core.decompile.DecompilerActionContext;
 import ghidra.app.util.HelpTopics;
@@ -43,6 +39,14 @@ public class FindAction extends AbstractDecompilerAction {
 		setEnabled(true);
 	}
 
+	@Override
+	public void dispose() {
+		if (findDialog != null) {
+			findDialog.dispose();
+		}
+		super.dispose();
+	}
+
 	protected FindDialog getFindDialog(DecompilerPanel decompilerPanel) {
 		if (findDialog == null) {
 			findDialog =
@@ -56,67 +60,6 @@ public class FindAction extends AbstractDecompilerAction {
 			findDialog.setHelpLocation(new HelpLocation(HelpTopics.DECOMPILER, "ActionFind"));
 		}
 		return findDialog;
-	}
-
-	private static class DecompilerSearcher implements FindDialogSearcher {
-
-		private DecompilerPanel decompilerPanel;
-
-		public DecompilerSearcher(DecompilerPanel dPanel) {
-			decompilerPanel = dPanel;
-		}
-
-		@Override
-		public CursorPosition getCursorPosition() {
-			FieldLocation fieldLocation = decompilerPanel.getCursorPosition();
-			return new DecompilerCursorPosition(fieldLocation);
-		}
-
-		@Override
-		public CursorPosition getStart() {
-
-			int lineNumber = 0;
-			int fieldNumber = 0; // always 0, as the field is the entire line and it is the only field
-			int column = 0; // or length for the end
-			FieldLocation fieldLocation = new FieldLocation(lineNumber, fieldNumber, 0, column);
-			return new DecompilerCursorPosition(fieldLocation);
-		}
-
-		@Override
-		public CursorPosition getEnd() {
-
-			List<Field> lines = decompilerPanel.getFields();
-			int lineNumber = lines.size() - 1;
-			ClangTextField textLine = (ClangTextField) lines.get(lineNumber);
-
-			int fieldNumber = 0; // always 0, as the field is the entire line and it is the only field
-			int rowCount = textLine.getNumRows();
-			int row = rowCount - 1; // 0-based
-			int column = textLine.getNumCols(row);
-			FieldLocation fieldLocation = new FieldLocation(lineNumber, fieldNumber, row, column);
-			return new DecompilerCursorPosition(fieldLocation);
-		}
-
-		@Override
-		public void setCursorPosition(CursorPosition position) {
-			decompilerPanel.setCursorPosition(
-				((DecompilerCursorPosition) position).getFieldLocation());
-		}
-
-		@Override
-		public void highlightSearchResults(SearchLocation location) {
-			decompilerPanel.setSearchResults(location);
-		}
-
-		@Override
-		public SearchLocation search(String text, CursorPosition position, boolean searchForward,
-				boolean useRegex) {
-			DecompilerCursorPosition decompilerCursorPosition = (DecompilerCursorPosition) position;
-			FieldLocation fieldLocation = decompilerCursorPosition.getFieldLocation();
-			return useRegex ? decompilerPanel.searchTextRegex(text, fieldLocation, searchForward)
-					: decompilerPanel.searchText(text, fieldLocation, searchForward);
-		}
-
 	}
 
 	@Override

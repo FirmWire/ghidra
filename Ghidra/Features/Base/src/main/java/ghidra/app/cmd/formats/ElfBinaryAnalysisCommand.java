@@ -17,7 +17,8 @@ package ghidra.app.cmd.formats;
 
 import java.util.Arrays;
 
-import generic.continues.RethrowContinuesFactory;
+import org.apache.commons.lang3.StringUtils;
+
 import ghidra.app.plugin.core.analysis.AnalysisWorker;
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
 import ghidra.app.util.bin.*;
@@ -36,7 +37,8 @@ import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
-import ghidra.util.*;
+import ghidra.util.Msg;
+import ghidra.util.StringUtilities;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.task.TaskMonitor;
@@ -77,11 +79,10 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 		Listing listing = currentProgram.getListing();
 		SymbolTable symbolTable = currentProgram.getSymbolTable();
 
-		ByteProvider provider = new MemoryByteProvider(currentProgram.getMemory(),
-			currentProgram.getAddressFactory().getDefaultAddressSpace());
+		ByteProvider provider =
+			MemoryByteProvider.createDefaultAddressSpaceByteProvider(program, false);
 		try {
-			ElfHeader elf = ElfHeader.createElfHeader(RethrowContinuesFactory.INSTANCE, provider,
-				msg -> messages.appendMsg(msg));
+			ElfHeader elf = new ElfHeader(provider, msg -> messages.appendMsg(msg));
 			elf.parse();
 
 			processElfHeader(elf, listing);
@@ -140,7 +141,7 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 
 		ElfSectionHeader[] stringSections = elf.getSections(ElfSectionHeaderConstants.SHT_STRTAB);
 		for (ElfSectionHeader stringSection : stringSections) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			try {
 				Address addr = addr(stringSection.getOffset());
 				Address maxAddr = addr.addNoWrap(stringSection.getSize() - 1);
@@ -175,7 +176,7 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 	private void processSectionHeaders(ElfHeader elf, Listing listing) throws Exception {
 		ElfSectionHeader[] sections = elf.getSections();
 		for (int i = 0; i < sections.length; i++) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			String name = sections[i].getNameAsString();
 
 			DataType sectionDT = sections[i].toDataType();
@@ -189,10 +190,8 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 			cu.setComment(CodeUnit.PLATE_COMMENT,
 				"#" + i + ") " + name + " at 0x" + Long.toHexString(sections[i].getAddress()));
 
-			if (sections[i].getSize() == 0) {
-				continue;
-			}
-			if (sections[i].getType() == ElfSectionHeaderConstants.SHT_NOBITS) {
+			if (sections[i].getType() == ElfSectionHeaderConstants.SHT_NOBITS ||
+				sections[i].getSize() == 0 || sections[i].isInvalidOffset()) {
 				continue;
 			}
 
@@ -214,14 +213,14 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 
 	private void processProgramHeaders(ElfHeader elf, Listing listing) throws Exception {
 
-		int headerCount = elf.e_phnum();
+		int headerCount = elf.getProgramHeaderCount();
 		int size = elf.e_phentsize() * headerCount;
 		if (size == 0) {
 			return;
 		}
 
 		Structure phStructDt = (Structure) elf.getProgramHeaders()[0].toDataType();
-		phStructDt = (Structure) phStructDt.clone(listing.getDataTypeManager());
+		phStructDt = phStructDt.clone(listing.getDataTypeManager());
 		Array arrayDt = new ArrayDataType(phStructDt, headerCount, size);
 
 		Data array = createData(addr(elf.e_phoff()), arrayDt);
@@ -230,7 +229,7 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 
 		ElfProgramHeader[] programHeaders = elf.getProgramHeaders();
 		for (int i = 0; i < programHeaders.length; i++) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			Data d = array.getComponent(i);
 			d.setComment(CodeUnit.EOL_COMMENT, programHeaders[i].getComment());
 
@@ -244,7 +243,7 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 			throws CancelledException {
 		for (ElfProgramHeader programHeader : elf.getProgramHeaders(
 			ElfProgramHeaderConstants.PT_INTERP)) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			long offset = programHeader.getOffset();
 			if (offset == 0) {
 				Msg.warn(this, " Dynamic table appears to have been stripped from binary");
@@ -282,7 +281,7 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 			BinaryReader reader = new BinaryReader(provider, !program.getMemory().isBigEndian());
 
 			for (int i = 0; i < dynamics.length; i++) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 
 				Data dynamicData = dynamicTableData.getComponent(i);
 				if (dynamicData == null) {
@@ -361,7 +360,7 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 
 		ElfSymbolTable[] symbolTables = elf.getSymbolTables();
 		for (ElfSymbolTable symbolTable2 : symbolTables) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 
 			Address symbolTableAddr = addr(symbolTable2.getFileOffset());
 
@@ -382,12 +381,14 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 				}
 
 				String name = symbols[j].getNameAsString();
-				long value = symbols[j].getValue() & Conv.INT_MASK;
+				if (StringUtils.isBlank(name)) {
+					continue;
+				}
 
 				try {
 					Address currAddr = symbolTableAddr.add(j * symbolTable2.getEntrySize());
 					listing.setComment(currAddr, CodeUnit.EOL_COMMENT,
-						name + " at 0x" + Long.toHexString(value));
+						name + " at 0x" + Long.toHexString(symbols[j].getValue()));
 				}
 				catch (Exception e) {
 					messages.appendMsg("Could not markup symbol table: " + e);
@@ -405,7 +406,7 @@ public class ElfBinaryAnalysisCommand extends FlatProgramAPI
 		monitor.setMessage("Processing relocation tables...");
 		ElfRelocationTable[] relocationTables = elf.getRelocationTables();
 		for (ElfRelocationTable relocationTable : relocationTables) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			ElfSectionHeader relocationSection = relocationTable.getTableSectionHeader();
 			String relocSectionName = "<section-not-found>";
 			if (relocationSection != null) {

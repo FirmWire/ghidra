@@ -16,7 +16,6 @@
 package ghidra.framework.main;
 
 import java.io.File;
-import java.io.IOException;
 
 import docking.ActionContext;
 import docking.action.DockingAction;
@@ -24,22 +23,28 @@ import docking.action.MenuData;
 import docking.tool.ToolConstants;
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
+import docking.widgets.filechooser.GhidraFileChooserMode;
 import ghidra.net.ApplicationKeyManagerFactory;
+import ghidra.net.ApplicationKeyManagerUtils;
 import ghidra.util.HelpLocation;
-import ghidra.util.Msg;
+import ghidra.util.filechooser.ExtensionFileFilter;
+import ghidra.util.filechooser.GhidraFileFilter;
 
 /**
  * Helper class to manage the actions on the Edit menu.
  */
 class EditActionManager {
+	/**
+	 * PKCS Private Key/Certificate File Filter
+	 */
+	public static final GhidraFileFilter CERTIFICATE_FILE_FILTER =
+		new ExtensionFileFilter(ApplicationKeyManagerUtils.PKCS_FILE_EXTENSIONS, "PKCS Key File");
 
 	private FrontEndPlugin plugin;
 	private FrontEndTool tool;
 	private DockingAction editPluginPathAction;
 	private DockingAction editCertPathAction;
 	private DockingAction clearCertPathAction;
-	private EditPluginPathDialog pluginPathDialog;
-	private GhidraFileChooser certFileChooser;
 
 	EditActionManager(FrontEndPlugin plugin) {
 		this.plugin = plugin;
@@ -101,9 +106,7 @@ class EditActionManager {
 	 * Pop up the edit plugin path dialog.
 	 */
 	private void editPluginPath() {
-		if (pluginPathDialog == null) {
-			pluginPathDialog = new EditPluginPathDialog();
-		}
+		EditPluginPathDialog pluginPathDialog = new EditPluginPathDialog();
 		pluginPathDialog.show(tool);
 	}
 
@@ -121,20 +124,13 @@ class EditActionManager {
 			return;
 		}
 
-		try {
-			ApplicationKeyManagerFactory.setKeyStore(null, true);
-			clearCertPathAction.setEnabled(false);
-		}
-		catch (IOException e) {
-			Msg.error(this,
-				"Error occurred while clearing PKI certificate setting: " + e.getMessage());
-		}
+		ApplicationKeyManagerFactory.setKeyStore(null, true);
+		clearCertPathAction.setEnabled(false);
 	}
 
 	private void editCertPath() {
-		if (certFileChooser == null) {
-			certFileChooser = createCertFileChooser();
-		}
+
+		GhidraFileChooser certFileChooser = createCertFileChooser();
 
 		File dir = null;
 		File oldFile = null;
@@ -167,17 +163,12 @@ class EditActionManager {
 			if (file == null) {
 				return; // cancelled
 			}
-			try {
-				ApplicationKeyManagerFactory.setKeyStore(file.getAbsolutePath(), true);
-				clearCertPathAction.setEnabled(true);
-				validInput = true;
-			}
-			catch (IOException e) {
-				Msg.showError(this, tool.getToolFrame(), "Certificate Failure",
-					"Failed to initialize key manager.\n" + e.getMessage(), e);
-				file = null;
-			}
+			ApplicationKeyManagerFactory.setKeyStore(file.getAbsolutePath(), true);
+			clearCertPathAction.setEnabled(true);
+			validInput = true;
 		}
+
+		certFileChooser.dispose();
 	}
 
 	private GhidraFileChooser createCertFileChooser() {
@@ -185,8 +176,8 @@ class EditActionManager {
 		GhidraFileChooser fileChooser = new GhidraFileChooser(tool.getToolFrame());
 		fileChooser.setTitle("Select Certificate (req'd for PKI authentication only)");
 		fileChooser.setApproveButtonText("Set Certificate");
-		fileChooser.setFileFilter(ApplicationKeyManagerFactory.CERTIFICATE_FILE_FILTER);
-		fileChooser.setFileSelectionMode(GhidraFileChooser.FILES_ONLY);
+		fileChooser.setFileFilter(CERTIFICATE_FILE_FILTER);
+		fileChooser.setFileSelectionMode(GhidraFileChooserMode.FILES_ONLY);
 		fileChooser.setHelpLocation(new HelpLocation(plugin.getName(), "Set_PKI_Certificate"));
 		return fileChooser;
 	}

@@ -432,7 +432,7 @@ public final class FileUtilities {
 		monitor.initialize(files.length);
 
 		for (int i = 0; i < files.length; i++) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			if (files[i].isDirectory()) {
 				// use a dummy monitor as not to ruin our progress
 				if (!doDeleteDir(files[i], monitor)) {
@@ -467,7 +467,7 @@ public final class FileUtilities {
 		}
 
 		for (File file : files) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			if (file.isDirectory()) {
 				// use a dummy monitor as not to ruin our progress
 				if (!doDeleteDir(file, monitor)) {
@@ -534,7 +534,7 @@ public final class FileUtilities {
 		monitor.initialize(originalDirFiles.length);
 
 		for (File file : originalDirFiles) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			monitor.setMessage("Copying " + file.getAbsolutePath());
 			File destinationFile = new File(copyDir, file.getName());
 			if (file.isDirectory()) {
@@ -571,7 +571,7 @@ public final class FileUtilities {
 
 		int copiedFilesCount = 0;
 		for (File file : originalDirFiles) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			monitor.setMessage("Copying " + file.getAbsolutePath());
 			File destinationFile = new File(copyDir, file.getName());
 			if (file.isDirectory()) {
@@ -850,7 +850,7 @@ public final class FileUtilities {
 	 *
 	 * @param potentialParentFile The file that may be the parent
 	 * @param otherFile The file that may be the child
-	 * @return boolean true if otherFile's path is within potentialParentFile's path.
+	 * @return boolean true if otherFile's path is within potentialParentFile's path
 	 */
 	public static boolean isPathContainedWithin(File potentialParentFile, File otherFile) {
 		try {
@@ -872,6 +872,20 @@ public final class FileUtilities {
 	}
 
 	/**
+	 * Returns true if any of the given <code>potentialParents</code> is the parent path of or has
+	 * the same path as the given <code>otherFile</code>.
+	 *
+	 * @param potentialParents The files that may be the parent
+	 * @param otherFile The file that may be the child
+	 * @return boolean true if otherFile's path is within any of the potentialParents' paths 
+	 */
+	public static boolean isPathContainedWithin(Collection<ResourceFile> potentialParents,
+			ResourceFile otherFile) {
+
+		return potentialParents.stream().anyMatch(parent -> parent.containsPath(otherFile));
+	}
+
+	/**
 	 * Returns the portion of the second file that trails the full path of the first file.  If
 	 * the paths are the same or unrelated, then null is returned.
 	 *
@@ -880,7 +894,8 @@ public final class FileUtilities {
 	 *
 	 * @param f1 the parent file
 	 * @param f2 the child file
-	 * @return the portion of the second file that trails the full path of the first file.
+	 * @return the portion of the second file that trails the full path of the first file; null as
+	 * described above
 	 * @throws IOException if there is an error canonicalizing the path
 	 */
 	public static String relativizePath(File f1, File f2) throws IOException {
@@ -903,17 +918,18 @@ public final class FileUtilities {
 	}
 
 	/**
-	 * Return the relative path string of one resource file in another. If
-	 * no path can be constructed or the files are the same, then null is returned.
+	 * Return the relative path string of one resource file in another. If no path can be 
+	 * constructed or the files are the same, then null is returned.
 	 * 
-	 * Note: unlike {@link #relativizePath(File, File)}, this function does not resolve symbolic links.
+	 * Note: unlike {@link #relativizePath(File, File)}, this function does not resolve symbolic 
+	 * links.
 	 *
 	 * <P>For example, given, in this order, two files with these paths
 	 *  <code>/a/b</code> and <code>/a/b/c</code>, this method will return 'c'.
 	 *
 	 * @param f1 the parent resource file
 	 * @param f2 the child resource file
-	 * @return the relative path of {@code f2} in {@code f1}
+	 * @return the relative path of {@code f2} in {@code f1}; null if f1 is not a parent of f2
 	 */
 	public static String relativizePath(ResourceFile f1, ResourceFile f2) {
 		StringBuilder sb = new StringBuilder(f2.getName());
@@ -1174,29 +1190,6 @@ public final class FileUtilities {
 	}
 
 	/**
-	 * Creates a temporary directory using the given prefix
-	 * @param prefix the prefix
-	 * @return the temp file
-	 */
-	public static File createTempDirectory(String prefix) {
-		try {
-			File temp = File.createTempFile(prefix, Long.toString(System.currentTimeMillis()));
-			if (!temp.delete()) {
-				throw new IOException("Could not delete temp file: " + temp.getAbsolutePath());
-			}
-			if (!createDir(temp)) {
-				throw new IOException("Could not create temp directory: " + temp.getAbsolutePath());
-			}
-			return temp;
-		}
-		catch (IOException e) {
-			Msg.error(FileUtilities.class, "Error creating temporary directory", e);
-		}
-
-		return null;
-	}
-
-	/**
 	 * Sets the given file (or directory) to readable and writable by only the owner.
 	 *
 	 * @param f The file (or directory) to set the permissions of.
@@ -1248,14 +1241,56 @@ public final class FileUtilities {
 	 * @param consumer the consumer of each child in the given directory
 	 * @throws IOException if there is any problem reading the directory contents
 	 */
-	public static void forEachFile(Path path, Consumer<Stream<Path>> consumer) throws IOException {
-
+	public static void forEachFile(Path path, Consumer<Path> consumer) throws IOException {
 		if (!Files.isDirectory(path)) {
 			return;
 		}
 
 		try (Stream<Path> pathStream = Files.list(path)) {
-			consumer.accept(pathStream);
+			pathStream.forEach(consumer);
 		}
 	}
+
+	/**
+	 * A convenience method to list the contents of the given directory path and pass each to the
+	 * given consumer.  If the given path does not represent a directory, nothing will happen.
+	 * 
+	 * @param resourceFile the directory
+	 * @param consumer the consumer of each child in the given directory
+	 */
+	public static void forEachFile(File resourceFile, Consumer<File> consumer) {
+		if (!resourceFile.isDirectory()) {
+			return;
+		}
+
+		File[] files = resourceFile.listFiles();
+		if (files == null) {
+			return;
+		}
+		for (File child : files) {
+			consumer.accept(child);
+		}
+	}
+
+	/**
+	 * A convenience method to list the contents of the given directory path and pass each to the
+	 * given consumer.  If the given path does not represent a directory, nothing will happen.
+	 * 
+	 * @param resourceFile the directory
+	 * @param consumer the consumer of each child in the given directory
+	 */
+	public static void forEachFile(ResourceFile resourceFile, Consumer<ResourceFile> consumer) {
+		if (!resourceFile.isDirectory()) {
+			return;
+		}
+
+		ResourceFile[] files = resourceFile.listFiles();
+		if (files == null) {
+			return;
+		}
+		for (ResourceFile child : files) {
+			consumer.accept(child);
+		}
+	}
+
 }

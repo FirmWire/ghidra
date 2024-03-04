@@ -1,6 +1,5 @@
 /* ###
  * IP: GHIDRA
- * REVIEWED: YES
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +15,11 @@
  */
 package ghidra.framework.model;
 
-import ghidra.framework.store.LockException;
-
 import db.TerminatedTransactionException;
+import db.Transaction;
+import ghidra.framework.store.LockException;
+import utility.function.ExceptionalCallback;
+import utility.function.ExceptionalSupplier;
 
 /**
  * <code>UndoableDomainObject</code> extends a domain object to provide transaction
@@ -34,6 +35,86 @@ import db.TerminatedTransactionException;
  * @see #endTransaction(int, boolean)
  */
 public interface UndoableDomainObject extends DomainObject, Undoable {
+
+	/**
+	 * Open new transaction.  This should generally be done with a try-with-resources block:
+	 * <pre>
+	 * try (Transaction tx = dobj.openTransaction(description)) {
+	 * 	// ... Do something
+	 * }
+	 * </pre>
+	 * 
+	 * @param description a short description of the changes to be made.
+	 * @return transaction object
+	 * @throws IllegalStateException if this {@link DomainObject} has already been closed.
+	 */
+	public Transaction openTransaction(String description) throws IllegalStateException;
+
+	/**
+	 * Performs the given callback inside of a transaction.  Use this method in place of the more
+	 * verbose try/catch/finally semantics.
+	 * <p>
+	 * <pre>
+	 * program.withTransaction("My Description", () -> {
+	 * 	// ... Do something
+	 * });
+	 * </pre>
+	 * 
+	 * <p>
+	 * Note: the transaction created by this method will always be committed when the call is 
+	 * finished.  If you need the ability to abort transactions, then you need to use the other 
+	 * methods on this interface.
+	 * 
+	 * @param description brief description of transaction
+	 * @param callback the callback that will be called inside of a transaction
+	 * @throws E any exception that may be thrown in the given callback
+	 */
+	public default <E extends Exception> void withTransaction(String description,
+			ExceptionalCallback<E> callback) throws E {
+		int id = startTransaction(description);
+		try {
+			callback.call();
+		}
+		finally {
+			endTransaction(id, true);
+		}
+	}
+
+	/**
+	 * Calls the given supplier inside of a transaction.  Use this method in place of the more
+	 * verbose try/catch/finally semantics.
+	 * <p>
+	 * <pre>
+	 * program.withTransaction("My Description", () -> {
+	 * 	// ... Do something
+	 * 	return result;
+	 * });
+	 * </pre>
+	 * <p>
+	 * If you do not need to supply a result, then use 
+	 * {@link #withTransaction(String, ExceptionalCallback)} instead.
+	 * 
+	 * @param <E> the exception that may be thrown from this method 
+	 * @param <T> the type of result returned by the supplier
+	 * @param description brief description of transaction
+	 * @param supplier the supplier that will be called inside of a transaction
+	 * @return the result returned by the supplier
+	 * @throws E any exception that may be thrown in the given callback
+	 */
+	public default <E extends Exception, T> T withTransaction(String description,
+			ExceptionalSupplier<T, E> supplier) throws E {
+		T t = null;
+		boolean success = false;
+		int id = startTransaction(description);
+		try {
+			t = supplier.get();
+			success = true;
+		}
+		finally {
+			endTransaction(id, success);
+		}
+		return t;
+	}
 
 	/**
 	 * Start a new transaction in order to make changes to this domain object.
@@ -71,14 +152,14 @@ public interface UndoableDomainObject extends DomainObject, Undoable {
 	public void endTransaction(int transactionID, boolean commit);
 
 	/**
-	 * Returns the current transaction
-	 * @return the current transaction
+	 * Returns the current transaction info
+	 * @return the current transaction info
 	 */
-	public Transaction getCurrentTransaction();
+	public TransactionInfo getCurrentTransactionInfo();
 
 	/**
-	 * Returns true if the last transaction was terminated externally from the action that
-	 * started it.
+	 * Returns true if the last transaction was terminated from the action that started it.
+	 * @return true if the last transaction was terminated from the action that started it.
 	 */
 	public boolean hasTerminatedTransaction();
 
@@ -95,7 +176,7 @@ public interface UndoableDomainObject extends DomainObject, Undoable {
 	 * using a shared transaction manager.  If either or both is already shared, 
 	 * a transition to a single shared transaction manager will be 
 	 * performed.  
-	 * @param domainObj
+	 * @param domainObj the domain object
 	 * @throws LockException if lock or open transaction is active on either
 	 * this or the specified domain object
 	 */

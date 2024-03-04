@@ -17,6 +17,7 @@ package ghidra.app.plugin.core.processors;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.datatransfer.Clipboard;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.*;
@@ -30,12 +31,16 @@ import javax.swing.JPanel;
 import docking.ActionContext;
 import docking.action.DockingAction;
 import docking.action.MenuData;
+import docking.dnd.GClipboard;
+import docking.dnd.StringTransferable;
+import docking.widgets.OptionDialog;
 import docking.widgets.label.GDLabel;
 import ghidra.app.CorePluginPackage;
 import ghidra.app.context.*;
 import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.plugin.ProgramPlugin;
 import ghidra.app.services.GoToService;
+import ghidra.framework.Application;
 import ghidra.framework.plugintool.PluginInfo;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.PluginStatus;
@@ -60,6 +65,7 @@ import ghidra.util.*;
 public class ShowInstructionInfoPlugin extends ProgramPlugin {
 
 	private static final String CURRENT_INSTRUCTION_PREPEND_STRING = "Current Instruction: ";
+	private static final String CURRENT_DATA_PREPEND_STRING = "Current Datatype: ";
 	private static final String CURRENT_FUNCTION_APPEND_STRING =
 		" (double-click to go to function entry)";
 
@@ -70,8 +76,8 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 	private List<InstructionInfoProvider> disconnectedProviders = new ArrayList<>();
 	private DockingAction showProcessorManualAction;
 
-	private JLabel instructionLabel;
-	private JPanel instructionPanel;
+	private JLabel codeUnitLabel;
+	private JPanel codeUnitPanel;
 	private JLabel functionLabel;
 	private JPanel functionPanel;
 	private JLabel addressLabel;
@@ -82,7 +88,7 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 
 	public ShowInstructionInfoPlugin(PluginTool tool) {
 
-		super(tool, true, false);
+		super(tool);
 
 		createStatusPanels();
 		createActions();
@@ -94,14 +100,14 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 	}
 
 	private void createStatusPanels() {
-		instructionPanel = new JPanel(new BorderLayout());
-		instructionLabel = new GDLabel("                         ");
-		instructionPanel.setPreferredSize(
-			new Dimension(200, instructionLabel.getPreferredSize().height));
-		instructionLabel.setToolTipText(CURRENT_INSTRUCTION_PREPEND_STRING);
-		instructionPanel.add(instructionLabel);
-		instructionPanel.setName("Current Instruction");
-		tool.addStatusComponent(instructionPanel, true, false);
+		codeUnitPanel = new JPanel(new BorderLayout());
+		codeUnitLabel = new GDLabel("                         ");
+		codeUnitPanel.setPreferredSize(
+			new Dimension(200, codeUnitLabel.getPreferredSize().height));
+		codeUnitLabel.setToolTipText(CURRENT_INSTRUCTION_PREPEND_STRING);
+		codeUnitPanel.add(codeUnitLabel);
+		codeUnitPanel.setName("Current Instruction");
+		tool.addStatusComponent(codeUnitPanel, true, false);
 
 		functionPanel = new JPanel(new BorderLayout());
 		functionLabel = new GDLabel("                   ");
@@ -185,7 +191,7 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 	private File writeWrapperFile(URL fileURL) throws IOException {
 		File f;
 		if (manualWrapperFiles.size() < MAX_MANUAL_WRAPPER_FILE_COUNT) {
-			f = File.createTempFile("pdfView", ".html");
+			f = Application.createTempFile("pdfView", ".html");
 			f.deleteOnExit();
 		}
 		else {
@@ -216,7 +222,19 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 		String missingDescription = entry.getMissingManualDescription();
 		if (filename == null || !new File(filename).exists()) {
 			String message = buildMissingManualMessage(language, filename, missingDescription);
-			Msg.showInfo(this, null, "Missing Processor Manual", message);
+
+			int choice =
+				OptionDialog.showOptionNoCancelDialog(null, "Missing Processor Manual", message,
+					"Copy \uFF06 Close", // & in Java is for mnemonics; use unicode value
+					"Close",
+					OptionDialog.INFORMATION_MESSAGE);
+			if (choice == OptionDialog.OPTION_ONE) {
+				Clipboard systemClipboard = GClipboard.getSystemClipboard();
+				String copyText = "Missing file: " + filename + "\nDetails: " + missingDescription;
+				StringTransferable transferable = new StringTransferable(copyText);
+				systemClipboard.setContents(transferable, null);
+			}
+
 			return null;
 		}
 
@@ -300,7 +318,7 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 			provider.dispose();
 		}
 		disconnectedProviders.clear();
-		tool.removeStatusComponent(instructionPanel);
+		tool.removeStatusComponent(codeUnitPanel);
 		tool.removeStatusComponent(addressPanel);
 		tool.removeStatusComponent(functionPanel);
 		super.dispose();
@@ -309,7 +327,7 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 	/**
 	 * Remove this InstructionProvider from list of managed dialogs
 	 *
-	 * @param provider
+	 * @param provider the provider to remove
 	 */
 	public void remove(InstructionInfoProvider provider) {
 		if (provider == connectedProvider) {
@@ -322,7 +340,7 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 	}
 
 	JLabel getInstructionLabel() {
-		return instructionLabel;
+		return codeUnitLabel;
 	}
 
 	/**
@@ -355,19 +373,27 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 			functionLabel.setToolTipText("");
 		}
 
-		/// code added //
-		Instruction instr = getInstructionForCurrentProgram();
-		if (instr == null) {
-			instructionLabel.setText("");
-			instructionLabel.setToolTipText("");
+		// update instruction/Data field
+		CodeUnit codeUnit = getCodeUnitForCurrentProgram();
+		if (codeUnit == null) {
+			codeUnitLabel.setText("");
+			codeUnitLabel.setToolTipText("");
 			return;
 		}
-
-		String representation = instr.toString();
-		instructionLabel.setText(" " + representation + " ");
-		instructionLabel.setToolTipText(CURRENT_INSTRUCTION_PREPEND_STRING + representation);
-
-		// end code added ///
+		if (codeUnit instanceof Instruction) {
+			String representation = codeUnit.toString();
+			codeUnitLabel.setText(" " + representation + " ");
+			codeUnitLabel.setToolTipText(CURRENT_INSTRUCTION_PREPEND_STRING + representation);
+		}
+		else {
+			Data data = (Data) codeUnit;
+			String dataTypeName = data.getDataType().getName();
+			int size = data.getLength();
+			String displayText = dataTypeName + "  (" + size + ")";
+			String toolTipText = CURRENT_DATA_PREPEND_STRING + dataTypeName + "  Size = " + size;
+			codeUnitLabel.setText(displayText);
+			codeUnitLabel.setToolTipText(toolTipText);
+		}
 	}
 
 	@Override
@@ -388,8 +414,8 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 
 	@Override
 	protected void programDeactivated(Program program) {
-		instructionLabel.setText("");
-		instructionLabel.setToolTipText("");
+		codeUnitLabel.setText("");
+		codeUnitLabel.setToolTipText("");
 		if (connectedProvider != null) {
 			connectedProvider.setProgram(null);
 		}
@@ -406,14 +432,14 @@ public class ShowInstructionInfoPlugin extends ProgramPlugin {
 		return listing.getInstructionContaining(addr);
 	}
 
-	private Instruction getInstructionForCurrentProgram() {
+	private CodeUnit getCodeUnitForCurrentProgram() {
 		Address addr = currentLocation.getAddress();
 		if (addr == null) {
 			return null;
 		}
 
 		Listing listing = currentProgram.getListing();
-		return listing.getInstructionContaining(addr);
+		return listing.getCodeUnitContaining(addr);
 	}
 
 	void goToSurroundingFunction() {
@@ -458,7 +484,7 @@ class ShowInfoAction extends ListingContextAction {
 
 		this.plugin = plugin;
 
-		setPopupMenuData(new MenuData(new String[] { "Instruction Info..." }, null, "Disassembly"));
+		setPopupMenuData(new MenuData(new String[] { "Instruction Info" }, null, "Disassembly"));
 
 	}
 
@@ -480,8 +506,8 @@ class ShowProcessorManualAction extends ProgramContextAction {
 		this.plugin = plugin;
 
 		setMenuBarData(
-			new MenuData(new String[] { "Tools", "Processor Manual..." }, null, "Disassembly"));
-		setPopupMenuData(new MenuData(new String[] { "Processor Manual..." }, null, "Disassembly"));
+			new MenuData(new String[] { "Tools", "Processor Manual" }, null, "Disassembly"));
+		setPopupMenuData(new MenuData(new String[] { "Processor Manual" }, null, "Disassembly"));
 
 		this.setEnabled(true);
 	}

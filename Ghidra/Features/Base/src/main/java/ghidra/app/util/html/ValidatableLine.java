@@ -1,6 +1,5 @@
 /* ###
  * IP: GHIDRA
- * REVIEWED: YES
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +17,8 @@ package ghidra.app.util.html;
 
 import java.awt.Color;
 
+import generic.theme.GThemeDefaults.Colors.Messages;
+
 /**
  * A loose concept that represents a line of text, potentially with multiple parts, that can
  * be validated against other instances and can change the color of the text.
@@ -27,7 +28,7 @@ import java.awt.Color;
  */
 public interface ValidatableLine {
 
-	public static final Color INVALID_COLOR = Color.RED;
+	public static final Color INVALID_COLOR = Messages.ERROR;
 
 	public void updateColor(ValidatableLine otherLine, Color invalidColor);
 
@@ -38,6 +39,12 @@ public interface ValidatableLine {
 	public ValidatableLine copy();
 
 	public String getText();
+
+	/**
+	 * Set color for all text.
+	 * @param color text color
+	 */
+	public void setTextColor(Color color);
 
 	/**
 	 * Sets the other line that this line is validated against.  The other line may be a full, 

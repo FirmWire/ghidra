@@ -15,17 +15,20 @@
  */
 package ghidra.app.plugin.core.reloc;
 
+import static ghidra.framework.model.DomainObjectEvent.*;
+import static ghidra.program.util.ProgramEvent.*;
+
 import docking.action.DockingAction;
 import ghidra.app.CorePluginPackage;
-import ghidra.app.events.*;
+import ghidra.app.events.ProgramActivatedPluginEvent;
+import ghidra.app.events.ProgramLocationPluginEvent;
 import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.services.GoToService;
-import ghidra.framework.model.*;
+import ghidra.framework.model.DomainObjectChangedEvent;
+import ghidra.framework.model.DomainObjectListener;
 import ghidra.framework.plugintool.*;
 import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.program.model.listing.Program;
-import ghidra.program.util.ChangeManager;
-import ghidra.program.util.ProgramSelection;
 import ghidra.util.table.SelectionNavigationAction;
 import ghidra.util.table.actions.MakeProgramSelectionAction;
 
@@ -45,7 +48,6 @@ import ghidra.util.table.actions.MakeProgramSelectionAction;
 public class RelocationTablePlugin extends Plugin implements DomainObjectListener {
 
 	private Program currentProgram;
-	private GoToService goToService;
 	private RelocationProvider provider;
 
 	public RelocationTablePlugin(PluginTool tool) {
@@ -54,9 +56,7 @@ public class RelocationTablePlugin extends Plugin implements DomainObjectListene
 
 	@Override
 	protected void init() {
-		goToService = tool.getService(GoToService.class);
 		provider = new RelocationProvider(this);
-
 		createActions();
 	}
 
@@ -69,18 +69,11 @@ public class RelocationTablePlugin extends Plugin implements DomainObjectListene
 		tool.addLocalAction(provider, navigationAction);
 	}
 
-	private void doMakeSelection() {
-		ProgramSelection selection = provider.getTable().getProgramSelection();
-		PluginEvent event = new ProgramSelectionPluginEvent(getName(), selection, currentProgram);
-		firePluginEvent(event);
-	}
-
 	@Override
 	public void dispose() {
 		super.dispose();
 		provider.dispose();
 		currentProgram = null;
-		goToService = null;
 	}
 
 	@Override
@@ -112,11 +105,8 @@ public class RelocationTablePlugin extends Plugin implements DomainObjectListene
 
 	@Override
 	public void domainObjectChanged(DomainObjectChangedEvent ev) {
-		if (ev.containsEvent(ChangeManager.DOCR_IMAGE_BASE_CHANGED) ||
-			ev.containsEvent(DomainObject.DO_OBJECT_RESTORED)) {
+		if (ev.contains(IMAGE_BASE_CHANGED, RELOCATION_ADDED, RESTORED)) {
 			provider.setProgram(currentProgram);
 		}
-
 	}
-
 }

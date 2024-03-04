@@ -15,13 +15,14 @@
  */
 package agent.gdb.manager.parsing;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.Pattern;
 
 import org.apache.commons.collections4.MultiMapUtils;
 import org.apache.commons.collections4.MultiValuedMap;
-import org.apache.commons.collections4.multimap.HashSetValuedHashMap;
-import org.apache.commons.lang3.StringEscapeUtils;
+import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 
 import agent.gdb.manager.parsing.GdbParsingUtils.AbstractGdbParser;
 import agent.gdb.manager.parsing.GdbParsingUtils.GdbParseError;
@@ -29,11 +30,13 @@ import agent.gdb.manager.parsing.GdbParsingUtils.GdbParseError;
 /**
  * A parser for GDB/MI records
  * 
+ * <p>
  * While this is a much more machine-friendly format, it has some interesting idiosyncrasies that
  * make it annoying even within a machine. This class attempts to impose a nice abstraction of these
  * records while dealing with nuances particular to certain records, but in general. Examine GDB's
  * documentation for some example records.
  * 
+ * <p>
  * There seem to be one primitive type and two (and a half?) aggregate types in these records. The
  * one primitive type is a string. The aggregates are lists and maps, and maybe "field lists" which
  * behave like multi-valued maps. Maps introduce IDs, which comprise the map keys or field names.
@@ -87,7 +90,7 @@ public class GdbMiParser extends AbstractGdbParser {
 			/**
 			 * Build the field list
 			 * 
-			 * @return
+			 * @return the field list
 			 */
 			public GdbMiFieldList build() {
 				return list;
@@ -96,41 +99,14 @@ public class GdbMiParser extends AbstractGdbParser {
 
 		/**
 		 * A key-value entry in the field list
+		 * 
+		 * @param key the key
+		 * @param value the value
 		 */
-		public static class Entry {
-			private final String key;
-			private final Object value;
-
-			private Entry(String key, Object value) {
-				this.key = key;
-				this.value = value;
-			}
-
-			/**
-			 * Get the key
-			 * 
-			 * @return the key
-			 */
-			public String getKey() {
-				return key;
-			}
-
-			/**
-			 * Get the value
-			 * 
-			 * @return the value
-			 */
-			public Object getValue() {
-				return value;
-			}
+		public record Entry(String key, Object value) {
 		}
 
-		private MultiValuedMap<String, Object> map = new HashSetValuedHashMap<String, Object>() {
-			@Override
-			protected HashSet<Object> createCollection() {
-				return new LinkedHashSet<>();
-			}
-		};
+		private MultiValuedMap<String, Object> map = new ArrayListValuedHashMap<String, Object>();
 		private MultiValuedMap<String, Object> unmodifiableMap =
 			MultiMapUtils.unmodifiableMultiValuedMap(map);
 		private final List<Entry> entryList = new ArrayList<>();
@@ -197,6 +173,7 @@ public class GdbMiParser extends AbstractGdbParser {
 		/**
 		 * Assume only a single list is associated with the key, and get that list
 		 * 
+		 * <p>
 		 * For convenience, the list is cast to a list of elements of a given type. This cast is
 		 * unchecked.
 		 * 
@@ -219,10 +196,8 @@ public class GdbMiParser extends AbstractGdbParser {
 		 */
 		public GdbMiFieldList getFieldList(String key) {
 			Object obj = getSingleton(key);
-			if (obj instanceof List) {
-				if (((List<?>) obj).isEmpty()) {
-					return GdbMiFieldList.builder().build();
-				}
+			if (obj instanceof List<?> list && list.isEmpty()) {
+				return GdbMiFieldList.builder().build();
 			}
 			return (GdbMiFieldList) obj;
 		}
@@ -265,9 +240,6 @@ public class GdbMiParser extends AbstractGdbParser {
 			return Objects.equals(this.map, that.map);
 		}
 	}
-
-	// see #parseString() for why this is no longer used....
-	//protected static final Pattern CSTRING = Pattern.compile("\\\"(\\\\.|[^\\\\\"])*\\\"");
 
 	protected static final Pattern COMMA = Pattern.compile(",");
 	protected static final Pattern LBRACKET = Pattern.compile("\\[");
@@ -336,7 +308,7 @@ public class GdbMiParser extends AbstractGdbParser {
 	 * 
 	 * @see #parseObject(CharSequence)
 	 * @return the object
-	 * @throws GdbParseError
+	 * @throws GdbParseError if no text matches
 	 */
 	public Object parseObject() throws GdbParseError {
 		switch (peek(true)) {
@@ -354,40 +326,80 @@ public class GdbMiParser extends AbstractGdbParser {
 	}
 
 	/**
-	 * Parse the string at the cursor
+	 * Parse the string at the cursor, undoing GDB's printchar transformation.
 	 * 
 	 * @see #parseString(CharSequence)
 	 * @return the string
 	 * @throws GdbParseError if no text matches the pattern
 	 */
 	public String parseString() throws GdbParseError {
-		/*
-		 * Matching CSTRING for inputs of too many characters (2048, really?) causes a
-		 * StackOverflowException in Java's built-in Pattern object. Boo! Thus, I'll write this
-		 * myself. All said and done, this might actually look better than the old regex
-		 */
-		// String match = match(CSTRING);
-		//return StringEscapeUtils.unescapeJava(match.substring(1, match.length() - 1));
-		int start = buf.position();
 		if ('"' != peek(false)) { // Keep whitespace that is in the string
 			throw new GdbParseError("\"", buf);
 		}
 		buf.get(); // consume "
+
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		while (true) {
-			char c = buf.get();
-			if (c == '"') {
+			char ch = buf.get();
+			if (ch > 0xff) {
+				throw new GdbParseError("byte", "U+" + String.format("%04X", ch));
+			}
+			else if (ch == '"') {
 				break;
 			}
-			else if (c == '\\') {
-				buf.get();
+			else if (ch != '\\') {
+				baos.write(ch);
+				continue;
+			}
+
+			/* Handle backslash-escape */
+			ch = buf.get();
+			switch (ch) {
+				case 'n':
+					baos.write('\n');
+					break;
+				case 'b':
+					baos.write('\b');
+					break;
+				case 't':
+					baos.write('\t');
+					break;
+				case 'f':
+					baos.write('\f');
+					break;
+				case 'r':
+					baos.write('\r');
+					break;
+				case 'e':
+					baos.write(0x1b);
+					break;
+				case 'a':
+					baos.write(0x07);
+					break;
+				case '0':
+				case '1':
+				case '2':
+				case '3':
+					char ch2 = buf.get();
+					if (ch2 < '0' || ch2 > '9') {
+						throw new GdbParseError("octal", "" + ch2);
+					}
+					char ch3 = buf.get();
+					if (ch3 < '0' || ch3 > '9') {
+						throw new GdbParseError("octal", "" + ch3);
+					}
+					int octchar = ((ch - '0') << 6) | ((ch2 - '0') << 3) | (ch3 - '0');
+					baos.write(octchar);
+					break;
+				case '\\':
+				case '"':
+					baos.write(ch);
+					break;
+				default:
+					throw new GdbParseError("escape", "" + ch);
 			}
 		}
-		// the closing " will already have been consumed
-		int end = buf.position();
-		buf.position(0);
-		String result = buf.subSequence(start + 1, end - 1).toString(); // remove "s
-		buf.position(end);
-		return StringEscapeUtils.unescapeJava(result);
+		return baos.toString(StandardCharsets.UTF_8);
 	}
 
 	/**
@@ -457,6 +469,11 @@ public class GdbMiParser extends AbstractGdbParser {
 			if (c == '{') {
 				Object fieldVal = parseObject();
 				result.add(UNNAMED, fieldVal);
+				continue;
+			}
+			if (c == '"') {
+				String bareString = parseString();
+				result.add(null, bareString);
 				continue;
 			}
 			String fieldId = match(FIELD_ID, true);

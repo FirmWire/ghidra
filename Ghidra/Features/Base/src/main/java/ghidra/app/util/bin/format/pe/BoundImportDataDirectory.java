@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.*;
 
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
+import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSpace;
@@ -40,20 +40,7 @@ public class BoundImportDataDirectory extends DataDirectory {
     private BoundImportDescriptor [] descriptors;
     private LinkedHashMap<String,Short> nameHash;
 
-    static BoundImportDataDirectory createBoundImportDataDirectory(
-            NTHeader ntHeader, FactoryBundledWithBinaryReader reader)
-            throws IOException {
-        BoundImportDataDirectory boundImportDataDirectory = (BoundImportDataDirectory) reader.getFactory().create(BoundImportDataDirectory.class);
-        boundImportDataDirectory.initBoundImportDataDirectory(ntHeader, reader);
-        return boundImportDataDirectory;
-    }
-
-    /**
-     * DO NOT USE THIS CONSTRUCTOR, USE create*(GenericFactory ...) FACTORY METHODS INSTEAD.
-     */
-    public BoundImportDataDirectory() {}
-
-	private void initBoundImportDataDirectory(NTHeader ntHeader, FactoryBundledWithBinaryReader reader) throws IOException {
+	BoundImportDataDirectory(NTHeader ntHeader, BinaryReader reader) throws IOException {
 		processDataDirectory(ntHeader, reader);
 
         if (descriptors == null) descriptors = new BoundImportDescriptor[0];
@@ -134,7 +121,7 @@ public class BoundImportDataDirectory extends DataDirectory {
             	Msg.error(this, "Invalid file index "+ptr);
             	break;
         	}
-            BoundImportDescriptor bid = BoundImportDescriptor.createBoundImportDescriptor(reader, ptr, rva);
+            BoundImportDescriptor bid = new BoundImportDescriptor(reader, ptr, rva);
 
             if (bid.getTimeDateStamp() == 0) break;
             if (bid.getNumberOfModuleForwarderRefs() < 0) break;
@@ -239,7 +226,7 @@ public class BoundImportDataDirectory extends DataDirectory {
 			else {
 				String moduleName = descriptor.getModuleName();
 				if (moduleName != null && moduleName.length() > 0) {
-					nameHash.put(moduleName, new Short((short)pos));
+					nameHash.put(moduleName, Short.valueOf((short)pos));
 					descriptor.setOffsetModuleName((short)pos);
 					pos += (descriptor.getModuleName().length() + 1);
 				}
@@ -257,7 +244,7 @@ public class BoundImportDataDirectory extends DataDirectory {
 				else {
 					String moduleName = forwarder.getModuleName();
 					if (moduleName != null && moduleName.length() > 0) {
-						nameHash.put(moduleName, new Short((short)pos));
+						nameHash.put(moduleName, Short.valueOf((short)pos));
 						forwarder.setOffsetModuleName((short)pos);
 						pos += (forwarder.getModuleName().length() + 1);
 					}

@@ -20,17 +20,14 @@ import ghidra.framework.options.Options;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.listing.Program;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
 public class GhidraProgramUtilities {
 	private GhidraProgramUtilities() {
 	}
 
 	/**
-	 * returns the current program, given a tool, if a program is opened;
-	 * otherwise returns null.
+	 * Returns the current program for the given tool or null if no program is open.
+	 * @param tool the tool get get the current program for
+	 * @return the current program for the given tool or null if no program is open
 	 */
 	public static Program getCurrentProgram(PluginTool tool) {
 		ProgramManager pmService = tool.getService(ProgramManager.class);
@@ -38,36 +35,43 @@ public class GhidraProgramUtilities {
 	}
 
 	/**
-	 * Returns true if the program does not contain the analyzed flag.
+	 * Returns true if the user should be asked to analyze. They will only be asked if the program
+	 * hasn't already been analyzed (analyzed flag property is false or null) or the
+	 * "ask to analyze" flag property is true or null (default is true unless explicitly set to 
+	 * false).
+	 * 
 	 * @param program the program to check for the property
-	 * @return true if the program does not contain the analyzed flag
+	 * @return true if the user should be prompted to analyze the program
 	 */
 	public static boolean shouldAskToAnalyze(Program program) {
-		try {
-			SimpleDateFormat format = new SimpleDateFormat(Program.ANALYSIS_START_DATE_FORMAT);
-			Date analysisStartDate = format.parse(Program.ANALYSIS_START_DATE);
-			Date creationDate = program.getCreationDate();
-			if (creationDate.compareTo(analysisStartDate) < 0) {
-				return false;
-			}
+
+		// no need to ask if the program can't be saved (i.e. read-only)
+		if (program == null || !program.canSave()) {
+			return false;
 		}
-		catch (ParseException e) {
-		}
+
 		Options options = program.getOptions(Program.PROGRAM_INFO);
-		return !options.contains(Program.ANALYZED);
+		// older programs don't have a "Ask" property, so check analyzed flag
+		boolean isAnalyzed = options.getBoolean(Program.ANALYZED_OPTION_NAME, false);
+		if (isAnalyzed) {
+			return false;
+		}
+		return options.getBoolean(Program.ASK_TO_ANALYZE_OPTION_NAME, true);
 	}
 
 	/**
-	 * Removes the analyzed flag from the program properties.
-	 * With this property removed, the user will be prompted to analyze the
+	 * Resets the analysis flags to the program defaults
+	 * With this reset, the user will be prompted to analyze the
 	 * program the next time it is opened.
-	 * @param program the program containing the property to be removed
+	 * @param program the program whose analysis flags should be reset
 	 */
-	public static void removeAnalyzedFlag(Program program) {
-		int transactionID = program.startTransaction(Program.ANALYZED);
+	public static void resetAnalysisFlags(Program program) {
+		int transactionID = program.startTransaction("Reset Analysis Flags");
+
 		try {
 			Options options = program.getOptions(Program.PROGRAM_INFO);
-			options.removeOption(Program.ANALYZED);
+			options.removeOption(Program.ANALYZED_OPTION_NAME);
+			options.removeOption(Program.ASK_TO_ANALYZE_OPTION_NAME);
 		}
 		finally {
 			program.endTransaction(transactionID, true);
@@ -75,24 +79,43 @@ public class GhidraProgramUtilities {
 	}
 
 	/**
-	 * Sets the analyzed flag to the specified value.
+	 * Marks the program has having been analyzed
 	 * @param program the program to set property
-	 * @param analyzed the analyzed flag
 	 */
-	public static void setAnalyzedFlag(Program program, boolean analyzed) {
+	public static void markProgramAnalyzed(Program program) {
 		Options options = program.getOptions(Program.PROGRAM_INFO);
 
-		// once the program is analyzed, register the value, so it won't keep writing it to the database.
-		if (analyzed && !options.isRegistered(Program.ANALYZED)) {
-			options.registerOption(Program.ANALYZED, false, null,
-				"Indicates if program has been analyzed");
-		}
-		int transactionID = program.startTransaction(Program.ANALYZED);
+		int transactionID = program.startTransaction("Mark Program Analyzed");
 		try {
-			options.setBoolean(Program.ANALYZED, analyzed);
+			options.setBoolean(Program.ANALYZED_OPTION_NAME, true);
+			options.setBoolean(Program.ASK_TO_ANALYZE_OPTION_NAME, false);
 		}
 		finally {
 			program.endTransaction(transactionID, true);
 		}
 	}
+
+	public static void markProgramNotToAskToAnalyze(Program program) {
+		Options options = program.getOptions(Program.PROGRAM_INFO);
+
+		int transactionID = program.startTransaction("Mark Program To Not Ask To Analyze");
+		try {
+			options.setBoolean(Program.ASK_TO_ANALYZE_OPTION_NAME, false);
+		}
+		finally {
+			program.endTransaction(transactionID, true);
+		}
+	}
+
+	/**
+	 * Returns true if the program has been analyzed at least once.
+	 * @param program the program to test to see if it has been analyzed
+	 * @return true if the program has been analyzed at least once.
+	 */
+	public static boolean isAnalyzed(Program program) {
+		Options options = program.getOptions(Program.PROGRAM_INFO);
+
+		return options.getBoolean(Program.ANALYZED_OPTION_NAME, false);
+	}
+
 }

@@ -26,6 +26,7 @@ import javax.swing.KeyStroke;
 
 import docking.action.DockingAction;
 import docking.action.builder.ActionBuilder;
+import docking.tool.ToolConstants;
 import docking.widgets.filechooser.GhidraFileChooser;
 import docking.widgets.filechooser.GhidraFileChooserMode;
 import ghidra.app.CorePluginPackage;
@@ -33,8 +34,8 @@ import ghidra.app.events.ProgramActivatedPluginEvent;
 import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.services.*;
 import ghidra.formats.gfilesystem.*;
+import ghidra.framework.main.ApplicationLevelPlugin;
 import ghidra.framework.main.FrontEndService;
-import ghidra.framework.main.FrontEndable;
 import ghidra.framework.model.Project;
 import ghidra.framework.model.ProjectListener;
 import ghidra.framework.plugintool.*;
@@ -66,10 +67,12 @@ import utilities.util.FileUtilities;
 	eventsConsumed = { ProgramActivatedPluginEvent.class }
 )
 //@formatter:on
-public class FileSystemBrowserPlugin extends Plugin implements FrontEndable, ProjectListener,
+public class FileSystemBrowserPlugin extends Plugin
+		implements ApplicationLevelPlugin, ProjectListener,
 		FileSystemBrowserService {
 
 	/* package */ DockingAction openFilesystemAction;
+	/* package */ DockingAction showFileSystemImplsAction;
 	private GhidraFileChooser chooserOpen;
 	private FrontEndService frontEndService;
 	private Map<FSRL, FileSystemBrowserComponentProvider> currentBrowsers = new HashMap<>();
@@ -91,7 +94,18 @@ public class FileSystemBrowserPlugin extends Plugin implements FrontEndable, Pro
 			FSBUtils.getProgramManager(tool, false);
 		}
 
-		setupOpenFileSystemAction();
+		setupActions();
+	}
+
+	private void setupActions() {
+		openFilesystemAction = new ActionBuilder("Open File System", this.getName())
+				.description(getPluginDescription().getDescription())
+				.enabledWhen(ac -> tool.getProject() != null)
+				.menuPath(ToolConstants.MENU_FILE, "Open File System...")
+				.menuGroup("Import", "z")
+				.keyBinding(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.CTRL_DOWN_MASK))
+				.onAction(ac -> doOpenFileSystem())
+				.buildAndInstall(tool);
 	}
 
 	@Override
@@ -104,7 +118,10 @@ public class FileSystemBrowserPlugin extends Plugin implements FrontEndable, Pro
 			frontEndService.removeProjectListener(this);
 			frontEndService = null;
 		}
-		chooserOpen = null;
+
+		if (chooserOpen != null) {
+			chooserOpen.dispose();
+		}
 
 		for (FileSystemBrowserComponentProvider provider : currentBrowsers.values()) {
 			provider.dispose();
@@ -192,17 +209,6 @@ public class FileSystemBrowserPlugin extends Plugin implements FrontEndable, Pro
 	@Override
 	public void projectOpened(Project project) {
 		// nada
-	}
-
-	private void setupOpenFileSystemAction() {
-		openFilesystemAction = new ActionBuilder("Open File System", this.getName())
-				.description(getPluginDescription().getDescription())
-				.enabledWhen(ac -> tool.getProject() != null)
-				.menuPath("File", "Open File System...")
-				.menuGroup("Import", "z")
-				.keyBinding(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.CTRL_DOWN_MASK))
-				.onAction(ac -> doOpenFileSystem())
-				.buildAndInstall(tool);
 	}
 
 	private void openChooser(String title, String buttonText, boolean multiSelect) {

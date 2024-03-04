@@ -26,6 +26,8 @@ import docking.EmptyBorderToggleButton;
 import docking.widgets.HyperlinkComponent;
 import docking.widgets.checkbox.GCheckBox;
 import docking.widgets.label.*;
+import generic.theme.*;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.framework.plugintool.PluginConfigurationModel;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.*;
@@ -36,6 +38,8 @@ import ghidra.util.layout.VerticalLayout;
 import resources.ResourceManager;
 
 public class PluginManagerComponent extends JPanel implements Scrollable {
+	private static final Icon DEFAULT_ICON = new GIcon("icon.plugin.manager.default");
+
 	private final PluginTool tool;
 	private PluginConfigurationModel model;
 	private List<PluginPackageComponent> packageComponentList = new ArrayList<>();
@@ -43,7 +47,7 @@ public class PluginManagerComponent extends JPanel implements Scrollable {
 	PluginManagerComponent(PluginTool tool, PluginConfigurationModel model) {
 		super(new VerticalLayout(2));
 		setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-		setBackground(Color.WHITE);
+		setBackground(new GColor("color.bg"));
 		this.tool = tool;
 		this.model = model;
 		model.setChangeCallback(this::updateCheckboxes);
@@ -107,12 +111,12 @@ public class PluginManagerComponent extends JPanel implements Scrollable {
 		throw new AssertException("No checkbox found for " + pluginPackage);
 	}
 
-//==================================================================================================
+//=================================================================================================
 // Inner Classes
-//==================================================================================================
+//=================================================================================================
 
 	private class PluginPackageComponent extends JPanel {
-		private final Color BG = Color.white;
+		private Color BG = new GColor("color.bg");
 		private final PluginPackage pluginPackage;
 		private final GCheckBox checkBox;
 
@@ -127,12 +131,12 @@ public class PluginManagerComponent extends JPanel implements Scrollable {
 			initializeLabelSection();
 			initializeDescriptionSection();
 
-			setBorder(BorderFactory.createLineBorder(Color.DARK_GRAY));
+			setBorder(BorderFactory.createLineBorder(Colors.BORDER));
 			updateCheckBoxState();
 		}
 
 		private void initizalizeCheckBoxSection() {
-			final JPanel checkboxPanel = new JPanel(new HorizontalLayout(0));
+			JPanel checkboxPanel = new JPanel(new HorizontalLayout(0));
 			checkboxPanel.setBackground(BG);
 
 			checkBox.addActionListener(
@@ -146,8 +150,11 @@ public class PluginManagerComponent extends JPanel implements Scrollable {
 			checkboxPanel.add(checkBox);
 			checkboxPanel.add(Box.createHorizontalStrut(10));
 
-			final JLabel iconLabel =
-				new GIconLabel(ResourceManager.getScaledIcon(pluginPackage.getIcon(), 32, 32, 32));
+			Icon icon = pluginPackage.getIcon();
+			if (icon == null) {
+				icon = DEFAULT_ICON;
+			}
+			JLabel iconLabel = new GIconLabel(ResourceManager.getScaledIcon(icon, 32, 32, 32));
 			iconLabel.setBackground(BG);
 
 			checkboxPanel.add(iconLabel);
@@ -158,22 +165,22 @@ public class PluginManagerComponent extends JPanel implements Scrollable {
 		}
 
 		private void initializeLabelSection() {
-			final JPanel centerPanel = new JPanel(new GridBagLayout());
+			JPanel centerPanel = new JPanel(new GridBagLayout());
 			GridBagConstraints gbc = new GridBagConstraints();
 			gbc.fill = GridBagConstraints.HORIZONTAL;
 			gbc.weightx = 1.0;
 
 			centerPanel.setBackground(BG);
 
-			final JPanel labelPanel = new JPanel(new VerticalLayout(3));
+			JPanel labelPanel = new JPanel(new VerticalLayout(3));
 			labelPanel.setBackground(BG);
 
-			final GLabel nameLabel = new GLabel(pluginPackage.getName());
-			nameLabel.setFont(nameLabel.getFont().deriveFont(18f));
-			nameLabel.setForeground(Color.BLACK);
+			GLabel nameLabel = new GLabel(pluginPackage.getName());
+			Gui.registerFont(nameLabel, "font.pluginpanel.name");
+			nameLabel.setForeground(new GColor("color.fg.pluginpanel.name"));
 			labelPanel.add(nameLabel);
 
-			final HyperlinkComponent configureHyperlink = createConfigureHyperlink();
+			HyperlinkComponent configureHyperlink = createConfigureHyperlink();
 			labelPanel.add(configureHyperlink);
 
 			labelPanel.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 40));
@@ -182,7 +189,7 @@ public class PluginManagerComponent extends JPanel implements Scrollable {
 		}
 
 		private HyperlinkComponent createConfigureHyperlink() {
-			final HyperlinkComponent configureHyperlink =
+			HyperlinkComponent configureHyperlink =
 				new HyperlinkComponent("<html> <a href=\"Configure\">Configure</a>");
 			configureHyperlink.addHyperlinkListener("Configure", e -> {
 				if (e.getEventType() == EventType.ACTIVATED) {
@@ -193,15 +200,15 @@ public class PluginManagerComponent extends JPanel implements Scrollable {
 			return configureHyperlink;
 		}
 
-		private String enchanceDescription(final String text) {
+		private String enchanceDescription(String text) {
 			return String.format("<html><body style='width: 300px'>%s</body></html>", text);
 		}
 
 		private void initializeDescriptionSection() {
-			final String htmlDescription = enchanceDescription(pluginPackage.getDescription());
+			String htmlDescription = enchanceDescription(pluginPackage.getDescription());
 
-			final JLabel descriptionlabel = new GHtmlLabel(htmlDescription);
-			descriptionlabel.setForeground(Color.GRAY);
+			JLabel descriptionlabel = new GHtmlLabel(htmlDescription);
+			descriptionlabel.setForeground(new GColor("color.fg.pluginpanel.description"));
 			descriptionlabel.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
 			descriptionlabel.setVerticalAlignment(SwingConstants.TOP);
 			descriptionlabel.setToolTipText(

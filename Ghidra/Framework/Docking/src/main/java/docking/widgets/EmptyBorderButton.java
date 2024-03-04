@@ -15,8 +15,7 @@
  */
 package docking.widgets;
 
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
 
 import javax.swing.*;
 import javax.swing.border.Border;
@@ -24,7 +23,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import ghidra.docking.util.DockingWindowsLookAndFeelUtils;
+import ghidra.docking.util.LookAndFeelUtils;
 import resources.ResourceManager;
 
 /**
@@ -36,6 +35,8 @@ public class EmptyBorderButton extends JButton {
 
 	private ButtonStateListener emptyBorderButtonChangeListener;
 
+	private ButtonFocusListener emptyBorderButtonFocusListener;
+
 	/**
 	 * A raised beveled border.
 	 */
@@ -45,8 +46,8 @@ public class EmptyBorderButton extends JButton {
 	/**
 	 * An empty border.
 	 */
-	public static final Border NO_BUTTON_BORDER = new EmptyBorder(
-		RAISED_BUTTON_BORDER.getBorderInsets(new JButton()));
+	public static final Border NO_BUTTON_BORDER =
+		new EmptyBorder(RAISED_BUTTON_BORDER.getBorderInsets(new JButton()));
 
 	/**
 	 * A lowered border beveled border.
@@ -105,7 +106,10 @@ public class EmptyBorderButton extends JButton {
 		installLookAndFeelFix();
 		clearBorder();
 		emptyBorderButtonChangeListener = new ButtonStateListener();
+		emptyBorderButtonFocusListener = new ButtonFocusListener();
+
 		addChangeListener(emptyBorderButtonChangeListener);
+		addFocusListener(emptyBorderButtonFocusListener);
 	}
 
 	@Override
@@ -123,7 +127,7 @@ public class EmptyBorderButton extends JButton {
 
 		// Mac OSX LNF doesn't give us rollover callbacks, so we have to add a mouse listener to
 		// do the work
-		if (DockingWindowsLookAndFeelUtils.isUsingAquaUI(getUI())) {
+		if (LookAndFeelUtils.isUsingAquaUI(getUI())) {
 			addMouseListener(new MouseAdapter() {
 				@Override
 				public void mouseEntered(MouseEvent e) {
@@ -164,6 +168,9 @@ public class EmptyBorderButton extends JButton {
 		else if (rollover) {
 			setBorder(getRaisedBorder());
 		}
+		else if (isFocusOwner()) {
+			setBorder(getRaisedBorder());
+		}
 		else {
 			setBorder(NO_BUTTON_BORDER);
 		}
@@ -179,6 +186,7 @@ public class EmptyBorderButton extends JButton {
 
 	public void removeListeners() {
 		removeChangeListener(emptyBorderButtonChangeListener);
+		removeFocusListener(emptyBorderButtonFocusListener);
 	}
 
 	private class ButtonStateListener implements ChangeListener {
@@ -186,5 +194,19 @@ public class EmptyBorderButton extends JButton {
 		public void stateChanged(ChangeEvent e) {
 			updateBorderBasedOnState();
 		}
+	}
+
+	private class ButtonFocusListener implements FocusListener {
+
+		@Override
+		public void focusGained(FocusEvent e) {
+			updateBorderBasedOnState();
+		}
+
+		@Override
+		public void focusLost(FocusEvent e) {
+			updateBorderBasedOnState();
+		}
+
 	}
 }

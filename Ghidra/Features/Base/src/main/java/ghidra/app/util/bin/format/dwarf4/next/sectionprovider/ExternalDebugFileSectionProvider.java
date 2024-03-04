@@ -15,10 +15,9 @@
  */
 package ghidra.app.util.bin.format.dwarf4.next.sectionprovider;
 
-import java.util.List;
-
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.util.List;
 
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.bin.format.dwarf4.external.*;
@@ -45,14 +44,14 @@ import ghidra.util.task.TaskMonitor;
 public class ExternalDebugFileSectionProvider extends BaseSectionProvider {
 	public static final String PROGRAM_INFO_DWARF_EXTERNAL_DEBUG_FILE = "DWARF External Debug File";
 
-	public static DWARFSectionProvider createSectionProviderFor(Program program,
+	public static DWARFSectionProvider createExternalSectionProviderFor(Program program,
 			TaskMonitor monitor) {
 		try {
 			ExternalDebugInfo extDebugInfo = ExternalDebugInfo.fromProgram(program);
 			if (extDebugInfo == null) {
 				return null;
 			}
-			Msg.info(ExternalDebugFilesService.class,
+			Msg.info(ExternalDebugFileSectionProvider.class,
 				"DWARF external debug information found: " + extDebugInfo);
 			ExternalDebugFilesService edfs =
 				DWARFExternalDebugFilesPlugin.getExternalDebugFilesService(
@@ -61,7 +60,7 @@ public class ExternalDebugFileSectionProvider extends BaseSectionProvider {
 			if (extDebugFile == null) {
 				return null;
 			}
-			Msg.info(ExternalDebugFilesService.class,
+			Msg.info(ExternalDebugFileSectionProvider.class,
 				"DWARF External Debug File: found: " + extDebugFile);
 			FileSystemService fsService = FileSystemService.getInstance();
 			try (
@@ -123,7 +122,7 @@ public class ExternalDebugFileSectionProvider extends BaseSectionProvider {
 	}
 
 	/**
-	 * Returns the previouly saved value of the external debug file location from the program's
+	 * Returns the previously saved value of the external debug file location from the program's
 	 * metadata.
 	 *  
 	 * @param program DWARF that previously was analyzed 

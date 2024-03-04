@@ -19,19 +19,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.google.common.collect.Range;
-
 import ghidra.dbg.target.TargetStackFrame;
 import ghidra.dbg.target.schema.TargetObjectSchema;
 import ghidra.dbg.util.*;
-import ghidra.trace.database.target.*;
-import ghidra.trace.model.Trace.TraceStackChangeType;
+import ghidra.trace.database.target.DBTraceObject;
+import ghidra.trace.database.target.DBTraceObjectInterface;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.stack.*;
 import ghidra.trace.model.target.TraceObject;
 import ghidra.trace.model.thread.TraceObjectThread;
 import ghidra.trace.model.thread.TraceThread;
-import ghidra.trace.util.TraceChangeRecord;
-import ghidra.trace.util.TraceChangeType;
+import ghidra.trace.util.*;
 import ghidra.util.LockHold;
 
 public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterface {
@@ -42,18 +40,18 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 		}
 
 		@Override
-		protected TraceChangeType<TraceStack, Void> getAddedType() {
-			return TraceStackChangeType.ADDED;
+		protected TraceEvent<TraceStack, Void> getAddedType() {
+			return TraceEvents.STACK_ADDED;
 		}
 
 		@Override
-		protected TraceChangeType<TraceStack, Range<Long>> getLifespanChangedType() {
+		protected TraceEvent<TraceStack, Lifespan> getLifespanChangedType() {
 			return null;
 		}
 
 		@Override
-		protected TraceChangeType<TraceStack, Void> getChangedType() {
-			return TraceStackChangeType.CHANGED;
+		protected TraceEvent<TraceStack, ?> getChangedType() {
+			return TraceEvents.STACK_CHANGED;
 		}
 
 		@Override
@@ -62,8 +60,8 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 		}
 
 		@Override
-		protected TraceChangeType<TraceStack, Void> getDeletedType() {
-			return TraceStackChangeType.DELETED;
+		protected TraceEvent<TraceStack, Void> getDeletedType() {
+			return TraceEvents.STACK_DELETED;
 		}
 	}
 
@@ -79,7 +77,7 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 	@Override
 	public TraceThread getThread() {
 		try (LockHold hold = object.getTrace().lockRead()) {
-			return object.queryAncestorsInterface(object.getLifespan(), TraceObjectThread.class)
+			return object.queryAncestorsInterface(computeSpan(), TraceObjectThread.class)
 					.findAny()
 					.orElseThrow();
 		}
@@ -87,14 +85,13 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 
 	@Override
 	public long getSnap() {
-		return object.getMinSnap();
+		return computeMinSnap();
 	}
 
 	@Override
 	public int getDepth() {
 		try (LockHold hold = object.getTrace().lockRead()) {
-			return object
-					.querySuccessorsInterface(object.getLifespan(), TraceObjectStackFrame.class)
+			return object.querySuccessorsInterface(computeSpan(), TraceObjectStackFrame.class, true)
 					.map(f -> f.getLevel())
 					.reduce(Integer::max)
 					.map(m -> m + 1)
@@ -106,7 +103,7 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 		try (LockHold hold = object.getTrace().lockWrite()) {
 			PathMatcher matcher = object.getTargetSchema().searchFor(TargetStackFrame.class, true);
 			List<String> relKeyList =
-				matcher.applyIndices(PathUtils.makeIndex(level)).getSingletonPath();
+				matcher.applyKeys(PathUtils.makeIndex(level)).getSingletonPath();
 			if (relKeyList == null) {
 				throw new IllegalStateException("Could not determine where to create new frame");
 			}
@@ -117,8 +114,8 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 	}
 
 	protected void copyFrameAttributes(TraceObjectStackFrame from, TraceObjectStackFrame to) {
-		// TODO: All attributes or just those known to StackFrame?
-		to.setProgramCounter(from.getProgramCounter());
+		// TODO: All attributes within a given span, intersected to that span?
+		to.setProgramCounter(computeSpan(), from.getProgramCounter(computeMaxSnap()));
 	}
 
 	protected void shiftFrameAttributes(int from, int to, int count,
@@ -141,15 +138,16 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 	protected void clearFrameAttributes(int start, int end, List<TraceObjectStackFrame> frames) {
 		for (int i = start; i < end; i++) {
 			TraceObjectStackFrame frame = frames.get(i);
-			frame.setProgramCounter(null);
+			frame.setProgramCounter(frame.computeSpan(), null);
 		}
 	}
 
 	@Override
 	public void setDepth(int depth, boolean atInner) {
+		// TODO: Need a span parameter
 		try (LockHold hold = object.getTrace().lockWrite()) {
 			List<TraceObjectStackFrame> frames = // Want mutable list
-				doGetFrames().collect(Collectors.toCollection(ArrayList::new));
+				doGetFrames(computeMinSnap()).collect(Collectors.toCollection(ArrayList::new));
 			int curDepth = frames.size();
 			if (curDepth == depth) {
 				return;
@@ -160,7 +158,7 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 					shiftFrameAttributes(diff, 0, depth, frames);
 				}
 				for (int i = depth; i < curDepth; i++) {
-					frames.get(i).getObject().deleteTree();
+					frames.get(i).getObject().removeTree(computeSpan());
 				}
 			}
 			else {
@@ -179,10 +177,16 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 	protected TraceStackFrame doGetFrame(int level) {
 		TargetObjectSchema schema = object.getTargetSchema();
 		PathPredicates matcher = schema.searchFor(TargetStackFrame.class, true);
-		matcher = matcher.applyIndices(PathUtils.makeIndex(level));
-		return object.getSuccessors(object.getLifespan(), matcher)
+		PathPredicates decMatcher = matcher.applyKeys(PathUtils.makeIndex(level));
+		PathPredicates hexMatcher = matcher.applyKeys("0x" + Integer.toHexString(level));
+		Lifespan span = computeSpan();
+		return object.getSuccessors(span, decMatcher)
 				.findAny()
-				.map(p -> p.getLastChild(object).queryInterface(TraceObjectStackFrame.class))
+				.map(p -> p.getDestination(object).queryInterface(TraceObjectStackFrame.class))
+				.or(() -> object.getSuccessors(span, hexMatcher)
+						.findAny()
+						.map(p -> p.getDestination(object)
+								.queryInterface(TraceObjectStackFrame.class)))
 				.orElse(null);
 	}
 
@@ -197,29 +201,28 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 				return doGetFrame(level);
 			}
 		}
-		else {
-			try (LockHold hold = object.getTrace().lockRead()) {
-				return doGetFrame(level);
-			}
+		try (LockHold hold = object.getTrace().lockRead()) {
+			return doGetFrame(level);
 		}
 	}
 
-	protected Stream<TraceObjectStackFrame> doGetFrames() {
-		return object
-				.querySuccessorsInterface(object.getLifespan(), TraceObjectStackFrame.class)
+	protected Stream<TraceObjectStackFrame> doGetFrames(long snap) {
+		return object.querySuccessorsInterface(Lifespan.at(snap), TraceObjectStackFrame.class, true)
 				.sorted(Comparator.comparing(f -> f.getLevel()));
 	}
 
 	@Override
-	public List<TraceStackFrame> getFrames() {
+	public List<TraceStackFrame> getFrames(long snap) {
 		try (LockHold hold = object.getTrace().lockRead()) {
-			return doGetFrames().collect(Collectors.toList());
+			return doGetFrames(snap).collect(Collectors.toList());
 		}
 	}
 
 	@Override
 	public void delete() {
-		object.deleteTree();
+		try (LockHold hold = object.getTrace().lockWrite()) {
+			object.removeTree(computeSpan());
+		}
 	}
 
 	@Override
@@ -230,5 +233,10 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 	@Override
 	public TraceChangeRecord<?, ?> translateEvent(TraceChangeRecord<?, ?> rec) {
 		return translator.translate(rec);
+	}
+
+	@Override
+	public boolean hasFixedFrames() {
+		return false;
 	}
 }

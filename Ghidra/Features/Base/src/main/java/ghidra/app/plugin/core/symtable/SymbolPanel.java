@@ -28,7 +28,6 @@ import org.jdom.Element;
 import docking.widgets.checkbox.GCheckBox;
 import docking.widgets.table.DefaultRowFilterTransformer;
 import docking.widgets.table.RowFilterTransformer;
-import ghidra.app.services.GoToService;
 import ghidra.framework.options.SaveState;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.symbol.Symbol;
@@ -46,11 +45,11 @@ class SymbolPanel extends JPanel {
 	private GhidraTable symTable;
 	private TableModelListener listener;
 	private FilterDialog filterDialog;
-	private GhidraThreadedTablePanel<Symbol> threadedTablePanel;
-	private GhidraTableFilterPanel<Symbol> tableFilterPanel;
+	private GhidraThreadedTablePanel<SymbolRowObject> threadedTablePanel;
+	private GhidraTableFilterPanel<SymbolRowObject> tableFilterPanel;
 
 	SymbolPanel(SymbolProvider provider, SymbolTableModel model, SymbolRenderer renderer,
-			final PluginTool tool, GoToService gotoService) {
+			PluginTool tool) {
 
 		super(new BorderLayout());
 
@@ -74,8 +73,7 @@ class SymbolPanel extends JPanel {
 			}
 		});
 
-		GoToService goToService = tool.getService(GoToService.class);
-		symTable.installNavigation(goToService, goToService.getDefaultNavigatable());
+		symTable.installNavigation(tool);
 
 		for (int i = 0; i < symTable.getColumnCount(); i++) {
 			TableColumn column = symTable.getColumnModel().getColumn(i);
@@ -116,7 +114,7 @@ class SymbolPanel extends JPanel {
 		return tableFilterPanel;
 	}
 
-	protected RowFilterTransformer<Symbol> updateRowDataTransformer(boolean nameOnly) {
+	protected RowFilterTransformer<SymbolRowObject> updateRowDataTransformer(boolean nameOnly) {
 		if (nameOnly) {
 			return new NameOnlyRowTransformer();
 		}
@@ -133,9 +131,7 @@ class SymbolPanel extends JPanel {
 		symTable.dispose();
 		threadedTablePanel.dispose();
 		tableFilterPanel.dispose();
-		symProvider = null;
-		filterDialog.close();
-		filterDialog = null;
+		filterDialog.dispose();
 	}
 
 	void setFilter() {
@@ -174,7 +170,7 @@ class SymbolPanel extends JPanel {
 		if (selectedRowCount == 1) {
 			int selectedRow = symTable.getSelectedRow();
 			Symbol symbol = symProvider.getSymbolForRow(selectedRow);
-			symProvider.setCurrentSymbol(symbol);
+			symProvider.setCurrentSymbol(symbol); // null allowed
 		}
 		else {
 			symProvider.setCurrentSymbol(null);
@@ -186,8 +182,15 @@ class SymbolPanel extends JPanel {
 	}
 
 	List<Symbol> getSelectedSymbols() {
+		List<Symbol> list = new ArrayList<>();
 		int[] rows = symTable.getSelectedRows();
-		return tableModel.getRowObjects(rows);
+		for (SymbolRowObject rowObject : tableModel.getRowObjects(rows)) {
+			Symbol s = rowObject.getSymbol();
+			if (s != null) {
+				list.add(s);
+			}
+		}
+		return list;
 	}
 
 	GhidraTable getTable() {
@@ -198,11 +201,11 @@ class SymbolPanel extends JPanel {
 // Inner Classes
 //==================================================================================================
 
-	private static class NameOnlyRowTransformer implements RowFilterTransformer<Symbol> {
+	private static class NameOnlyRowTransformer implements RowFilterTransformer<SymbolRowObject> {
 		private List<String> list = new ArrayList<>();
 
 		@Override
-		public List<String> transform(Symbol rowObject) {
+		public List<String> transform(SymbolRowObject rowObject) {
 			list.clear();
 			if (rowObject != null) {
 				// The toString() returns the name for the symbol, which may be cached.  Calling

@@ -99,9 +99,10 @@
     The NoMas() non-terminal unwinds the rather deep <EOF> match.
   */
 
-options{
+options {
     STATIC = false;
-    JAVA_UNICODE_ESCAPE=true;
+    JAVA_UNICODE_ESCAPE = false;
+    UNICODE_INPUT = true;
 }
 
 PARSER_BEGIN(PreProcessor)
@@ -109,6 +110,7 @@ PARSER_BEGIN(PreProcessor)
 package ghidra.app.util.cparser.CPP;
 
 import ghidra.util.Msg;
+import ghidra.util.task.TaskMonitor;
 
 import java.util.*;
 import java.io.*;
@@ -165,6 +167,38 @@ public class PreProcessor {
 		boolean contradict;
 		boolean emitExecSave;
 		int comparison;
+		
+		ArrayList <StringBuffer> appendList = new ArrayList();
+        ArrayList <Boolean> expandList = new ArrayList();
+                
+        void append(String str, boolean expand) {
+           if (image != null & image.length()>0) {
+               appendList.add(new StringBuffer(image));
+               expandList.add(true);
+               image = null;
+           }
+           int endIndex = appendList.size() - 1;
+           if (endIndex >= 0 && (str.strip().length()==0 || expand == expandList.get(endIndex)) ) {
+        	   // just add to the last image so it can expand properly
+        	   StringBuffer lastStr = appendList.get(endIndex);
+        	   lastStr.append(str);
+        	   return;
+           }
+           
+           appendList.add(new StringBuffer(str));
+           expandList.add(expand);
+        }
+        
+//        void append(PPToken tok, boolean expand) {
+//           if (tok.image != null && tok.image.length() > 0) {
+//              append(tok.image, expand);
+//              return;
+//           }
+//		   int cnt = 0;
+//           for (String string : appendList) {
+//              append(string, expandList.get(cnt));
+//           }
+//        }
 
 		void setTruth(boolean truth) {
 			this.truth = truth;
@@ -208,7 +242,7 @@ public class PreProcessor {
 						return this.image.equals((String) t);
 					}
 				} catch (ClassNotFoundException e) {
-					Msg.error(this, "PPToken.equals: " + e.getMessage());
+					addParseMessage(null, "PPToken.equals: " + e.getMessage());
 				}
 			return false;
 		}
@@ -255,12 +289,12 @@ public class PreProcessor {
 						}
 						break;
 					default:
-						Msg.error(this, "Cannot compareToZero Token: " + image + " kind " + kind);
+						addParseMessage(null, "Cannot compareToZero Token: " + image + " kind " + kind);
 						break;
 				}
 			}
 			catch (Exception e) {
-				Msg.error(this, "CMP2Zero:Numeric Conversion Error: " + e.getMessage());
+				addParseMessage(null, "CMP2Zero:Numeric Conversion Error: " + e.getMessage());
 			}
 			return comparison;
 		}
@@ -284,7 +318,7 @@ public class PreProcessor {
 						PPToken replVal = (PPToken) getDef(this); // not a PPToken
 						if (replVal == null) {
 							replVal = new PPToken(this);
-							// Msg.error(this,
+							// addParseMessage(null,
 							// "Missing numeric value for: "+image+" at "
 							// +curFileStackTop
 							// ()+"'"+beginLine+". PreProcessor expects one.");
@@ -299,7 +333,7 @@ public class PreProcessor {
 			}
 			catch (Exception e) {
 				thisFP = null;
-				// Msg.error(this, "Numeric Conversion Error for '" + this.image
+				// addParseMessage(null, "Numeric Conversion Error for '" + this.image
 				// + "' in " + curFileStackTop() + " line " + that.beginLine +
 				// " : "+e.getMessage());
 			}
@@ -317,7 +351,7 @@ public class PreProcessor {
 						PPToken replVal = (PPToken) getDef(that); // not a PPToken
 						if (replVal == null) {
 							replVal = new PPToken(that);
-							// Msg.error(this,
+							// addParseMessage(null,
 							// "Missing numeric value for: "+image+" at "
 							// +curFileStackTop
 							// ()+"'"+beginLine+". PreProcessor expects one.");
@@ -332,7 +366,7 @@ public class PreProcessor {
 			}
 			catch (Exception e) {
 				thatFP = null;
-				// Msg.error(this, "Numeric Conversion Error in " +
+				// addParseMessage(null, "Numeric Conversion Error in " +
 				// curFileStackTop() + " line " + that.beginLine +
 				// " : "+e.getMessage());
 			}
@@ -362,6 +396,67 @@ public class PreProcessor {
 			}
 			return comparison;
 		}
+
+		PPToken computeBinary(Token op, PPToken val2) { 
+			BigInteger tvalue = BigInteger.ZERO;
+			BigInteger result = BigInteger.ZERO;
+			BigInteger vvalue = BigInteger.ZERO;
+			try {
+				tvalue = getLongValue(getDef(this).image);
+				vvalue = getLongValue(getDef(val2).image);
+			}
+			catch (Exception e) {
+			}
+			switch (op.kind) {
+				case MINUS:
+					result = tvalue.subtract(vvalue);
+					break;
+				case PLUS:
+					result = tvalue.add(vvalue);
+					break;
+				case TIMES:
+					result = tvalue.multiply(vvalue);
+					break;
+				case AND:
+					result = tvalue.and(vvalue);
+					break;
+				case OR:
+					result = tvalue.or(vvalue);
+					break;
+				case RSH:
+					result = tvalue.shiftRight(vvalue.intValue());
+					break;
+				case LSH:
+					result = tvalue.shiftLeft(vvalue.intValue());
+					break;
+			}
+			PPToken t = new PPToken(result.toString());
+			t.kind = NUMERIC;
+			t.setTruth(result != BigInteger.ZERO);
+			return t;
+        }
+
+        PPToken computeUnary(Token op) { 
+			BigInteger tvalue = BigInteger.ZERO;
+			BigInteger result = BigInteger.ZERO;
+			try {
+				tvalue = getLongValue(getDef(this).image);
+			}
+			catch (Exception e) {
+			}
+			switch (op.kind) {
+				case MINUS:
+					result = tvalue.negate();
+					break;
+				case NOT:
+					result = (BigInteger.ZERO.equals(tvalue) ? BigInteger.ZERO : BigInteger.ONE);
+					break;
+			}
+			PPToken t = new PPToken(result.toString());
+			t.kind = NUMERIC;
+			t.setTruth(!BigInteger.ZERO.equals(result));
+			return t;
+        }
 
 		boolean getEmitSave() {
 			return emitExecSave;
@@ -400,10 +495,24 @@ public class PreProcessor {
 			image = buf.toString();
 		}
 
-		void emit() {
-			image = defs.expand(image, true);
-			print(image);
-		}
+        void emit(boolean expand) {
+        	if (expand && appendList.isEmpty()) {
+                image = defs.expand(image, true);  
+        	} else {
+        		int cnt = 0;
+        		for (StringBuffer string : appendList) {
+        			if (expand && expandList.get(cnt++)) {
+        				image += defs.expand(string.toString(), true);
+        			} else {
+        				image += string;
+        			}
+				}
+    		}
+    		if (image.length() == 1 && image.startsWith("\n")) {
+               image = (!emitExecSwitch ? "////\n" : "\n");
+            }
+    		print(image);
+        }
 
 	}
 
@@ -414,7 +523,7 @@ public class PreProcessor {
 	boolean emitExecSwitch = true;
 
 	// Hastable for storing #include file names
-	Hashtable<String, Boolean> files = new Hashtable<String, Boolean>();
+	HashSet<String> files = new HashSet<String>();
 
 	// Stack for keeping shadowed (include) files
 	Stack<String> fileStack = new Stack<String>();
@@ -437,6 +546,13 @@ public class PreProcessor {
 	// times they have been parsed
 	private HashMap<String, Integer> alreadyDone;
 
+    private StringBuilder parseMessages = new StringBuilder();
+
+    // true if parse was successful
+    private boolean parseSuccess = false;
+    
+    private TaskMonitor monitor = null;
+
 	// Toggle printing
 	private int verboseLevel = 0;
 
@@ -453,22 +569,36 @@ public class PreProcessor {
 	public DefineTable getDefinitions() {
 		return defs;
 	}
-
-	// Get a def from the manifest constant list, from a defined string
+	
+    // Get a def from the manifest constant list, from a defined string
 	public PPToken getDef(PPToken def) {
-		if (verboseLevel == 6 || verboseLevel == 5 || verboseLevel == 4
-				|| verboseLevel == 3)
-			println("Defs: containsKey: " + def.image + " = "
-					+ defs.containsKey(def.image));
+		if (verboseLevel == 6 || verboseLevel == 5 || verboseLevel == 4 || verboseLevel == 3)
+			println("Defs: containsKey: " + def.image + " = " + defs.containsKey(def.image));
 		PPToken pt = defs.get(def.image);
 		if (pt != null && pt.image.length() > 0) {
-			pt.image = defs.expand(pt.image, false);
-		}  else {
-		    // no Def, it is what it is!
-            pt = def;
-        }
+			String expanded = defs.expand(pt.image, false);
+			pt = new PPToken(pt);
+			pt.image = expanded;
+		}
+		else {
+			// no Def, it is what it is!
+			pt = def;
+		}
 		return pt;
 	}
+    
+    // Get a define definition by name from the list
+    public String getDef(String name) {
+            PPToken pt = defs.get(name);
+            String val = name;
+			if (pt != null && pt.image.length() > 0) {
+				val = defs.expand(pt.image, false);
+			}
+			else {
+				// no Def, it is what it is!
+			}
+            return val;
+    }
 
 	// Add a def to the manifest constant list
 	private void setDef(PPToken def) {
@@ -536,7 +666,9 @@ public class PreProcessor {
 			}
 		}
 		if (emitExecSwitch == true) {
+		  if (marg != null) {
 			setArg(key, marg);
+	      }
 		}
 	}
 
@@ -578,10 +710,10 @@ public class PreProcessor {
 				}
 			}
 		} catch (FileNotFoundException fene) {
-			Msg.error(this, fene.getMessage() + " " + incFile);
+			addParseMessage(incFile.getName(), fene.getMessage());
 		}
 		if (fis == null) {
-			// Msg.error(this,
+			// addParseMessage(null,
 			// "Warning: No relative path to #include \""+def+"\"\nThis is a design/configuration flaw. Trying the standard places...");
 			standardPlace(inc, xsym);
 		} else {
@@ -593,7 +725,7 @@ public class PreProcessor {
 		}
 	}
 
-	private void swapFileStreams(File incFile, FileInputStream fis) {
+	private void swapFileStreams(File incFile, FileInputStream fis) throws ParseException {
 		if (verboseLevel == 2)
 			print(incFile.getAbsolutePath() + "\n");
 		else if (verboseLevel == 1)
@@ -611,40 +743,35 @@ public class PreProcessor {
 					count++;
 				}
 				if (count > 5) {
-					Msg.error(this,
-							"Error: Possible infinite inclusion recursion detected: "
-									+ incFile.getAbsolutePath());
-					Msg.error(this, fileStack);
+					addParseMessage(incFile.getAbsolutePath(),
+						"Error: Possible infinite inclusion recursion detected: \n" + fileStack);
 					return;
 				}
 			} while (pos != -1);
 
 			// check if this has already been done
 			Integer val = alreadyDone.get(incFile.getAbsolutePath());
-			if (val != null) {
-				if (val.intValue() > 2) {
-					// silently don't parse this file, should already be done.
-					return;
-				}
-			} else {
-				val = new Integer(0);
+			if (val == null) {
+				val = Integer.valueOf(0);
 			}
-			alreadyDone.put(incFile.getAbsolutePath(),
-					Integer.valueOf(val.intValue() + 1));
+			// Must parse headers multiple times, MS uses headers to set pack()
+			// still useful for debugging
+				
+			val = val + 1;
+			alreadyDone.put(incFile.getAbsolutePath(), val);
 
 			fileStack.push(incFile.getAbsolutePath());
 			parser = new PreProcessor(this);
 			parser.ReInit(fis);
 			parser.Input();
 			fileStack.pop();
-		} catch (ParseException e) {
-			Msg.error(this,
-					"PERROR parsing Included File: In " + incFile.getName()
-							+ ": " + e.getMessage());
-			Msg.error(this, "PreProcessor Parse Error:  " + e.getMessage());
-		} catch (TokenMgrError e) {
-			Msg.error(this, "ERROR parsing Included File: " + incFile.getName());
-			Msg.error(this, "PreProcessor Token Error:  " + e.getMessage());
+        } catch (ParseException e) {
+			addParseMessage(incFile.getName(), "ERROR parsing Included File: " + e.getMessage());
+			throw e;
+		}
+		catch (TokenMgrError e) {
+			addParseMessage(incFile.getName(), "ERROR parsing Included File: " + e.getMessage());
+			throw e;
 		}
 	}
 
@@ -701,6 +828,13 @@ public class PreProcessor {
 			println("False");
 		return false;
 	}
+	
+	void bufAppendWithComment(PPToken buf, Token u) {
+	    if (emitExecSwitch==true)
+	        buf.append(u.image,true);
+	    else
+	        buf.append("//// " + u.image, false);
+	}
 
 	// Parse include file
 	private void includeFile(PPToken inc, boolean xsym) throws ParseException {
@@ -708,13 +842,22 @@ public class PreProcessor {
 		String fn = new String(ft);
 		// get rid of any errant quoting or whitespace
 		fn = fn.trim();
-		if (fn.charAt(0) == '\"' && fn.endsWith("\"")) {
-			fn = fn.substring(1, fn.length() - 1);
+
+		// Check for quoted include file name, protects embedded spaces
+		if (fn.startsWith("\"") && fn.indexOf('\"', 1) > 0) {
+			fn = fn.substring(1, fn.indexOf('\"', 1));
 		}
+
+		// Check for <> include file name, protects embedded spaces
+		if (fn.startsWith("<") && fn.indexOf('>', 1) > 0) {
+			fn = fn.substring(1, fn.indexOf('>', 1));
+		}
+
 		FileInputStream fis = null;
 		File iFile = null;
 		int i;
-		addFile(fn);
+		
+		boolean alreadyIncluded = addFile(fn);
 		for (i = 0; i < pathList.size(); i++) {
 			iFile = getFile(pathList.elementAt(i), fn, xsym);
 			// don't include the same file name
@@ -733,26 +876,26 @@ public class PreProcessor {
 			fis = getFIS(iFile);
 		}
 		if (fis == null) {
-			Msg.error(this, "No path to #include " + ft + "\nUse -I option");
-			Msg.error(this, "    Current Include Path: ");
-			for (int pi = 0; pi < fileStack.size(); pi++) {
-				Msg.error(this, "     :   " + fileStack.get(pi));
+			addParseMessage(null, "WARNING: No path to #include " + ft +
+				"    Assuming not needed!" + "\u005cnUse -I option");
+			addParseMessage(null, "    Current Include Path: ");
+			for (String element : fileStack) {
+				addParseMessage(null, "     :   " + element);
 			}
-			Msg.error(this, "    Assuming not needed");
-			// throw new ParseException("No path to #include " + ft
-			// + "\nUse -I option");
 		} else {
 			if (verboseLevel == 2) {
-				print("Line " + inc.beginLine + ": " + curFileStackTop()
-						+ " => ");
+				print("Line " + inc.beginLine + ": " + curFileStackTop() + " => ");
 			}
 			StringBuffer pad = new StringBuffer();
-			for (int padInd = 0; padInd < fileStack.size(); padInd++)
+			for (String element : fileStack) {
 				pad.append("   ");
-			Msg.info(this, "      " + pad + iFile);
+			}
+			if (!alreadyIncluded) {
+                addParseMessage(null, "      " + pad + iFile);
+		    }
 			swapFileStreams(iFile, fis);
 			if (verboseLevel == 1) {
-				Msg.info(this, "Include depth " + fileStack.size() + ": Done!");
+				addParseMessage(null, "Include depth " + fileStack.size() + ": Done!");
 			}
 		}
 	}
@@ -898,15 +1041,31 @@ public class PreProcessor {
 					fis = new java.io.FileInputStream(lowerFile);
 			}
 		} catch (FileNotFoundException fene) {
-			Msg.error(this, fene.getMessage() + " " + iFile);
+			addParseMessage(null, fene.getMessage() + " " + iFile);
 		}
 		return fis;
 	}
 
-	// Add an include file to those already included
-	private void addFile(String file) {
-		files.put(file, Boolean.TRUE);
+	// Add an include file to those already included, return true if already included
+	private boolean addFile(String file) {
+	    if (files.contains(file)) {
+	      return true;
+	    }
+		files.add(file);
+		return false;
 	}
+	
+	private void printCommentedLines(boolean emitSwitch, String line, String state) {
+		StringBuffer buf = new StringBuffer("///");
+		buf.append(emitSwitch ? " " : "/" );
+		buf.append(line);
+		if (emitSwitch) {
+			buf.append(" ===" + state);
+		}
+		buf.append("\n");
+		print(buf.toString());
+		// "#else if " + t.image + (emitExecSwitch == false ? "" : " ===" + t.getTruth()) + "\n"
+    }
 
 	// Print String
 	private void print(String text) {
@@ -921,10 +1080,10 @@ public class PreProcessor {
 	// Prints out all the files used in parsing the source
 	private void printFiles() {
 
-		Enumeration<String> eFiles = files.keys();
+		Iterator<String> eFiles = files.iterator();
 
-		while (eFiles.hasMoreElements()) {
-			Msg.info(this, "PreProcessor: " + eFiles.nextElement());
+		while (eFiles.hasNext()) {
+			addParseMessage(null, "PreProcessor: " + eFiles.next());
 		}
 	}
 
@@ -957,8 +1116,7 @@ public class PreProcessor {
 							val = "";
 						}
 						if (verboseLevel == 3 || verboseLevel == 6) {
-							System.out.print("Predefining " + key + " to "
-									+ val);
+							addParseMessage(null, "Predefining " + key + " to " + val);
 						}
 						Token k, v;
 						k = new Token();
@@ -971,12 +1129,12 @@ public class PreProcessor {
 						PPToken ppv = new PPToken(v);
 						setDef(ppk, ppv);
 						if (verboseLevel == 3 || verboseLevel == 6) {
-							Msg.info(this, "Defs: containsKey: " + key + " = "
-									+ defs.containsKey(key) + " " + defs.size());
+							addParseMessage(null, "Defs: containsKey: " + key + " = " +
+										defs.containsKey(key) + " " + defs.size());
 						}
 					} else {
 						if (verboseLevel == 3 || verboseLevel == 6) {
-							System.out.print("Predefining " + optValue);
+							addParseMessage(null, "Predefining " + optValue);
 						}
 						Token k = new Token();
 						k.image = argString.substring(2);
@@ -994,23 +1152,20 @@ public class PreProcessor {
 					try {
 						verboseLevel = Integer.parseInt(optValue, 10);
 					} catch (NumberFormatException nfe) {
-						Msg.error(this,
-								"Verbose Level Error: " + nfe.getMessage());
-						throw new ParseException("Bad verbosity level "
-								+ optValue);
+						addParseMessage(null, "Verbose Level Error: " + nfe.getMessage());
+						throw new ParseException("Bad verbosity level " + optValue);
 					}
 					continue; // continue loop
 				case 'O':
 					try {
 						setOutputStream(new java.io.FileOutputStream(optValue));
 					} catch (FileNotFoundException exc) {
-						Msg.error(this, "Couldn't create file " + optValue);
-						throw new ParseException("Couldn't create file "
-								+ optValue);
+						addParseMessage(null, "Couldn't create file " + optValue);
+						throw new ParseException("Couldn't create file " + optValue);
 					}
 					continue;
 				default:
-					Msg.error(this, "Unknown option: " + argString);
+					addParseMessage(null, "Unknown option: " + argString);
 					throw new ParseException("Unknown option: " + argString);
 				}
 			default:
@@ -1023,6 +1178,16 @@ public class PreProcessor {
 
 	public void addIncludePath(String path) {
 		pathList.addElement(path);
+	}
+	
+	public void addIncludePaths(String[] paths) {
+		if (paths == null || paths.length < 1) {
+			return;
+		}
+		
+		for (String path : paths) {
+			addIncludePath(path);
+		}
 	}
 
 	public int getNumericType(String val) {
@@ -1075,6 +1240,21 @@ public class PreProcessor {
 		throw new NumberFormatException("Couldn't parse number: \'" + str + "\'");
 	}
 
+	private void addParseMessage(String filename, String message) {
+	    if (filename != null) { 
+		   parseMessages.append("   In file " + filename + "\n");
+        }
+	    parseMessages.append(message + "\n");
+	}
+	
+	public String getParseMessages() {
+		return parseMessages.toString();
+	}
+
+	public boolean didParseSucceed() {
+	  return parseSuccess;
+	}
+
 	public void setArgs(String[] args) throws ParseException {
 		shift = getopt(args);
 	}
@@ -1083,10 +1263,10 @@ public class PreProcessor {
 		outputStream = new PrintStream(fos);
 	}
 
-	public void parse(String filename) {
+	public boolean parse(String filename) throws ParseException {
 		if (verboseLevel == 1) {
-			Msg.info(this, "PreProcessor Version 0.0:  Reading from file "
-					+ filename + " . . .");
+			addParseMessage(null,
+				"PreProcessor:  Reading from file " + filename + " . . .");
 		}
 
 		FileInputStream fis = null;
@@ -1105,10 +1285,11 @@ public class PreProcessor {
 			}
 		}
 		if (fis == null) {
-			Msg.error(this, "PreProcessor Version 0.0:  File " + filename
-					+ " not found.");
-			return;
-		}
+			String msg = "PreProcessor:  File " + filename + " not found.";
+			addParseMessage(null, msg);
+			Msg.error(this, msg);
+			return false;
+		}	
 		fileStack.push(filename);
 		alreadyDone = new HashMap<String, Integer>();
 		ReInit(fis);
@@ -1117,17 +1298,18 @@ public class PreProcessor {
 			fileStack.pop();
 			if (fileStack.size() == 0) {
 				if (verboseLevel == 1) {
-					Msg.info(this,
-							"PreProcessor Version 0.0:  Java program parsed successfully.");
+					addParseMessage(null,
+						"PreProcessor:  Java program parsed successfully.");
 				}
 			}
 		} catch (ParseException e) {
-			Msg.error(this, "ERROR parsing: " + filename);
-			Msg.error(this, "PreProcessor Parse Error:  " + e.getMessage());
+			addParseMessage(filename, "PreProcessor Parse Error:  " + e.getMessage());
+			throw e;
 		} catch (TokenMgrError e) {
-			Msg.error(this, "ERROR parsing: " + filename);
-			Msg.error(this, "PreProcessor Token Error:  " + e.getMessage());
+			addParseMessage(filename, "PreProcessor Token Error:  " + e.getMessage());
+			throw e;
 		}
+		return true;
 	}
 
 	PreProcessor(PreProcessor parent) {
@@ -1152,8 +1334,8 @@ public class PreProcessor {
 
 		if (args.length - shift == 0) {
 			if (verboseLevel == 1) {
-				Msg.info(this,
-						"PreProcessor Version 0.0:  Reading from standard input . . .");
+				addParseMessage(null,
+					"PreProcessor:  Reading from standard input . . .");
 			}
 			fileStack.push("stdin");
 		} else
@@ -1170,12 +1352,12 @@ public class PreProcessor {
 			FileInputStream fis = new java.io.FileInputStream(filename);
 			ReInit(fis);
 		} catch (java.io.FileNotFoundException e) {
-			Msg.error(this, "PreProcessor Version 0.0:  File " + filename
+			addParseMessage(null, "PreProcessor:  File " + filename
 					+ " not found.");
-			Msg.error(this, "Usage is one of:");
-			Msg.error(this, "         java PreProcessor < inputfile ...");
-			Msg.error(this, "OR");
-			Msg.error(this, "         java PreProcessor inputfile ...");
+			addParseMessage(null, "Usage is one of:");
+			addParseMessage(null, "         java PreProcessor < inputfile ...");
+			addParseMessage(null, "OR");
+			addParseMessage(null, "         java PreProcessor inputfile ...");
 			return;
 		}
 	}
@@ -1183,14 +1365,17 @@ public class PreProcessor {
 	public PreProcessor() throws ParseException {
 		this(System.in);
 	}
+	
+	public void setMonitor(TaskMonitor monitor) {
+	    this.monitor = monitor;
+	}
 
 	// Run the parser
 	public static void main(String args[]) {
 		try {
 			PreProcessor parser = new PreProcessor(args);
 		} catch (ParseException e) {
-			System.out
-					.println("PreProcessor Version 0.0:  Encountered errors during parse.");
+			System.out.println("PreProcessor:  Encountered errors during parse.");
 			System.out.println("PreProcessor: " + e.getMessage());
 		}
 	}
@@ -1203,33 +1388,40 @@ PARSER_END(PreProcessor)
 
 void Input() :
 {
-    boolean b = true;
+    PPToken b;
     int conditionDepth=execStack.size();
     PPToken ppt = new PPToken("\n#line 1: \""+curFileStackTop()+"\"\n");
-    ppt.emit();
+    ppt.emit(false);
 }
 {
-    ( b=TranslationUnit(){if (b==false) break;})*
+    ( b=TranslationUnit()
+        {
+           if (monitor != null && monitor.isCancelled()) {
+              throw new ParseException("Parsing Canceled");
+           }
+           if (b.getTruth()==false) break;
+        }
+    )*
     {
         if (conditionDepth!=execStack.size()) {
-            Msg.error(this, "Imbalance in sequence/nesting of compile-time conditions/logic in input file "+curFileStackTop());
-            Msg.error(this, "              " + execStack);
+            addParseMessage(null, "Imbalance in sequence/nesting of compile-time conditions/logic in input file "+curFileStackTop());
+            addParseMessage(null, "              " + execStack);
             // pop off conditionals, so we can get back on track
             while (conditionDepth != execStack.size() && execStack.size() > 0) {
             	PPToken olde = execStack.pop();;
                 emitExecSwitch = olde.getEmitSave();
             }
         }
-        //We're out of translation units
+        // Out of translation units
         return;
     }
 
 }
 
 
-boolean TranslationUnit() : {boolean b = true;}
+PPToken TranslationUnit() : {PPToken b;}
 {
-    (LOOKAHEAD(2)b=Group(){if (b==false) break;})+{return b;}
+    (LOOKAHEAD(2) b=Group() {if (b.getTruth()==false) break;})+{return b;}
 }
 
 void NoMas() : {}
@@ -1237,35 +1429,35 @@ void NoMas() : {}
     <EOF>
 }
 
-boolean Group() : {boolean b = true;}
+PPToken Group() : {PPToken b;}
 {
     LOOKAHEAD(2)  b=GroupPart(){ return b;}  |
-    (LOOKAHEAD(2) b=IFSection(){if (b==false) return b;})+{return b;}
+    (LOOKAHEAD(2) b=IFSection(){if (b.getTruth()==false) return b;})+{return b;}
 }
 
 
-boolean GroupPart() : {boolean b = true;PPToken t,u=new PPToken("");Token v=new Token();v.image="";}
+PPToken GroupPart() : { PPToken t,u=new PPToken("");Token v=new Token();v.image="";}
 {
     (LOOKAHEAD(2)
      (t=Text()
-      (v=<WS>{u.image+=v.image;})*
+      // (v=<WS>{u.image+=v.image;})*
      ){
          /* ==>> HERE IS WHERE WE EMIT <<=== */
-         t.image+=u.image;
-         if (emitExecSwitch==true) t.emit();
+         // t.append(u.image, true);
+         if (emitExecSwitch==true) { t.emit(true); } else t.emit(false);
          t.image="";
          u.image="";
      }
     )+
-      {return b;}
- // MJT      {return Group();}
-    |   LOOKAHEAD(3)(LOOKAHEAD(2)b=IFSection()  {return b;})+
-    |   b=ControlLine(){return b;}
+      { t.setTruth(true); return t;}
+    |   LOOKAHEAD(3)(LOOKAHEAD(2)t=IFSection()  {return t;})+
+    |   t=ControlLine(){return t;}
 }
 
-boolean ControlLine() : {PPToken t = null, u = null; boolean b = true;Vector vals = new Vector();}
+PPToken ControlLine() : {PPToken t = new PPToken(""), u = null; Vector vals = new Vector();}
 {
-    (LOOKAHEAD(2)t=Define()  |
+    (LOOKAHEAD(2)
+     Define() |
      Include() |
      UnDef() |
      Pragma() |
@@ -1274,27 +1466,31 @@ boolean ControlLine() : {PPToken t = null, u = null; boolean b = true;Vector val
      Info() |
      LineInfo() ){
         if (vals!=null&&vals.size()==0) vals = null;
-        return true;
+        t.setTruth(true);
+        return t;
     } |
     NoMas(){
-        return false;
+        t.setTruth(false);
+        return t;
     }
 }
 
-boolean IFSection() : {boolean b;}
+PPToken IFSection() : {PPToken ifg, group;}
 {
-    b=IFGroup(){
-        //emitExecSwitch = b;
-        return GroupPart();
+    ifg = IFGroup()
+    {
+        group = GroupPart();
+        return group;
     }
 }
 
-boolean IFGroup() : {PPToken t, e, olde;boolean b, c;}
+PPToken IFGroup() : { PPToken t, e, olde; }
 {
     (e=If() t=IfCondition(){
          e.setEmitSave(emitExecSwitch);
          e.setTruth(t.getTruth());
          execStack.push(e);
+         printCommentedLines(emitExecSwitch, "#if " + t.image, "" + t.getTruth());
          if (emitExecSwitch==true) emitExecSwitch = e.getTruth();
          if (verboseLevel==6||verboseLevel==7) {
              println("["+execStack.size()+"]"+"If "+t.getTruth()+" : "+emitExecSwitch);
@@ -1303,11 +1499,12 @@ boolean IFGroup() : {PPToken t, e, olde;boolean b, c;}
      e=ElIf() t=ElseIfCondition(){
          e.setTruth(t.getTruth());
          if (execStack.size()==0) {
-             Msg.error(this, curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
-	     throw new ParseException(curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
+             addParseMessage(null,curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
+	         throw new ParseException(curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
          }
          olde = (PPToken) execStack.pop();
          emitExecSwitch = olde.getEmitSave();
+         printCommentedLines(emitExecSwitch, "#else if " + t.image, "" + t.getTruth());
          e.setEmitSave(emitExecSwitch);
          if (!olde.getTruth() && emitExecSwitch==true)
              emitExecSwitch = e.getTruth();
@@ -1322,6 +1519,7 @@ boolean IFGroup() : {PPToken t, e, olde;boolean b, c;}
      e=IfDef() t=IfDefExpr() {
          t.setEmitSave(emitExecSwitch);
          execStack.push(t);
+         printCommentedLines(emitExecSwitch, "#ifdef " + t.image, "" + t.getTruth());
          if (emitExecSwitch==true) emitExecSwitch = t.getTruth();
          if (verboseLevel==6||verboseLevel==7) {
              println("["+execStack.size()+"]"+"IfDef "+t.getTruth()+" : "+emitExecSwitch);
@@ -1330,6 +1528,7 @@ boolean IFGroup() : {PPToken t, e, olde;boolean b, c;}
      e=IfNDef() t=IfNDefExpr() {
          t.setEmitSave(emitExecSwitch);
          execStack.push(t);
+         printCommentedLines(emitExecSwitch, "#ifndef " + t.image, "" + t.getTruth());
          if (emitExecSwitch==true) emitExecSwitch = t.getTruth();
          if (verboseLevel==6||verboseLevel==7) {
              println("["+execStack.size()+"]"+"IfNDef "+t.getTruth()+" : "+emitExecSwitch);
@@ -1337,11 +1536,12 @@ boolean IFGroup() : {PPToken t, e, olde;boolean b, c;}
      } |
      t=Else(){
          if (execStack.size()==0) {
-             Msg.error(this, curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
+             addParseMessage(null, curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
              throw new ParseException (curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
          }
          olde = (PPToken) execStack.pop();
          emitExecSwitch = olde.getEmitSave();
+         printCommentedLines(emitExecSwitch, "#else", "" + t.getTruth()); 
          t.setEmitSave(emitExecSwitch);
          if (emitExecSwitch && olde.getTruth()) emitExecSwitch = false;
          execStack.push(t);
@@ -1351,20 +1551,19 @@ boolean IFGroup() : {PPToken t, e, olde;boolean b, c;}
      } |
      t=EndIf(){
          if (execStack.size()==0) {
-             Msg.error(this, curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
+            addParseMessage(null, curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
             throw new ParseException(curFileStackTop()+"'"+t.beginLine+"Unbalanced IF directive detected");
          }
          olde = (PPToken) execStack.pop();
-         emitExecSwitch = olde.getEmitSave();
+         boolean newExecSwitch = olde.getEmitSave();
+         printCommentedLines(newExecSwitch, "#endif", "" + emitExecSwitch);
+         emitExecSwitch = newExecSwitch;
          if (verboseLevel==6||verboseLevel==7) {
              println("["+execStack.size()+"]"+curFileStackTop()+"'"+t.beginLine+": Endif "+" : "+emitExecSwitch);
          }
-         //if (execStack.size()>0) t.setTruth(((PPToken)execStack.peek()).getTruth());
-         //else t.setTruth(true);
-         //emitExecSwitch = t.getEmitSave();
      }
 
-    ){return t.getTruth();}
+    ) { return t; }
 }
 
 
@@ -1411,8 +1610,8 @@ PPToken Include() : {Token t;PPToken pt;int conditionDepth=execStack.size();}
      }
     ){
         if (conditionDepth!=execStack.size()) {
-            Msg.error(this, "Imbalance in sequence/nesting of compile-time conditions/logic in included file "+t.image);
-            Msg.error(this, "              " + execStack);
+            addParseMessage(null, "Imbalance in sequence/nesting of compile-time conditions/logic in included file "+t.image);
+            addParseMessage(null, "              " + execStack);
             // pop off conditionals, so we can get back on track
             while (conditionDepth != execStack.size() && execStack.size() > 0) {
             	PPToken olde = execStack.pop();
@@ -1438,13 +1637,13 @@ PPToken LineInfo() : {Token t; Token u;}
 }
 
 
-PPToken Define() : {Token t,u=null,v=null,w=null,x=null;Vector dargs = new Vector();}
+PPToken Define() : {Token t,u=null,v=null,w=null,x=null;Vector dargs = null; }
 {
     (LOOKAHEAD(2)  // supports current lexer
      (t=<MANIFEST>
-      [LOOKAHEAD(2) ((u=MacroArgs(){dargs.add(u);})+ | u=MacroVals() )
+      [LOOKAHEAD(2) ({u=new Token(); if (dargs==null) { dargs = new Vector(); }} ( u=MacroArgs() { dargs.add(u);})* <MACROARGSEND> | u=MacroVals() )
        [(w=MacroVals(){   if (x==null) {
-	                           if (dargs.size()>0) {
+	                           if (dargs != null) {
 	                              x=w;
 	                           } else {
 	                              x=u;x.image+=w.image;
@@ -1457,11 +1656,11 @@ PPToken Define() : {Token t,u=null,v=null,w=null,x=null;Vector dargs = new Vecto
              )+] ] ) |
      LOOKAHEAD(2) //  questionable
      (t=<MANIFEST>
-      u=MacroArgs(){dargs.add(u);}
+      u=MacroArgs(){if (dargs==null) { dargs = new Vector(); } dargs.add(u);}
       [LOOKAHEAD(2)v=Define()]) |
      LOOKAHEAD(2) //  questionable
      (t=<MANIFEST>
-      [ (u=MacroArgs(){dargs.add(u);})+
+      [ (u=MacroArgs(){if (dargs==null) { dargs = new Vector(); } dargs.add(u);})+
         [v=MacroVals()] ]) |
      (t=<MANIFEST> //  questionable
       (<WS>)+ u=Define() )
@@ -1471,24 +1670,29 @@ PPToken Define() : {Token t,u=null,v=null,w=null,x=null;Vector dargs = new Vecto
             if (u!=null&&v!=null) {
                 PPToken pv=new PPToken(v);
                 setMacro(pt,dargs,pv);
+                printCommentedLines(emitExecSwitch, "#define " + pt.image + "("+dargs+")  " + pv.image, "" + "DEFINED");
             } else if (u==null&&v==null) {
                 setDef(pt);
+                printCommentedLines(emitExecSwitch, "#define " + pt.image, "" + "DEFINED");
             } else if (v!=null) {
                 PPToken pv=new PPToken(v);
                 setDef(pt,pv);
+                printCommentedLines(emitExecSwitch, "#define " + pt.image + "  " + pv.image, "" + "DEFINED");
             } else if (u!=null) {
-                if (dargs.size()>0) {
+                if (dargs != null) {
                     PPToken pv=new PPToken("");
                     setMacro(pt,dargs,pv);
+                    printCommentedLines(emitExecSwitch, "#define " + pt.image + "("+dargs+")  " + pv.image, "" + "DEFINED");
                 } else {
                     PPToken pu=new PPToken(u);
                     setDef(pt,pu);
+                    printCommentedLines(emitExecSwitch, "#define " + pt.image + "  " + pu.image, "" + "DEFINED"); 
                 }
             }
         } else {
             if (verboseLevel==5||verboseLevel==6) println("PreProcessor: "+curFileStackTop()+"'"+t.beginLine+": "+t.image+" aready defined. Undefine first.");
         }
-        if (dargs!=null&&dargs.size()==0) dargs = null;
+
         return pt;
     }
 }
@@ -1506,25 +1710,26 @@ PPToken UnDef() : {Token t;}
 
 PPToken MacroArgs() : {Token t,u=null;}
 {
-    t=<MACROMV>{return new PPToken(t);}
+    (
+      t=<MACROMV> |
+      t=<MACROMVTAG >
+    )
+    {return new PPToken(t);}
 }
 
 PPToken MacroVals() : {Token s,t,u=new Token();u.image="";}
 {
     (u=Values() |
-     (LOOKAHEAD(2)(t=<MACRORV>{u.image+=t.image;} | t=<MQUOTED_VALUE> { u.image+="\""+t.image+"\"";}))+
+     (LOOKAHEAD(2)(t=<MACRORV> {u.image+=t.image;} | t=<MACRORVCMT> { t.image="/"; } | t=<MQUOTED_VALUE> { u.image+="\""+t.image+"\"";}))+
      [LOOKAHEAD(2) (LOOKAHEAD(2)t=Values(){u.image+=t.image;})+  ]
-//     |
-//     t=<NOTCMTRV>{u.image+=t.image;}
-//     [LOOKAHEAD(2) (LOOKAHEAD(2)t=Values(){u.image+=t.image;})+  ]
      ) {return new PPToken(u);}
 }
 
 PPToken Pragma() :
-{Token t;}
-{   t=<PRAGMA_EXPRN> {
-       PPToken pt = new PPToken(t);
-       if (emitExecSwitch==true) println("#pragma " + defs.expand(t.image,true)); return pt;
+{Token t,u=null; }
+{   (LOOKAHEAD(2)(t=<PRAGMA_EXPRN> { if (u==null) { u = t; } else { u.image += t.image; } } ))+ {
+       PPToken pt = new PPToken(u);
+       if (emitExecSwitch==true) println("#pragma " + defs.expand(u.image,true)); return pt;
     }
 }
 
@@ -1575,8 +1780,8 @@ PPToken Error() :
 {Token t;}
 {   t=<ERROR_EXPRN>{
         if (emitExecSwitch==true) {
-            Msg.error(this, curFileStackTop()+"'"+t.beginLine+" Compiler Error:");
-            Msg.error(this, t.image);
+            addParseMessage(null, curFileStackTop()+"'"+t.beginLine+" Compiler Error:");
+            addParseMessage(null, t.image);
         }
         return new PPToken(t);
     }
@@ -1586,8 +1791,8 @@ PPToken Warning() :
 {Token t;}
 {   t=<WARNING_EXPRN>{
         if (emitExecSwitch==true) {
-            Msg.error(this, curFileStackTop()+"'"+t.beginLine+" Warning: ");
-            Msg.error(this, t.image);
+            addParseMessage(null, curFileStackTop()+"'"+t.beginLine+" Warning: ");
+            addParseMessage(null, t.image);
         }
         return new PPToken(t);
     }
@@ -1644,7 +1849,9 @@ PPToken Values() :
         t.kind = getNumericType(t.image);
     }|
     t=QuotedValue() |
-//    t=<CMTVAL> |
+    t=<VALUESCMT> {
+      t.image = "/";
+    } |
     t=<MOREVAL>
     ){
         PPToken pt=new PPToken(t);
@@ -1660,29 +1867,32 @@ PPToken QuotedValue() :
 }
 
 PPToken Text() :
-{Token u, t = new Token(); StringBuffer buf = new StringBuffer(); t.image="";}
+{Token u, nl, t = new Token(); PPToken buf = new PPToken(""); t.image="";}
 {
     ( LOOKAHEAD(3)
-      (LOOKAHEAD(2)(u=<OUTER_TEXT>{if (emitExecSwitch==true) buf.append(u.image);}
-//                    [LOOKAHEAD(2)u=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);}]|
-                    (LOOKAHEAD(2)u=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);})*|
+      (LOOKAHEAD(2)(u=<OUTER_TEXT>{ bufAppendWithComment(buf,u); }
+                    (LOOKAHEAD(2)nl=NewLines() {if (emitExecSwitch==true) buf.append(nl.image,true); else buf.append((u.image.length() == 0 ? "//// " : "") + nl.image, false); } )* |
 
-                    u=<OTHER_TEXT>{if (emitExecSwitch==true)  buf.append(u.image);})
-       [LOOKAHEAD(2)u=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);}]
-       [LOOKAHEAD(2)u=QuotedText(){if (emitExecSwitch==true)  buf.append(u.image);}]
-       [LOOKAHEAD(2)u=<OTHER_TEXT>{if (emitExecSwitch==true)  buf.append(u.image);}
-//        [LOOKAHEAD(2)u=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);}]])+|
-        (LOOKAHEAD(2)u=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);})*])+|
+                    u=<OTHER_TEXT> {bufAppendWithComment(buf,u); } )
+       [LOOKAHEAD(2)u=NewLines() {bufAppendWithComment(buf,u); }]
+       [(LOOKAHEAD(2)(u=QuotedText() {bufAppendWithComment(buf,u); }
+                    [LOOKAHEAD(2)u=NewLines(){ bufAppendWithComment(buf,u); }] |
+                    u=<OTHER_TEXT> {bufAppendWithComment(buf,u); })
+           [LOOKAHEAD(2)t=NewLines() {if (emitExecSwitch==true) buf.append(t.image,true); else buf.append("//// " + u.image, false); }]
+           [LOOKAHEAD(2)u=<OTHER_TEXT> {bufAppendWithComment(buf,u); }]
+           [LOOKAHEAD(2)u=NewLines() {bufAppendWithComment(buf,u); }])+]
+       [LOOKAHEAD(2)u=<OTHER_TEXT> {bufAppendWithComment(buf,u); }
+        (LOOKAHEAD(2)u=NewLines(){ bufAppendWithComment(buf,u);})*])+|
                 
-      (LOOKAHEAD(2)(u=QuotedText(){if (emitExecSwitch==true)  buf.append(u.image);}
-                    [LOOKAHEAD(2)u=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);}]|
-                    u=<OTHER_TEXT>{if (emitExecSwitch==true)  buf.append(u.image);})
-       [LOOKAHEAD(2)t=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);}]
-       [LOOKAHEAD(2)u=<OTHER_TEXT>{if (emitExecSwitch==true)  buf.append(u.image);}]
-       [LOOKAHEAD(2)u=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);}])+ |
+      (LOOKAHEAD(2)(u=QuotedText() {bufAppendWithComment(buf,u); }
+                    [LOOKAHEAD(2)u=NewLines(){ bufAppendWithComment(buf,u); }] |
+                    u=<OTHER_TEXT> {bufAppendWithComment(buf,u); })
+       [LOOKAHEAD(2)t=NewLines() {if (emitExecSwitch==true) buf.append(t.image,true); else buf.append("//// " + u.image, false); }]
+       [LOOKAHEAD(2)u=<OTHER_TEXT> {bufAppendWithComment(buf,u); }]
+       [LOOKAHEAD(2)u=NewLines() {bufAppendWithComment(buf,u); }])+ |
        
-      u=NewLines(){if (emitExecSwitch==true)  buf.append(u.image);}
-    ){return new PPToken(buf.toString());}
+      u=NewLines() {bufAppendWithComment(buf,u); }
+    ) { return buf;}
 }
 
 
@@ -1693,19 +1903,35 @@ PPToken NewLines() :
     // the rest are fluff to emulate real preprocessor output
     // #if and #def newlines have been returned to their skip sections
     (
-    t=<NEWLINE> |
-    t=<ERRLINE> |
-    t=<LINLINE> |
-    t=<PRGLINE> |
+    t=<NEWLINE>  |    // general newline
+//    t=<CMNTNL>   |    // newline coming from /* */  // stripped for now
+    t=<EOLCMNTNL> |    // newline coming from //
+    t=<ERRLINE>  |
+    t=<LINLINE>  |
+    t=<PRAGLINE>  |
+    t=<IFDLINE>  |
+    t=<IFNDLINE> |
+    t=<DIRLINE> |
+    t=<UNDLINE> |
+    t=<CONLINE> |
     t=<INCLINE>
-    ){return new PPToken(t);}
+    ) {return new PPToken(t);}
 }
 
 PPToken QuotedText() :
-{Token u;}
+{Token t = null; Token r = null; }
 {
-    (u=<QUOTED_TEXT>)
-     {return new PPToken(u);}
+    (t=<QUOTED_TEXT>
+      {
+        if (r == null) {
+           r = t;
+        } else {
+    	  r.image = r.image.substring(0,r.image.length()) + t.image.substring(1);
+        }
+       }
+     )+
+    
+    { return new PPToken(r); }
 }
 
 
@@ -1724,7 +1950,7 @@ PPToken CompoundAndExpression() :
 {
     t=ConditionalExpression()
       ( LOOKAHEAD(2)
-        u=And(){
+        u=LogAnd(){
             if (verboseLevel()==7) print(u.image);
         }
         v=ConditionalExpression(){
@@ -1738,7 +1964,7 @@ PPToken CompoundOrExpression() :
 {
     t=ConditionalExpression()
       ( LOOKAHEAD(2)
-        u=Or(){
+        u=LogOr(){
             if (verboseLevel()==7) print(u.image);
         }
         v=ConditionalExpression(){
@@ -1764,7 +1990,7 @@ PPToken LogicalOrExpression() :
 {
     (t=LogicalAndExpression()
      (LOOKAHEAD(2)
-      u=Or(){
+      u=LogOr(){
           if (verboseLevel()==7) print(u.image);
       }
       v=LogicalAndExpression(){
@@ -1779,7 +2005,7 @@ PPToken LogicalAndExpression() :
 {
     (t=EqualityExpression()
      ( LOOKAHEAD(2)
-       u=And(){
+       u=LogAnd(){
            if (verboseLevel()==7) print(u.image);
        }
        v=EqualityExpression(){
@@ -1788,23 +2014,6 @@ PPToken LogicalAndExpression() :
        })*
     ){return t;}
 }
-
-/***
-PPToken EqualityExpression() :
-{PPToken t,u,v;}
-{
-    (t=RelationalExpression()
-     ( LOOKAHEAD(2)
-       u=EqualTo(){
-           if (verboseLevel()==7) print(u.image);
-       }
-       v=RelationalExpression(){
-           t.setTruth(t.compareTo(v)==0);
-           if (verboseLevel()==7) print(": ");
-       })*
-    ){return t;}
-}
-***/
 
 PPToken EqualityExpression() :
 {PPToken t,u,v;}
@@ -1863,63 +2072,6 @@ PPToken RelationalExpression() :
     ){return t;}
 }
 
-
-PPToken GreaterThanExpression() :
-{PPToken t,u,v;}
-{  (
-   t=LogNegation()
-   (u=GreaterThan(){
-        if (verboseLevel()==7) print(u.image);
-    }
-    v=LogNegation(){
-        try {
-            t.setTruth(t.compareTo(v)>0);
-        } catch (NumberFormatException exc) {
-            t.setTruth(false);
-        }
-        if (verboseLevel()==7) print(": ");
-    }
-   )*
-   ){return t;}
-}
-
-
-PPToken GreaterThanOrEqualExpression() :
-{PPToken t,u,v;}
-{  t=GreaterThanExpression()
-     ( u=GreaterThanOrEqual(){
-           if (verboseLevel()==7) print(u.image);
-       }
-       v=GreaterThanExpression(){
-           try {
-               t.setTruth(t.compareTo(v)>=0);
-           } catch (NumberFormatException exc) {
-               t.setTruth(false);
-           }
-           if (verboseLevel()==7) print(": ");
-       }
-     )*{return t;}
-}
-
-
-
-PPToken LessThanOrEqualExpression() :
-{PPToken t,u,v;}
-{  t=GreaterThanOrEqualExpression()
-     ( u=LessThanOrEqual(){
-           if (verboseLevel()==7) print(u.image);
-       }
-       v=GreaterThanOrEqualExpression(){
-           try {
-               t.setTruth(t.compareTo(v)<=0);
-           } catch (NumberFormatException exc) {
-               t.setTruth(false);
-           }
-           if (verboseLevel()==7) print(": ");
-       }
-     )*{return t;}
-}
-
 PPToken LessExpression() :
 {PPToken t,u,v;}
 {  t=LessThanOrEqualExpression()
@@ -1938,16 +2090,70 @@ PPToken LessExpression() :
      )*{return t;}
 }
 
-PPToken Or() :
-{Token t;PPToken pt;}
-{
-    t=<OR> {return new PPToken(t);}
+PPToken LessThanOrEqualExpression() :
+{PPToken t,u,v;}
+{  t=GreaterThanOrEqualExpression()
+     ( u=LessThanOrEqual(){
+           if (verboseLevel()==7) print(u.image);
+       }
+       v=GreaterThanOrEqualExpression(){
+           try {
+               t.setTruth(t.compareTo(v)<=0);
+           } catch (NumberFormatException exc) {
+               t.setTruth(false);
+           }
+           if (verboseLevel()==7) print(": ");
+       }
+     )*{return t;}
 }
 
-PPToken And() :
+PPToken GreaterThanOrEqualExpression() :
+{PPToken t,u,v;}
+{  t=GreaterThanExpression()
+     ( u=GreaterThanOrEqual(){
+           if (verboseLevel()==7) print(u.image);
+       }
+       v=GreaterThanExpression(){
+           try {
+               t.setTruth(t.compareTo(v)>=0);
+           } catch (NumberFormatException exc) {
+               t.setTruth(false);
+           }
+           if (verboseLevel()==7) print(": ");
+       }
+     )*{return t;}
+}
+
+PPToken GreaterThanExpression() :
+{PPToken t,u,v;}
+{  (
+   t=Expression()
+   (u=GreaterThan(){
+        if (verboseLevel()==7) print(u.image);
+    }
+    v=Expression(){
+        try {
+            t.setTruth(t.compareTo(v)>0);
+        } catch (NumberFormatException exc) {
+            t.setTruth(false);
+        }
+        if (verboseLevel()==7) print(": ");
+    }
+   )*
+   ){return t;}
+}
+
+
+PPToken LogOr() :
 {Token t;PPToken pt;}
 {
-    t=<AND> {return new PPToken(t);}
+    t=<LOG_OR> {return new PPToken(t);}
+}
+
+PPToken LogAnd() :
+{Token t;PPToken pt;}
+{
+    t=<LOG_AND> {return new PPToken(t);}
 }
 
 PPToken EqualTo() :
@@ -1998,44 +2204,6 @@ PPToken ElseMark() :
     t=<COLON> {return new PPToken(t);}
 }
 
-PPToken LogNegation() :
-{Token t; PPToken pt=null; boolean negate=false;}
-{
-    (t=<NOT>{
-         negate = true;
-         if (verboseLevel()==7) print(t.image);
-     })*
-    pt=Expression(){
-        if (negate==true) pt.setContra(true);
-    }
-    {return pt;}
-}
-
-PPToken Negation() :
-{Token t; PPToken pt=null; boolean negate=false;}
-{
-    (t=<MINUS>{
-         negate = true;
-         if (verboseLevel()==7) print(t.image);
-     })*
-     pt=Expression(){
-       if (negate==true) {
-			BigInteger tvalue = BigInteger.ZERO;
-			BigInteger result = BigInteger.ZERO;
-			try {
-				tvalue = getLongValue(this.getDef(pt).image);
-			}
-			catch (Exception e) {
-			}
-			result = tvalue.negate();
-			pt = new PPToken(pt);
-			pt.image = result.toString();
-			pt.kind = NUMERIC;
-			pt.setTruth(!result.equals(BigInteger.ZERO));
-       }
-    }
-    {return pt;}
-}
 
 PPToken Assertion() :
 {Token t; PPToken pt=null; boolean checkDefined = false; }
@@ -2044,7 +2212,7 @@ PPToken Assertion() :
         pt=Expression()
     {
        pt = new PPToken(pt);
-       pt.setTruth(isDef(pt));
+       pt.setTruth(isDef(pt) || (pt.kind == FP_NUMERIC || pt.kind == NUMERIC));  // numbers are always defined
        return pt;
     })
     | 
@@ -2057,72 +2225,126 @@ PPToken Assertion() :
 }
 
 PPToken Expression() :
-{Token op; PPToken t,v,pt;}
+{ PPToken obj = null; }
 {
-    t=ValueExpression()
-    (LOOKAHEAD(3)
-     op=SubtractFrom()
-     v=ValueExpression()
-     {
-		BigInteger tvalue = BigInteger.ZERO;
-		BigInteger result = BigInteger.ZERO;
-		BigInteger vvalue = BigInteger.ZERO;
-		try {
-			tvalue = getLongValue(this.getDef(t).image);
-			vvalue = getLongValue(this.getDef(v).image);
-		}
-		catch (Exception e) {
-		}
-		switch (op.kind) {
-			case MINUS:
-				result = tvalue.subtract(vvalue);
-				break;
-			case PLUS:
-				result = tvalue.add(vvalue);
-				break;
-			case TIMES:
-				result = tvalue.multiply(vvalue);
-				break;
-			case LOG_AND:
-				result = tvalue.and(vvalue);
-				break;
-			case LOG_OR:
-				result = tvalue.or(vvalue);
-				break;
-			case RSH:
-				result = tvalue.shiftRight(vvalue.intValue());
-				break;
-			case LSH:
-				result = tvalue.shiftLeft(vvalue.intValue());
-				break;
-		}
-		t.image = result.toString();
-		t.kind = NUMERIC;
-		t.setTruth(result != BigInteger.ZERO);
-     }
-     )* {return new PPToken(t);}
+  obj = InclusiveORExpression()
+  {
+    return obj;
+  }
+}
+  
+
+PPToken InclusiveORExpression() : {
+    PPToken obj = null, obj2 = null; Token op=null;
+}
+{
+	obj = ExclusiveORExpression() ( LOOKAHEAD(2) op=< OR > obj2=ExclusiveORExpression() { obj = obj.computeBinary(op, obj2); } ) *
+	{
+		return obj;
+    }
+}
+
+PPToken ExclusiveORExpression() : {
+    PPToken obj = null, obj2 = null; Token op=null;
+}
+{
+	obj = ANDExpression() ( LOOKAHEAD(2) op=< XOR > obj2=ANDExpression() { obj = obj.computeBinary(op, obj2); } ) *
+	{
+		return obj;
+    }
+}
+
+PPToken ANDExpression() : {
+    PPToken obj = null, obj2 = null; Token op=null;
+}
+{
+	obj = ShiftExpression() ( LOOKAHEAD(2) op=< AND > obj2=ShiftExpression() { obj = obj.computeBinary(op, obj2); } ) *
+	{
+		return obj;
+    }
+}
+
+PPToken ShiftExpression() : {
+   PPToken obj = null, obj2 = null; Token op=null;
+}
+{
+	obj = AdditiveExpression()
+	( LOOKAHEAD(2) (op=< LSH > | op=< RSH > ) obj2 = AdditiveExpression()
+	   { obj = obj.computeBinary(op, obj2); }
+	) *
+	{
+		return obj;
+    }
+}
+
+PPToken AdditiveExpression() : {
+    PPToken obj = null, obj2 = null; Token op=null;
+}
+{
+	obj = MultiplicativeExpression()
+	( LOOKAHEAD(2) ( op=< PLUS > | op=< MINUS >) obj2 = MultiplicativeExpression()
+	  { obj = obj.computeBinary(op, obj2); }
+    ) *
+	{
+		return obj;
+    }
+}
+
+PPToken MultiplicativeExpression() : {
+    PPToken obj = null, obj2 = null; Token op=null;
+}
+{
+	obj = UnaryExpression()
+	( LOOKAHEAD(2) ( op=< TIMES > | op=< DIVIDE > | op= < MOD > ) obj2 = UnaryExpression()
+	  { obj = obj.computeBinary(op, obj2); }
+    ) *
+	{
+		return obj;
+    }
 }
 
 
-PPToken SubtractFrom() :
-{Token t;PPToken pt;}
+PPToken UnaryExpression() : {
+     PPToken obj = null;
+     Token op = null;
+}
 {
-    (t=<MINUS> | t=<PLUS> | t=<TIMES> | t=<LOG_AND> | t=<LOG_OR> | t=<RSH> | t=<LSH> )
-    {return new PPToken(t);}
+	(
+		LOOKAHEAD(3)
+		obj = LogNegation()
+        | 
+	    < PLUS > obj=LogNegation()
+	    |
+	    op=< MINUS > obj=LogNegation() { obj = obj.computeUnary(op); }
+	)
+	{
+		return obj;
+    }
+}
+
+PPToken LogNegation() :
+{Token t; PPToken pt=null; boolean negate=false;}
+{
+    (t=<NOT>{
+         negate = true;
+         if (verboseLevel()==7) print(t.image);
+     })*
+    pt=ValueExpression(){
+        if (negate==true) pt.setContra(true);
+    }
+    {return pt;}
 }
 
 PPToken ValueExpression() :
 {Token t;Token v;PPToken pt;PPToken tv=null;
- Token u=null;Vector dargs = new Vector(); boolean negation=false; boolean positive=false; }
+ Token u=null;Vector dargs = new Vector(); }
 {
 
     (
     LOOKAHEAD(2)
-    ((<MINUS> {negation=true;} | <PLUS> { positive=true;} )? t=<NUMERIC> | t=<FP_NUMERIC> | t=<ELSE> | t=<IF> ) {
+    (t=<NUMERIC> | t=<FP_NUMERIC> | t=<ELSE> | t=<IF> ) {
         if (verboseLevel()==7) print(t.image);
         pt=new PPToken(t);
-        if (negation) { pt.image = "-" + pt.image; }
-        if (positive) { pt.image = "+" + pt.image; }
         if (pt.compareToZero()==0) pt.setTruth(false);
         else pt.setTruth(true);
         return pt;
@@ -2136,15 +2358,15 @@ PPToken ValueExpression() :
         return pt;
     }
     |
-    (<MINUS> {negation=true;} | <PLUS> { positive=true;} )? (t=<ITEM>) [LOOKAHEAD(4) <BEGITEM> ((u=<ITEM> | u=<NUMERIC>) {dargs.add(u);})+ <ENDITEM> ] {
+    (t=<ITEM>) [ LOOKAHEAD(4) <BEGITEM> ((tv=Expression()) {dargs.add(tv);})+ <ENDITEM> ] {
         if (verboseLevel()==7) print(t.image);
         pt=new PPToken(t);
         if (dargs.size() > 0) {
             pt.image += "(";
-            Enumeration<Token> denum = dargs.elements();
+            Enumeration<PPToken> denum = dargs.elements();
             int index = 0;
             while (denum.hasMoreElements()) {
-                Token atok = (Token) denum.nextElement();
+                PPToken atok = (PPToken) denum.nextElement();
                 if (index++ != 0) {
                         pt.image += ",";
                 }
@@ -2157,8 +2379,6 @@ PPToken ValueExpression() :
             // The expanded macro text can't be injected into the parse stream
             // try parsing the expression with an internal simple expression
             // parser that can handle equality expressions
-        	if (negation) { pt.image = "-" + pt.image; }
-        	if (positive) { pt.image = "+" + pt.image; }
 			Long val = AddressEvaluator.evaluateToLong(pt.image);
 			if (val != null) {
 			    pt.image = val.toString();
@@ -2176,13 +2396,13 @@ PPToken ValueExpression() :
             if (!pt.image.equals(tv.image)) {
             	tv.image = defs.expand(tv.image, true);
             	tv.kind = getNumericType(tv.image);
-
             }
-            if (negation) { tv.image = "-" + tv.image; }
-            if (positive) { tv.image = "+" + tv.image; }
+
 			Long val = AddressEvaluator.evaluateToLong(tv.image);
 			pt.setTruth(true);
 			if (val != null) {
+			  	pt.image = val.toString();
+				pt.kind = NUMERIC;
 				if (val == 0) {
 					pt.setTruth(false);
 				}
@@ -2195,6 +2415,7 @@ PPToken ValueExpression() :
 		return pt;
     }
     )
+    
 }
 
 // LEXICAL SCANNER SECTION
@@ -2206,20 +2427,43 @@ TOKEN_MGR_DECLS :
 <DEFAULT>
 SKIP:
 {
+    <_BOM: "\ufeff" > |    // beginning of file BOM for UTF8
     <_CTRL: (<WSP>)* <DIR> (<WSP>)* > : DIRECTIVE |
     <_XSYM: <XSYM> > : XSYMLINK |
-//    <_LCMT: (<WSP>)* <CMT>(<CMT>) > : LINECOMMENT |
-//    <_CMT: (<WSP>)* <CMT>(<ECMT>) > : COMMENT |
-    <_LCMT: "//" (~["\n","\r"])* ("\n"|"\r"|"\r\n")> |
-    <_CMT: <CMT>(<ECMT>) (~["*"])* "*" ("*" | ~["*","/"] (~["*"])* "*")*  "/" > |
-    <_BLANKLINE: (<WSP>)+ > : DEFAULT
-
+    <_BLANKLINE: (<WSP>)+ >
 }
 
-SPECIAL_TOKEN :
+<DEFAULT>
+//MORE:
+SKIP:
 {
-  <_LINECOMMENT: "//" (~["\n","\r"])* ("\n"|"\r"|"\r\n")> |
-  <_COMMENT: <CMT>(<ECMT>) (~["*"])* "*" ("*" | ~["*","/"] (~["*"])* "*")*  "/" >
+  <_LCMT: "/" "/" > : SpecialEOLComment |
+  <_CMT: <CMT>(<ECMT>)  > : SpecialBlockComment
+}
+
+<SpecialEOLComment>
+TOKEN :
+{
+  <EOLCMNTNL: <ENDL> > : DEFAULT
+}
+<SpecialEOLComment>
+//MORE:
+SKIP :
+{
+  <(~[])> 
+}
+
+<SpecialBlockComment>
+SKIP :
+{
+  <CMNTNL: <ENDCMT> > : DEFAULT
+}
+
+<SpecialBlockComment>
+// MORE:
+SKIP:
+{
+  <(~[])>
 }
 
 <DEFAULT>
@@ -2231,13 +2475,15 @@ TOKEN:
     <#_GT:  ">" > |
     <#_LE:  "<=" > |
     <#_GE:  ">=" > |
-    <#_AND:  "&&" > |
-    <#_LOG_AND: "&" > |
-    <#_OR:  "||" > |
-    <#_LOG_OR: "|" > |
+    <#_AND:  "&" > |
+    <#_LOG_AND: "&&" > |
+    <#_OR:  "|" > |
+    <#_XOR:  "^" > |
+    <#_LOG_OR: "||" > |
     <#_LSH:  "<<" > |
     <#_RSH:  ">>" > |
     <#_MINUS: "-" > |
+    <#_PERCENT: "%" > |
     <#_PLUS: "+" > |
     <#_QMARK: "?" > |
     <#_COLON: ":" > |
@@ -2271,7 +2517,7 @@ TOKEN:
     <#NOTWWSQLT: ~[" ","\t","\n","\r","<","\""]> |
     <#NOTWSQLT: ~["\t","\n","\r","<","\""]> |
     <#NOTVALCMT: ("/##/")> |
-    <INTEGER_LITERAL: <DECIMAL_LITERAL> (["l","L"])? | <HEX_LITERAL> (["l","L","U"])* | <OCTAL_LITERAL> (["l","L"])*> |
+    <INTEGER_LITERAL: <DECIMAL_LITERAL> (["u","l","L","U"])* | <HEX_LITERAL> (["u","l","L","U"])* | <OCTAL_LITERAL> (["u","l","L","U"])*> |
     <#DECIMAL_LITERAL: ["0"-"9"] (["0"-"9"])*> |
     <#HEX_LITERAL: "0" ["x","X"] (["0"-"9","a"-"f","A"-"F"])+> |
     <#HEX_DIGIT: (["0"-"9","a"-"f","A"-"F"])> |
@@ -2317,15 +2563,12 @@ SKIP:
     "undef" : UNDEFINE
     |
     "line" : LINE
-    |
-    <DIRLINE: <ENDL> > : DEFAULT
     | // former IF states
     <_WSP0: <WSP> > : DIRECTIVE  |
     <_COD1: <COD> > : DIRECTIVE |
     <_WSP2: <WSP>> : DIRECTIVE |
     <COMMA: ","> : DIRECTIVE |
     <_LCMT0: <CMT><CMT>>  : LINECOMMENT |
-    <EIFLINE: <ENDL>> : DEFAULT |
     <_CMT0: <CMT><ECMT>>  : DIRECTIVECOMMENT
 }
 
@@ -2351,12 +2594,15 @@ TOKEN : {
     <GE: <_GE> > |
     <AND: <_AND> > |
     <OR: <_OR> > |
+    <XOR: <_XOR> > |
     <LOG_OR: <_LOG_OR> > |
     <LOG_AND: <_LOG_AND> > |
     <LSH: <_LSH> > |
     <RSH: <_RSH> > |
     <MINUS: <_MINUS>> |
     <PLUS: <_PLUS>> |
+    <DIVIDE: <CMT>> |
+    <MOD: <_PERCENT >> |
     <TIMES: <ECMT>> |
     <QMARK: <_QMARK>> |
     <COLON: <_COLON>> |
@@ -2365,7 +2611,8 @@ TOKEN : {
     <FP_NUMERIC: (<FP_LITERAL>)+ > |
     <ITEM:  (["a"-"z","A"-"Z","_","$"] (["a"-"z","A"-"Z","_","$","0"-"9"])* | (["0"-"9"])+ | ["1"-"9"](["0"-"9"])* | ["0"](["0"-"9"])+ )> |
     <BEGITEM: <OP>> { parenNesting++; } : DIRECTIVE |
-    <ENDITEM: <CP>> { parenNesting--; } : DIRECTIVE
+    <ENDITEM: <CP>> { parenNesting--; } : DIRECTIVE |
+    <DIRLINE: <ENDL> > : DEFAULT
 }
 
 <IGNORETOEOL>
@@ -2383,7 +2630,6 @@ SKIP : {
     <_INCCP: <CP> > : DIRECTIVE |
     <_INCOP: <OP> > : INCDEF |
     <_INCSTANDARD:  <_LT> (~["\n","\r",">",")","("])* <_GT> > : INCDEF
-//    <DIRLINE: <ENDL> > : DEFAULT
 }
 
 //<INCDEF>
@@ -2445,38 +2691,44 @@ TOKEN : {
 
 <PRAGMA>
 TOKEN : {
-    <PRAGMA_EXPRN:  <NOTWS> (<NOTENDL>)+ > : DEFAULT |
-    <PRGLINE: <ENDL> > : DEFAULT
+    <PRAGMA_EXPRN:
+             <WSP> ( ~["\\","\n","\r","/"," ","\t"] |
+              (<CMT><NOTENDLSTAR>)
+             )+ > : PRAGMA |
+    <PRAGLINE:  <ENDL> > : DEFAULT
 }
 
 <PRAGMA>
 SKIP : {
-    <_WSP1: <WSP> > : PRAGMA
+    <_LCMTPRAG: <CMT><CMT>> : LINECOMMENT |
+    <_SCMT_PRAG: (<STARTCMT> (<NOTENDLSTAR> | ("*" ~["/"]) | ("/"))+ <ENDCMT>) > : PRAGMA |
+    <_COD_WSP: <WSP>> : PRAGMA |
+    <_COD_PRAG: <COD>> : PRAGMA
 }
 
 
 <IFDEF>
 TOKEN : {
-    <IFDEF_EXPRN:  <NOTWS> (<NOTENDLC> | ( "/" <NOTENDLC>) )+ > : DEFAULT
+    <IFDEF_EXPRN:  <NOTWS> (<NOTENDLC> | ( "/" <NOTENDLC>) )* > : DEFAULT |
+    <IFDLINE: <ENDL> > : DEFAULT
 }
 
 <IFDEF>
 SKIP : {
     <_LCMT20: <CMT><CMT>> : LINECOMMENT |
-    <_WSP3: <WSP>> : IFDEF |
-    <IFDLINE: <ENDL> > : DEFAULT
+    <_WSP3: <WSP>> : IFDEF
 }
 
 <IFNDEF>
 TOKEN : {
-    <IFNDEF_EXPRN:  <NOTWS> (<NOTENDLC> | ( "/" <NOTENDLC>) )+ > : DEFAULT
+    <IFNDEF_EXPRN:  <NOTWS> (<NOTENDLC> | ( "/" <NOTENDLC>) )* > : DEFAULT |
+    <IFNDLINE: <ENDL> > : DEFAULT
 }
 
 <IFNDEF>
 SKIP : {
     <_LCMT21: <CMT><CMT>> : LINECOMMENT |
-    <_WSP4: <WSP>> : IFNDEF |
-    <IFNDLINE: <ENDL> > : DEFAULT
+    <_WSP4: <WSP>> : IFNDEF
 }
 
 <ERROR>
@@ -2493,7 +2745,7 @@ SKIP : {
 
 <WARNING>
 TOKEN : {
-    <WARNING_EXPRN:  <NOTWS> (<NOTENDL>)+ > : DEFAULT |
+    <WARNING_EXPRN:  <NOTWS> (<NOTENDL>)* > : DEFAULT |
     <WARNLINE: <ENDL> > : DEFAULT
 }
 
@@ -2504,7 +2756,7 @@ SKIP : {
 
 <INFO>
 TOKEN : {
-    <INFO_EXPRN:  <NOTWS> (<NOTENDL>)+ > : DEFAULT |
+    <INFO_EXPRN:  <NOTWS> (<NOTENDL>)* > : DEFAULT |
     <INFOLINE: <ENDL> > : DEFAULT
 }
 
@@ -2515,13 +2767,13 @@ SKIP : {
 
 <UNDEFINE>
 SKIP : {
-    <UNDLINE: <ENDL>>: DEFAULT |
     <_LEADIN1: (<WSP>)+> : UNDEFINE
 }
 
 <UNDEFINE>
 TOKEN : {
-    <CONSTITUENT: <MANIFEST> > : DEFAULT
+    <CONSTITUENT: <MANIFEST> > : DEFAULT |
+    <UNDLINE: <ENDL>>: DEFAULT
 }
 
 <DEFINE>
@@ -2533,14 +2785,14 @@ SKIP : {
 SKIP : {
     "(" : MACROARGS |
     ")" : MACROVALS |
-    <CONLINE: <ENDL>> : DEFAULT |
     <_WSP7: <WSP>> : RVALUES |
     <_CODC: <COD>> : RVALUES
 }
 
 <CONSTANT>
 TOKEN : {
-    <MANIFEST: (["a"-"z","A"-"Z","_","$"] (["a"-"z","A"-"Z","_","$","0"-"9"])* | (["0"-"9"])+ | ["-","+"]["1"-"9"](["0"-"9"])* | ["-","+"]["0"](["0"-"9"])+ | "...") >
+    <MANIFEST: (["a"-"z","A"-"Z","_","$"] (["a"-"z","A"-"Z","_","$","0"-"9"])* | (["0"-"9"])+ | ["-","+"]["1"-"9"](["0"-"9"])* | ["-","+"]["0"](["0"-"9"])+ | "...") > |
+    <CONLINE: <ENDL>> : DEFAULT
 }
 
 
@@ -2579,13 +2831,19 @@ SKIP : {
 
 <RVALUES>
 TOKEN : {
-    <VALUES: (<NOTVALCMT> | <NOTCMTCOD> | (<CMT><NOTENDLSTAR>) | (["\\"] ~[" ","\n","\r"]) )+ > : RVALUES |
+    <VALUES: (<NOTVALCMT> |
+              <NOTCMTCOD> |
+              (<CMT><NOTENDLSTAR>) |
+              ("'" ((~["\n","\r","\\"]) | ("\\" ~["\n","\r"] ) ) "'") |
+              (["\\"] ~[" ","\n","\r"])
+             )+ > : RVALUES |
+    <VALUESCMT: <CMT><ENDL> > : DEFAULT |
     <MOREVAL: <MANIFEST> >
 }
 
 <RVALUES_COMMENT>
 SKIP : {
-    <_ECMT7: (~["*"] | "*" ~["/"])* > : RVALUES_COMMENT |
+    <_ECMT7: ~["*"] | "*" ~["/"] > : RVALUES_COMMENT |
     <_EECMT7: <ENDCMT> > : RVALUES
 }
 
@@ -2598,13 +2856,14 @@ SKIP:
 <QUOTED_VAL>
 TOKEN:
 {
-    <QUOTED_VALUE: ( ~["\"","\\"] | "\\" ~["\n", "\r"] )*  > : QUOTED_VAL
+    <QUOTED_VALUE: ( ~["\"","\\"] | "\\" ~["\n", "\r"] )+  > : QUOTED_VAL
 }
 
 <MACROARGS>
 TOKEN : {
-    <MACROMV: <MANIFEST> >
-    // <MACROMV: <MANIFEST> >
+    <MACROMV: <MANIFEST> > |
+    <MACROMVTAG: "[" <MANIFEST > "]" > |
+    <MACROARGSEND: ")"> : MACROVALS 
 }
 
 <MACROARGS>
@@ -2612,7 +2871,7 @@ SKIP : {
     <_ECMT5: <CMT><ECMT>(~["*"])* "*" ("*" | ~["*","/"] (~["*"])* "*")*  "/"> : MACROARGS |
     <_CMT5: <CMT><CMT>(~["\n","\r"])+ > : MACROARGS |
     <_MWSP: ","> : MACROARGS |
-    <_EWSP: ")"> : MACROVALS |
+
     <_COD3: <COD> > : MACROARGS |
     <_MACWSP: <WSP>> : MACROARGS
 }
@@ -2630,7 +2889,8 @@ TOKEN : {
 
 <MACROVALS>
 TOKEN : {
-    <MACRORV: ( <NOTCMTCOD> | <CMT><NOTENDLSTAR> | ("\\" ~[" ","\t","\\","\n","\r"]))+ > : MACROVALS
+    <MACRORV: ( <NOTCMTCOD> | <CMT><NOTENDLSTAR> | ("\\" ~[" ","\t","\\","\n","\r"]))+ > : MACROVALS |
+    <MACRORVCMT: <CMT><ENDL> > : DEFAULT
 }
 
 <MACROVALS>
@@ -2658,7 +2918,7 @@ TOKEN:
 
 <MACROVALS_COMMENT>
 SKIP : {
-    <_ECMT9: (~["*"] | "*" ~["/"])* > : MACROVALS_COMMENT |
+    <_ECMT9: ~["*"] | "*" ~["/"] > : MACROVALS_COMMENT |
     <_EEECMT9: <ENDCMT> > : MACROVALS |
     <_EECMT9: <ENDCMT> (<WSP>)* <ENDL> > : DEFAULT
 }

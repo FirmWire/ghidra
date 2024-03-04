@@ -21,8 +21,7 @@ import java.util.*;
 import db.DBChangeSet;
 import db.DBHandle;
 import db.buffers.LocalBufferFile.BufferFileFilter;
-import ghidra.framework.ShutdownHookRegistry;
-import ghidra.framework.ShutdownPriority;
+import ghidra.framework.*;
 import ghidra.util.Msg;
 import ghidra.util.SystemUtilities;
 import ghidra.util.datastruct.ObjectArray;
@@ -136,7 +135,7 @@ public class BufferMgr {
 	private static final int INITIAL_BUFFER_TABLE_SIZE = 1024;
 
 	/**
-	 * An optional pre-cache of all buffers can be performed within a separate 
+	 * An optional pre-cache of all buffers can be performed within a separate
 	 * thread if enabled.
 	 */
 	private enum PreCacheStatus {
@@ -257,7 +256,7 @@ public class BufferMgr {
 
 	/**
 	 * Enable and start source buffer file pre-cache if appropriate.
-	 * This may be forced for all use cases by setting the System property 
+	 * This may be forced for all use cases by setting the System property
 	 * db.always.precache=true
 	 * WARNING! EXPERIMENTAL !!!
 	 */
@@ -287,7 +286,7 @@ public class BufferMgr {
 				}
 				for (BufferMgr bufferMgr : instanceList) {
 					try {
-						bufferMgr.dispose();
+						bufferMgr.dispose(true);
 					}
 					catch (Throwable t) {
 						// Ignore errors
@@ -390,7 +389,7 @@ public class BufferMgr {
 	 * buffer file.
 	 * This method should be called when this buffer manager instance
 	 * is no longer needed.
-	 * @param keepRecoveryData true if existing snapshot recovery files 
+	 * @param keepRecoveryData true if existing snapshot recovery files
 	 * should not be deleted.
 	 */
 	public void dispose(boolean keepRecoveryData) {
@@ -689,7 +688,7 @@ public class BufferMgr {
 
 	/**
 	 * Start pre-cache of source file if appropriate.
-	 * This targets remote buffer file adapters only. 
+	 * This targets remote buffer file adapters only.
 	 */
 	private void startPreCacheIfNeeded() {
 		if (preCacheThread != null) {
@@ -729,7 +728,7 @@ public class BufferMgr {
 	}
 
 	/**
-	 * Pre-cache source file into cache file.  This is intended to be run in a 
+	 * Pre-cache source file into cache file.  This is intended to be run in a
 	 * dedicated thread when the source file is remote.
 	 */
 	private void preCacheSourceFile() throws IOException {
@@ -1038,6 +1037,12 @@ public class BufferMgr {
 	 */
 	private void handleCorruptionException(Exception exception, String errorText)
 			throws IOException {
+
+		if (exception instanceof ClosedException) {
+			// not a corruption exception, but rather it can happen when closing the database
+			throw (IOException) exception;
+		}
+
 		Msg.error(this, errorText, exception);
 		corruptedState = true;
 		if (exception instanceof IOException) {
@@ -1493,7 +1498,7 @@ public class BufferMgr {
 
 				for (int id = 0; id < indexCnt; id++) {
 
-					monitor.checkCanceled();
+					monitor.checkCancelled();
 					monitor.setProgress(id);
 
 					// Check for cached buffer
@@ -1559,10 +1564,12 @@ public class BufferMgr {
 	 * @throws IOException if IO error occurs
 	 */
 	public LocalBufferFile getRecoveryChangeSetFile() throws IOException {
-		if (recoveryMgr != null) {
-			return recoveryMgr.getRecoveryChangeSetFile();
+		synchronized (snapshotLock) {
+			if (recoveryMgr != null) {
+				return recoveryMgr.getRecoveryChangeSetFile();
+			}
+			return null;
 		}
-		return null;
 	}
 
 	/**
@@ -1646,11 +1653,10 @@ public class BufferMgr {
 			// Recover free buffer list
 			int[] freeIndexes = recoveryFile.getFreeIndexList();
 			for (int index : freeIndexes) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				if (index >= origIndexCount) {
 					// Newly allocated free buffer
-					BufferNode node =
-						createNewBufferNode(index, currentCheckpointHead, null);
+					BufferNode node = createNewBufferNode(index, currentCheckpointHead, null);
 					node.isDirty = true;
 					node.modified = true;
 					node.empty = true;
@@ -1671,7 +1677,7 @@ public class BufferMgr {
 			Arrays.sort(bufferIndexes);
 			for (int i = 0; i < bufferIndexes.length; i++) {
 
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.setProgress(i + 1);
 
 				// Get recovery buffer
@@ -1904,7 +1910,8 @@ public class BufferMgr {
 		// Empty buffers will be flushed when outFile is closed
 		int bufCount = 0;
 		for (int id = 0; id < indexCnt; id++) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
+			monitor.setProgress(id);
 			BufferNode node = getCachedBufferNode(id);
 			if (node != null) {
 				// check nod which resides in cache
@@ -1923,10 +1930,12 @@ public class BufferMgr {
 			}
 		}
 
+		monitor.initialize(indexCnt);
+
 		// write/update all non-empty buffers
 		try (OutputBlockStream out = LocalBufferFile.getOutputBlockStream(outFile, bufCount)) {
 			for (int id = 0; id < indexCnt; id++) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.setProgress(id);
 
 				// get buffer node from cache
@@ -2042,7 +2051,7 @@ public class BufferMgr {
 	}
 
 	public static void cleanupOldCacheFiles() {
-		File tmpDir = new File(System.getProperty("java.io.tmpdir"));
+		File tmpDir = Application.getUserTempDirectory();
 		File[] cacheFiles =
 			tmpDir.listFiles(new BufferFileFilter(CACHE_FILE_PREFIX, CACHE_FILE_EXT));
 		if (cacheFiles == null) {

@@ -20,14 +20,13 @@ import java.util.*;
 import java.util.List;
 
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 
+import generic.theme.GColor;
+import generic.theme.GIcon;
 import ghidra.app.services.DataTypeQueryService;
-import ghidra.app.services.DataTypeManagerService;
 import ghidra.program.model.data.*;
 import ghidra.program.model.data.Enum;
 import ghidra.util.Msg;
-import ghidra.util.datastruct.Algorithms;
 import ghidra.util.exception.AssertException;
 import resources.MultiIcon;
 import resources.ResourceManager;
@@ -38,28 +37,10 @@ public class DataTypeUtils {
 	private static final char END_CHAR = '\uffff';
 	private static final char BEGIN_CHAR = '\u0000';
 
-	private static Map<Icon, MultiIcon> highlightIconMap = new HashMap<>();
+	private static final Color COLOR_ICON_HIGHLIGHT =
+		new GColor("color.bg.plugin.datamgr.icon.highlight");
 
-	private static String OPEN_FOLDER = "images/openFolder.png";
-	private static String CLOSED_FOLDER = "images/closedFolder.png";
-	private static String DISABLED_OPEN_FOLDER = "images/disabledOpenFolder.png";
-	private static String DISABLED_CLOSED_FOLDER = "images/disabledClosedFolder.png";
-	private static String DEFAULT_ICON = "images/defaultDt.gif";
-	private static String DISABLED_DEFAULT_ICON = "images/disabledCode.gif";
-	private static String LOCKED_OPEN_FOLDER = "images/openFolderCheckedOut.png";
-	private static String LOCKED_CLOSED_FOLDER = "images/closedFolderCheckedOut.png";
-	private static String OPEN_ARCHIVE_FOLDER = "images/openFolderArchive.png";
-	private static String CLOSED_ARCHIVE_FOLDER = "images/closedFolderArchive.png";
-	private static String ROOT_ICON = "images/BookShelf.png";
-	private static String OPEN_ROOT_ICON = "images/BookShelfOpen.png";
-	private static String FAVORITE_ICON = "images/emblem-favorite.png";
-	private static String BUILT_IN_ICON = "images/package_development.png";
-	private static String STRUCTURE_ICON = "images/cstruct.png";
-	private static String UNION_ICON = "images/cUnion.png";
-	private static String TYPEDEF_ICON = "images/typedef.png";
-	private static String FUNCTION_ICON = "images/functionDef.png";
-	private static String ENUM_ICON = "images/enum.png";
-	private static String POINTER_ICON = "images/fingerPointer.png";
+	private static Map<Icon, MultiIcon> highlightIconMap = new HashMap<>();
 
 	private static Icon defaultIcon;
 	private static Icon disabledIcon;
@@ -90,29 +71,29 @@ public class DataTypeUtils {
 			return;
 		}
 		imagesLoaded = true;
-		defaultIcon = ResourceManager.loadImage(DEFAULT_ICON);
-		disabledIcon = ResourceManager.loadImage(DISABLED_DEFAULT_ICON);
+		defaultIcon = new GIcon("icon.plugin.datatypes.default");
+		disabledIcon = new GIcon("icon.plugin.datatypes.default.disabled");
 
-		favoriteIcon = ResourceManager.loadImage(FAVORITE_ICON);
-		disabledFavoriteIcon = ResourceManager.getDisabledIcon((ImageIcon) favoriteIcon);
+		favoriteIcon = new GIcon("icon.plugin.datatypes.util.favorite");
+		disabledFavoriteIcon = new GIcon("icon.plugin.datatypes.util.favorite.disabled");
 
-		builtInIcon = ResourceManager.loadImage(BUILT_IN_ICON);
-		disabledBuiltInIcon = ResourceManager.getDisabledIcon((ImageIcon) builtInIcon);
+		builtInIcon = new GIcon("icon.plugin.datatypes.built.in");
+		disabledBuiltInIcon = new GIcon("icon.plugin.datatypes.built.in.disabled");
 
-		rootIcon = ResourceManager.loadImage(ROOT_ICON);
-		openRootIcon = ResourceManager.loadImage(OPEN_ROOT_ICON);
+		rootIcon = new GIcon("icon.plugin.datatypes.util.root");
+		openRootIcon = new GIcon("icon.plugin.datatypes.util.open.root");
 
-		openFolderIcon = ResourceManager.loadImage(OPEN_FOLDER);
-		disabledOpenFolderIcon = ResourceManager.loadImage(DISABLED_OPEN_FOLDER);
+		openFolderIcon = new GIcon("icon.plugin.datatypes.util.open.folder");
+		disabledOpenFolderIcon = new GIcon("icon.plugin.datatypes.util.open.folder.disabled");
 
-		closedFolderIcon = ResourceManager.loadImage(CLOSED_FOLDER);
-		disabledClosedFolderIcon = ResourceManager.loadImage(DISABLED_CLOSED_FOLDER);
+		closedFolderIcon = new GIcon("icon.plugin.datatypes.util.closed.folder");
+		disabledClosedFolderIcon = new GIcon("icon.plugin.datatypes.util.closed.folder.disabled");
 
-		lockedOpenFolderIcon = ResourceManager.loadImage(LOCKED_OPEN_FOLDER);
-		lockedClosedFolderIcon = ResourceManager.loadImage(LOCKED_CLOSED_FOLDER);
+		lockedOpenFolderIcon = new GIcon("icon.plugin.datatypes.util.open.folder.locked");
+		lockedClosedFolderIcon = new GIcon("icon.plugin.datatypes.util.closed.folder.locked");
 
-		openArchiveFolderIcon = ResourceManager.loadImage(OPEN_ARCHIVE_FOLDER);
-		closedArchiveFolderIcon = ResourceManager.loadImage(CLOSED_ARCHIVE_FOLDER);
+		openArchiveFolderIcon = new GIcon("icon.plugin.datatypes.util.open.archive");
+		closedArchiveFolderIcon = new GIcon("icon.plugin.datatypes.util.closed.archive");
 
 		createDataTypeIcons();
 
@@ -121,35 +102,36 @@ public class DataTypeUtils {
 	private static void createDataTypeIcons() {
 		List<DataTypeIconWrapper> list = new ArrayList<>();
 
-		Icon enumIcon = ResourceManager.loadImage(ENUM_ICON);
+		Icon enumIcon = new GIcon("icon.plugin.datatypes.enum");
 		list.add(new DataTypeIconWrapper(Enum.class, enumIcon,
-			ResourceManager.getDisabledIcon((ImageIcon) enumIcon)));
+			ResourceManager.getDisabledIcon(enumIcon)));
 
-		Icon functionIcon = ResourceManager.loadImage(FUNCTION_ICON);
+		Icon functionIcon = new GIcon("icon.plugin.datatypes.function");
 		list.add(new DataTypeIconWrapper(FunctionDefinition.class, functionIcon,
-			ResourceManager.getDisabledIcon((ImageIcon) functionIcon)));
+			ResourceManager.getDisabledIcon(functionIcon)));
 
-		Icon pointerIcon = ResourceManager.loadImage(POINTER_ICON);
+		Icon pointerIcon = new GIcon("icon.plugin.datatypes.pointer");
 		list.add(new DataTypeIconWrapper(Pointer.class, pointerIcon,
-			ResourceManager.getDisabledIcon((ImageIcon) pointerIcon)));
+			ResourceManager.getDisabledIcon(pointerIcon)));
 
-		Icon typedefIcon = ResourceManager.loadImage(TYPEDEF_ICON);
+		Icon typedefIcon = new GIcon("icon.plugin.datatypes.typedef");
 		list.add(new DataTypeIconWrapper(TypeDef.class, typedefIcon,
-			ResourceManager.getDisabledIcon((ImageIcon) typedefIcon)));
+			ResourceManager.getDisabledIcon(typedefIcon)));
 
-		Icon unionIcon = ResourceManager.loadImage(UNION_ICON);
+		Icon unionIcon = new GIcon("icon.plugin.datatypes.union");
 		list.add(new DataTypeIconWrapper(Union.class, unionIcon,
-			ResourceManager.getDisabledIcon((ImageIcon) unionIcon)));
+			ResourceManager.getDisabledIcon(unionIcon)));
 
-		Icon structureIcon = ResourceManager.loadImage(STRUCTURE_ICON);
+		Icon structureIcon = new GIcon("icon.plugin.datatypes.structure");
 		list.add(new DataTypeIconWrapper(Structure.class, structureIcon,
-			ResourceManager.getDisabledIcon((ImageIcon) structureIcon)));
+			ResourceManager.getDisabledIcon(structureIcon)));
 
 		dataTypeIconWrappers = list.toArray(new DataTypeIconWrapper[list.size()]);
 	}
 
 	/**
 	 * Returns the root folder icon.
+	 * @param expanded true to use the expanded icon; false to use the collapsed icon.
 	 * @return the root folder icon.
 	 */
 	public static Icon getRootIcon(boolean expanded) {
@@ -159,7 +141,7 @@ public class DataTypeUtils {
 
 	/**
 	 * Returns the open folder icon.
-	 * 
+	 *
 	 * @param disabled True returns a disabled icon; false returns the normal icon.
 	 * @return the open folder icon.
 	 */
@@ -174,7 +156,7 @@ public class DataTypeUtils {
 
 	/**
 	 * Returns the closed folder icon.
-	 * 
+	 *
 	 * @param disabled True returns a disabled icon; false returns the normal icon.
 	 * @return the closed folder icon.
 	 */
@@ -189,7 +171,7 @@ public class DataTypeUtils {
 
 	/**
 	 * Returns the open archive folder icon.
-	 * 
+	 *
 	 * @param isLocked True means to return the checked-out open archive folder icon
 	 * @return the open archive folder icon.
 	 */
@@ -204,7 +186,7 @@ public class DataTypeUtils {
 
 	/**
 	 * Returns the closed folder icon.
-	 * 
+	 *
 	 * @param isLocked True means to return the checked-out closed folder icon
 	 * @return the closed folder icon.
 	 */
@@ -217,39 +199,9 @@ public class DataTypeUtils {
 		return closedArchiveFolderIcon;
 	}
 
-//    /**
-//     * Returns the open archive folder icon.
-//     * 
-//     * @param isLocked True means to return the checked-out open archive folder icon
-//     * @return the open archive folder icon.
-//     */
-//    public static Icon getOpenProjectArchiveFolder( boolean isLocked ) {
-//    	loadImages();
-//        if ( isLocked ) {
-//            return lockedOpenProjectArchiveFolderIcon;
-//        }
-//        
-//        return openProjectArchiveFolderIcon;
-//    }
-//    
-//    /**
-//     * Returns the closed folder icon.
-//     * 
-//     * @param isLocked True means to return the checked-out closed folder icon
-//     * @return the closed folder icon.
-//     */
-//    public static Icon getClosedProjectArchiveFolder( boolean isLocked ) {
-//    	loadImages();
-//        if ( isLocked ) {
-//            return lockedClosedProjectArchiveFolderIcon;
-//        }
-//        
-//        return closedProjectArchiveFolderIcon;
-//    }
-//    
 	/**
 	 * Returns the BuiltIn icon.
-	 * 
+	 *
 	 * @param disabled True returns a disabled icon; false returns the normal icon.
 	 * @return the BuiltIn icon.
 	 */
@@ -264,7 +216,7 @@ public class DataTypeUtils {
 
 	/**
 	 * Returns the favorites icon.
-	 * 
+	 *
 	 * @param disabled True returns a disabled icon; false returns the normal icon.
 	 * @return the favorites icon.
 	 */
@@ -279,7 +231,7 @@ public class DataTypeUtils {
 
 	/**
 	 * Finds the icon associated with the provided data type.
-	 * 
+	 *
 	 * @param dataType The data type for which to find an icon.
 	 * @param disabled True returns a disabled icon; false returns the normal icon.
 	 * @return the icon associated with the provided data type.
@@ -302,7 +254,7 @@ public class DataTypeUtils {
 
 	/**
 	 * Returns an icon that adds highlighting to the provided icon.
-	 * 
+	 *
 	 * @param baseIcon The icon to highlight.
 	 * @return the highlighted icon.
 	 */
@@ -311,7 +263,7 @@ public class DataTypeUtils {
 		MultiIcon highlightIcon = highlightIconMap.get(baseIcon);
 
 		if (highlightIcon == null) {
-			highlightIcon = new MultiIcon(new HighlightIcon(new Color(204, 204, 255)));
+			highlightIcon = new MultiIcon(new HighlightIcon(COLOR_ICON_HIGHLIGHT));
 			highlightIcon.addIcon(baseIcon);
 			highlightIconMap.put(baseIcon, highlightIcon);
 		}
@@ -320,12 +272,12 @@ public class DataTypeUtils {
 	}
 
 	/**
-	 * Returns a sorted list of {@link DataType}s that have names which start with the given
-	 * search string.   The list is sorted according to {@link #DATA_TYPE_LOOKUP_COMPARATOR}.
-	 * 
-	  @param searchString The name of the DataTypes to match.
+	 * Returns a sorted list of {@link DataType}s that have names which start with the given search
+	 * string.   The list is sorted according to {@link #DATA_TYPE_LOOKUP_COMPARATOR}.
+	 *
+	 * @param searchString The name of the DataTypes to match.
 	 * @param dataService The service from which the data types will be taken.
-	 * @return A sorted list of {@link DataType}s that have names which start with the given search 
+	 * @return A sorted list of {@link DataType}s that have names which start with the given search
 	 *         string.
 	 */
 	public static List<DataType> getStartsWithMatchingDataTypes(String searchString,
@@ -335,13 +287,13 @@ public class DataTypeUtils {
 	}
 
 	/**
-	 * Returns a sorted list of {@link DataType}s that have names which match the given search 
-	 * string.  The list is sorted according to {@link #DATA_TYPE_LOOKUP_COMPARATOR}.  
-	 * 
+	 * Returns a sorted list of {@link DataType}s that have names which match the given search
+	 * string.  The list is sorted according to {@link #DATA_TYPE_LOOKUP_COMPARATOR}.
+	 *
 	 * @param searchString The name of the DataTypes to match.
 	 * @param dataService The service from which the data types will be taken.
-	 * @return A sorted list of {@link DataType}s that have names which match the given search 
-	 *         string. 
+	 * @return A sorted list of {@link DataType}s that have names which match the given search
+	 *         string.
 	 */
 	public static List<DataType> getExactMatchingDataTypes(String searchString,
 			DataTypeQueryService dataService) {
@@ -350,10 +302,13 @@ public class DataTypeUtils {
 	}
 
 	/**
-	 * Changes the give text to prepare it or use in searching for data types.  Clients should
-	 * call this method to make sure that the given text is suitable for use when searching 
-	 * the data type values returned by {@link #getExactMatchingDataTypes(String, DataTypeManagerService)}
-	 * and {@link #getStartsWithMatchingDataTypes(String, DataTypeManagerService)}.
+	 * Changes the given text to prepare it for use in searching for data types.  Clients should
+	 * call this method to make sure that the given text is suitable for use when searching the
+	 * data type values returned by
+	 * {@link #getExactMatchingDataTypes(String, DataTypeQueryService)} and
+	 * {@link #getStartsWithMatchingDataTypes(String, DataTypeQueryService)}.
+	 * @param searchText the search text
+	 * @return the updated text
 	 */
 	public static String prepareSearchText(String searchText) {
 		return searchText.replaceAll(" ", "");
@@ -365,10 +320,10 @@ public class DataTypeUtils {
 		searchTextStart = prepareSearchText(searchTextStart);
 		searchTextEnd = prepareSearchText(searchTextEnd);
 
-		int startIndex = Algorithms.binarySearchWithDuplicates(dataTypeList, searchTextStart,
+		int startIndex = binarySearchWithDuplicates(dataTypeList, searchTextStart,
 			DATA_TYPE_LOOKUP_COMPARATOR);
 
-		int endIndex = Algorithms.binarySearchWithDuplicates(dataTypeList, searchTextEnd,
+		int endIndex = binarySearchWithDuplicates(dataTypeList, searchTextEnd,
 			DATA_TYPE_LOOKUP_COMPARATOR);
 
 		return dataTypeList.subList(startIndex, endIndex);
@@ -376,13 +331,15 @@ public class DataTypeUtils {
 
 	/**
 	 * Get the base data type for the specified data type.
-	 * <br>For example, the base data type for Word*[5] is Word.
-	 * For a pointer, the base data type is the type being pointed to 
-	 * or the pointer itself if it is pointing at nothing.
-	 * <br>If "INT" is a typedef on a "dword" then INT[7][3] would have a base data type of dword.
-	 * If you wanted to get the INT from INT[7][3] 
-	 * you should call getNamedBasedDataType(DataType) instead.
-	 * @param baseDataType the data type whose base data type is to be determined.
+	 *
+	 * <p>For example, the base data type for Word*[5] is Word.  For a pointer, the base data type
+	 * is the type being pointed to or the pointer itself if it is pointing at nothing.
+	 *
+	 * <p>If "INT" is a typedef on a "dword" then INT[7][3] would have a base data type of dword.
+	 * If you wanted to get the INT from INT[7][3] you should call getNamedBasedDataType(DataType)
+	 * instead.
+	 *
+	 * @param dt the data type whose base data type is to be determined.
 	 * @return the base data type.
 	 */
 	public static DataType getBaseDataType(DataType dt) {
@@ -409,15 +366,17 @@ public class DataTypeUtils {
 	}
 
 	/**
-	 * Get the named base data type for the specified data type.
-	 * This method intentionally does not drill down into typedefs.
-	 * <br>For example, the named base data type for Word*[5] is Word.
-	 * For a pointer, the named base data type is the type being pointed to 
-	 * or the pointer itself if it is pointing at nothing.
-	 * <br>If "INT" is a typedef on a "dword", then INT[7][3] would 
-	 * have a named base data type of INT.
-	 * If you wanted to get the dword from INT[7][3] 
-	 * you should call getBasedDataType(DataType) instead.
+	 * Get the named base data type for the specified data type.  This method intentionally does
+	 * not drill down into typedefs.
+	 *
+	 * <p>For example, the named base data type for Word*[5] is Word.  For a pointer, the named
+	 * base data type is the type being pointed to or the pointer itself if it is pointing at
+	 * nothing.
+	 *
+	 * <p>If "INT" is a typedef on a "dword", then INT[7][3] would have a named base data type of
+	 * INT.  If you wanted to get the dword from INT[7][3] you should call
+	 * getBasedDataType(DataType) instead.
+	 *
 	 * @param dt the data type whose named base data type is to be determined.
 	 * @return the base data type.
 	 */
@@ -444,10 +403,10 @@ public class DataTypeUtils {
 	 * Create a copy of the chain of data types that eventually lead to a named
 	 * data type.
 	 * <p>
-	 * Returns a {@link DataType#copy(DataTypeManager) copy()} of the first named data 
-	 * type found in the pointer / array type chain, and returns an identical chain of
-	 * pointer / arrays up to the copied named type.
-	 * <p>
+	 * Returns a {@link DataType#copy(DataTypeManager) copy()} of the first named data type found
+	 * in the pointer / array type chain, and returns an identical chain of pointer / arrays up to
+	 * the copied named type.
+	 *
 	 * @param dataType data type to be copied
 	 * @param dtm data type manager
 	 * @return deep copy of dataType
@@ -475,39 +434,60 @@ public class DataTypeUtils {
 			msg = "The Program is not modifiable!\n";
 		}
 		else if (dtm instanceof FileArchiveBasedDataTypeManager) {
-			msg =
-				"The archive file is not modifiable!\nYou must open the archive for editing\n before performing this operation.";
+			msg = "The archive file is not modifiable!\nYou must open the archive for editing\n" +
+				"before performing this operation.\n" + dtm.getName();
+		}
+		else if (dtm instanceof ProjectArchiveBasedDataTypeManager) {
+			ProjectArchiveBasedDataTypeManager projectDtm =
+				(ProjectArchiveBasedDataTypeManager) dtm;
+			if (!projectDtm.isUpdatable() && !projectDtm.getDomainFile().canCheckout()) {
+				msg = "The project archive is not modifiable!\n" + dtm.getName();
+			}
+			else {
+				msg = "The project archive is not modifiable!\nYou must check out the archive\n" +
+					"before performing this operation.\n" + dtm.getName();
+			}
 		}
 		else {
-			msg =
-				"The project archive is not modifiable!\nYou must check out the archive\n before performing this operation.";
+			msg = "The Archive is not modifiable!\n";
 		}
 		Msg.showInfo(DataTypeUtils.class, parent, title, msg);
-
 	}
 
-// For testing:	
-//	public static void main( String[] args ) {
-//	    JFrame frame = new JFrame();
-//	    JPanel panel = new JPanel();
-//	    
-//	    JLabel label1 = new GDLabel();
-//	    Icon icon = getOpenFolderIcon( false );
-//	    label1.setIcon( icon );
-//	    
-//	    JLabel label2 = new GDLabel();
-//	    Icon icon2 = ResourceManager.getDisabledIcon( (ImageIcon) icon );
-//	    label2.setIcon( icon2 );	    	    
-//	        
-//	    panel.add( label1 );
-//	    panel.add( label2 );
-//	    
-//	    frame.getContentPane().add( panel );
-//	    
-//	    frame.pack();
-//	    frame.setVisible( true );
-//	    frame.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
-//	}
+	public static int binarySearchWithDuplicates(List<DataType> data,
+			String searchItem, Comparator<Object> comparator) {
+		int index = Collections.binarySearch(data, searchItem, comparator);
+
+		// the binary search returns a negative, incremented position if there is no match in the
+		// list for the given search
+		if (index < 0) {
+			index = -index - 1;
+		}
+		else {
+			index = findTrueStartIndex(searchItem, data, index, comparator);
+		}
+		return index;
+	}
+
+	// finds the index of the first element in the given list--this is used in conjunction with
+	// the binary search, which doesn't produce the desired results when searching lists with 
+	// duplicates
+
+	private static int findTrueStartIndex(String searchItem, List<DataType> dataList,
+			int startIndex, Comparator<Object> comparator) {
+		if (startIndex < 0) {
+			return startIndex;
+		}
+
+		for (int i = startIndex; i >= 0; i--) {
+			if (comparator.compare(dataList.get(i), searchItem) != 0) {
+				return ++i; // previous index
+			}
+		}
+
+		return 0; // this means that the search text matches the first element in the lists
+	}
+
 }
 
 //==================================================================================================
@@ -577,47 +557,5 @@ class HighlightIcon implements Icon {
 		g.setColor(color);
 		g.fillRect(x + 1, y, WIDTH, HEIGHT);
 		g.drawRect(x, y, WIDTH + 1, HEIGHT - 1);
-	}
-}
-
-class VersionIcon implements Icon {
-
-	private static Color VERSION_ICON_COLOR_DARK = new Color(0x82, 0x82, 0xff);
-	private static Color VERSION_ICON_COLOR_LIGHT = new Color(0x9f, 0x9f, 0xff);
-
-	private static final int WIDTH = 18;
-	private static final int HEIGHT = 17;
-
-	int width;
-	int height;
-
-	VersionIcon() {
-		this(WIDTH, HEIGHT);
-	}
-
-	VersionIcon(int width, int height) {
-		this.width = width;
-		this.height = height;
-	}
-
-	@Override
-	public int getIconHeight() {
-		return height;
-	}
-
-	@Override
-	public int getIconWidth() {
-		return width;
-	}
-
-	@Override
-	public void paintIcon(Component c, Graphics g, int x, int y) {
-		g.setColor(VERSION_ICON_COLOR_LIGHT);
-		g.fillRect(x + 1, y + 1, width - 2, height - 2);
-		g.setColor(VERSION_ICON_COLOR_DARK);
-		g.drawLine(x + 1, y, x + width - 2, y);
-		g.drawLine(x + width - 1, y + 1, x + width - 1, y + height - 2);
-		g.drawLine(x + 1, y + height - 1, x + width - 2, y + height - 1);
-		g.drawLine(x, y + 1, x, y + height - 2);
 	}
 }

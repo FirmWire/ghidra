@@ -21,8 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.*;
 
-import javax.swing.JComponent;
-
 import org.apache.commons.lang3.StringUtils;
 
 import docking.widgets.SearchLocation;
@@ -47,38 +45,28 @@ import ghidra.util.Msg;
  */
 public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
-	private final ClangFieldElement EMPTY_LINE_NUMBER_SPACER;
-
 	private int maxWidth;
-	private int lineNumberFieldWidth;
 	private int indentWidth;
 	private DecompileOptions options;
 	private DecompilerPanel decompilerPanel;
 	private ClangTokenGroup docroot; // Root of displayed document
 	private Field[] fieldList; // Array of fields comprising layout
 	private FontMetrics metrics;
-	private HighlightFactory hlFactory;
+	private FieldHighlightFactory hlFactory;
 	private ArrayList<LayoutModelListener> listeners;
-	private Color[] syntax_color; // Foreground colors.
+	private Color[] syntaxColor; // Foreground colors.
 	private BigInteger numIndexes = BigInteger.ZERO;
 	private ArrayList<ClangLine> lines = new ArrayList<>();
 
 	private boolean showLineNumbers = true;
 
-	private ClangFieldElement createEmptyLineNumberSpacer() {
-		ClangToken lineNumberToken = ClangToken.buildSpacer(null, 0, "");
-		AttributedString as = new AttributedString("", Color.WHITE, metrics);
-		return new ClangFieldElement(lineNumberToken, as, 0);
-	}
-
 	public ClangLayoutController(DecompileOptions opt, DecompilerPanel decompilerPanel,
-			FontMetrics met, HighlightFactory hlFactory) {
+			FontMetrics met, FieldHighlightFactory hlFactory) {
 		options = opt;
 		this.decompilerPanel = decompilerPanel;
-		syntax_color = new Color[9];
+		syntaxColor = new Color[ClangToken.MAX_COLOR];
 		metrics = met;
 		this.hlFactory = hlFactory;
-		EMPTY_LINE_NUMBER_SPACER = createEmptyLineNumberSpacer();
 		listeners = new ArrayList<>();
 		buildLayouts(null, null, null, false);
 	}
@@ -94,7 +82,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 	@Override
 	public Dimension getPreferredViewSize() {
-		return new Dimension(maxWidth + lineNumberFieldWidth, 500);
+		return new Dimension(maxWidth, 500);
 	}
 
 	@Override
@@ -122,27 +110,27 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 	@Override
 	public void modelSizeChanged(IndexMapper mapper) {
-		for (int i = 0; i < listeners.size(); ++i) {
-			listeners.get(i).modelSizeChanged(mapper);
+		for (LayoutModelListener listener : listeners) {
+			listener.modelSizeChanged(mapper);
 		}
 	}
 
 	public void modelChanged() {
-		for (int i = 0; i < listeners.size(); ++i) {
-			listeners.get(i).modelSizeChanged(IndexMapper.IDENTITY_MAPPER);
+		for (LayoutModelListener listener : listeners) {
+			listener.modelSizeChanged(IndexMapper.IDENTITY_MAPPER);
 		}
 	}
 
 	@Override
 	public void dataChanged(BigInteger start, BigInteger end) {
-		for (int i = 0; i < listeners.size(); ++i) {
-			listeners.get(i).dataChanged(start, end);
+		for (LayoutModelListener listener : listeners) {
+			listener.dataChanged(start, end);
 		}
 	}
 
 	public void layoutChanged() {
-		for (int i = 0; i < listeners.size(); ++i) {
-			listeners.get(i).dataChanged(BigInteger.ZERO, numIndexes);
+		for (LayoutModelListener listener : listeners) {
+			listener.dataChanged(BigInteger.ZERO, numIndexes);
 		}
 	}
 
@@ -179,15 +167,11 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 			boolean paintLineNumbers) {
 		List<ClangToken> tokens = line.getAllTokens();
 
-		ClangFieldElement lineNumberFieldElement =
-			createLineNumberFieldElement(line, lineCount, paintLineNumbers);
-
 		FieldElement[] elements = createFieldElementsForLine(tokens);
 
 		int indent = line.getIndent() * indentWidth;
-		int lineNumberWidth = lineNumberFieldElement.getStringWidth();
-		int updatedMaxWidth = maxWidth + lineNumberWidth;
-		return new ClangTextField(tokens, elements, lineNumberFieldElement, indent, updatedMaxWidth,
+		int updatedMaxWidth = maxWidth;
+		return new ClangTextField(tokens, elements, indent, line.getLineNumber(), updatedMaxWidth,
 			hlFactory);
 	}
 
@@ -197,7 +181,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		int columnPosition = 0;
 		for (int i = 0; i < tokens.size(); ++i) {
 			ClangToken token = tokens.get(i);
-			Color color = syntax_color[token.getSyntaxType()];
+			Color color = syntaxColor[token.getSyntaxType()];
 			if (token instanceof ClangCommentToken) {
 				AttributedString prototype = new AttributedString("prototype", color, metrics);
 				Program program = decompilerPanel.getProgram();
@@ -214,39 +198,30 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		return elements;
 	}
 
-	private ClangFieldElement createLineNumberFieldElement(ClangLine line, int lineCount,
-			boolean paintLineNumbers) {
-
-		if (paintLineNumbers) {
-			return new LineNumberFieldElement(line.getLineNumber(), lineCount, metrics);
-		}
-
-		return EMPTY_LINE_NUMBER_SPACER;
-	}
-
 	/**
 	 * Update to the current Decompiler display options
 	 */
 	@SuppressWarnings("deprecation")
 	// ignoring the deprecated call for toolkit
 	private void updateOptions() {
-		syntax_color[ClangToken.KEYWORD_COLOR] = options.getKeywordColor();
-		syntax_color[ClangToken.TYPE_COLOR] = options.getTypeColor();
-		syntax_color[ClangToken.FUNCTION_COLOR] = options.getFunctionColor();
-		syntax_color[ClangToken.COMMENT_COLOR] = options.getCommentColor();
-		syntax_color[ClangToken.VARIABLE_COLOR] = options.getVariableColor();
-		syntax_color[ClangToken.CONST_COLOR] = options.getConstantColor();
-		syntax_color[ClangToken.PARAMETER_COLOR] = options.getParameterColor();
-		syntax_color[ClangToken.GLOBAL_COLOR] = options.getGlobalColor();
-		syntax_color[ClangToken.DEFAULT_COLOR] = options.getDefaultColor();
+		syntaxColor[ClangToken.KEYWORD_COLOR] = options.getKeywordColor();
+		syntaxColor[ClangToken.TYPE_COLOR] = options.getTypeColor();
+		syntaxColor[ClangToken.FUNCTION_COLOR] = options.getFunctionColor();
+		syntaxColor[ClangToken.COMMENT_COLOR] = options.getCommentColor();
+		syntaxColor[ClangToken.VARIABLE_COLOR] = options.getVariableColor();
+		syntaxColor[ClangToken.CONST_COLOR] = options.getConstantColor();
+		syntaxColor[ClangToken.PARAMETER_COLOR] = options.getParameterColor();
+		syntaxColor[ClangToken.GLOBAL_COLOR] = options.getGlobalColor();
+		syntaxColor[ClangToken.DEFAULT_COLOR] = options.getDefaultColor();
+		syntaxColor[ClangToken.ERROR_COLOR] = options.getErrorColor();
+		syntaxColor[ClangToken.SPECIAL_COLOR] = options.getSpecialColor();
 
-		// setting the metrics here will indirectly trigger the new font to be used deeper in 
+		// setting the metrics here will indirectly trigger the new font to be used deeper in
 		// the bowels of the FieldPanel (you can get the font from the metrics)
 		Font font = options.getDefaultFont();
 		metrics = Toolkit.getDefaultToolkit().getFontMetrics(font);
 		indentWidth = metrics.stringWidth(PrettyPrinter.INDENT_STRING);
 		maxWidth = indentWidth * options.getMaxWidth();
-		lineNumberFieldWidth = 0;
 
 		showLineNumbers = options.isDisplayLineNumbers();
 	}
@@ -256,17 +231,12 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 		// Assume docroot has been built.
 
-		PrettyPrinter printer = new PrettyPrinter(function, docroot);
+		PrettyPrinter printer = new PrettyPrinter(function, docroot, null);
 		lines = printer.getLines();
 
 		int lineCount = lines.size();
 		fieldList = new Field[lineCount]; // One field for each "C" line
 		numIndexes = BigInteger.valueOf(lineCount);
-
-		lineNumberFieldWidth = 0;
-		if (showLineNumbers && !isError) {
-			lineNumberFieldWidth = LineNumberFieldElement.getFieldWidth(metrics, lineCount);
-		}
 
 		for (int i = 0; i < lineCount; ++i) {
 			ClangLine oneLine = lines.get(i);
@@ -336,11 +306,11 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		for (String element : errlines_init) {
 			splitToMaxWidthLines(errlines, element);
 		}
-		for (int i = 0; i < errlines.size(); ++i) {
+		for (String errline : errlines) {
 			ClangTokenGroup line = new ClangTokenGroup(docroot);
 			ClangBreak lineBreak = new ClangBreak(line, 1);
 			ClangSyntaxToken message =
-				new ClangSyntaxToken(line, errlines.get(i), ClangXML.COMMENT_COLOR);
+				new ClangSyntaxToken(line, errline, ClangToken.COMMENT_COLOR);
 			line.AddTokenGroup(lineBreak);
 			line.AddTokenGroup(message);
 			docroot.AddTokenGroup(line);
@@ -369,7 +339,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 //==================================================================================================
 // Search Related Methods
-//==================================================================================================	
+//==================================================================================================
 
 	private SearchLocation findNextTokenGoingForward(
 			java.util.function.Function<String, SearchMatch> matcher, String searchString,
@@ -378,22 +348,30 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		int row = currentLocation.getIndex().intValue();
 		for (int i = row; i < fieldList.length; i++) {
 			ClangTextField field = (ClangTextField) fieldList[i];
-			String textLine =
+			String partialLine =
 				getTextLineFromOffset((i == row) ? currentLocation : null, field, true);
-
-			SearchMatch match = matcher.apply(textLine);
-			if (match != SearchMatch.NO_MATCH) {
-				if (i == row) {
-					String fullLine = field.getText();
-					match.start += fullLine.length() - textLine.length();
-				}
-				FieldNumberColumnPair pair = getFieldIndexFromOffset(match.start, field);
-				FieldLocation fieldLocation =
-					new FieldLocation(i, pair.getFieldNumber(), 0, pair.getColumn());
-
-				return new FieldBasedSearchLocation(fieldLocation, match.start, match.end - 1,
-					searchString, true);
+			SearchMatch match = matcher.apply(partialLine);
+			if (match == SearchMatch.NO_MATCH) {
+				continue;
 			}
+			if (i == row) { // cursor is on this line
+				//
+				// The match start for all lines without the cursor will be relative to the start
+				// of the line, which is 0.  However, when searching on the row with the cursor,
+				// the match start is relative to the cursor position.  Update the start to
+				// compensate for the difference between the start of the line and the cursor.
+				//
+				String fullLine = field.getText();
+				int cursorOffset = fullLine.length() - partialLine.length();
+				match.start += cursorOffset;
+				match.end += cursorOffset;
+			}
+			FieldNumberColumnPair pair = getFieldIndexFromOffset(match.start, field);
+			FieldLocation fieldLocation =
+				new FieldLocation(i, pair.getFieldNumber(), 0, pair.getColumn());
+
+			return new FieldBasedSearchLocation(fieldLocation, match.start, match.end - 1,
+				searchString, true);
 		}
 		return null;
 	}
@@ -442,7 +420,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 				if (matcher.find()) {
 					int start = matcher.start();
 					int end = matcher.end();
-					return new SearchMatch(start, end);
+					return new SearchMatch(start, end, textLine);
 				}
 
 				return SearchMatch.NO_MATCH;
@@ -469,7 +447,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 				end = matcher.end();
 			}
 
-			return new SearchMatch(start, end);
+			return new SearchMatch(start, end, textLine);
 		};
 
 		return findNextTokenGoingBackward(reverse, searchString, currentLocation);
@@ -486,7 +464,8 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 				if (index == -1) {
 					return SearchMatch.NO_MATCH;
 				}
-				return new SearchMatch(index, index + searchString.length());
+
+				return new SearchMatch(index, index + searchString.length(), textLine);
 			};
 
 			return findNextTokenGoingForward(function, searchString, currentLocation);
@@ -498,7 +477,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 			if (index == -1) {
 				return SearchMatch.NO_MATCH;
 			}
-			return new SearchMatch(index, index + searchString.length());
+			return new SearchMatch(index, index + searchString.length(), textLine);
 		};
 
 		return findNextTokenGoingBackward(function, searchString, currentLocation);
@@ -506,6 +485,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 	private String getTextLineFromOffset(FieldLocation location, ClangTextField textField,
 			boolean forwardSearch) {
+
 		if (location == null) { // the cursor location is not on this line; use all of the text
 			return textField.getText();
 		}
@@ -518,12 +498,16 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 		if (forwardSearch) {
 
-			// Protects against the location column being out of range (this can
-			// happen if we're searching forward and the cursor is past the last token).
-			if (location.getCol() + 1 >= partialText.length()) {
+			int nextCol = location.getCol();
+
+			// protects against the location column being out of range (this can happen if we're
+			// searching forward and the cursor is past the last token)
+			if (nextCol >= partialText.length()) {
 				return "";
 			}
-			return partialText.substring(location.getCol() + 1);
+
+			// skip a character to start the next search; this prevents matching the previous match
+			return partialText.substring(nextCol);
 		}
 
 		// backwards search
@@ -539,18 +523,28 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 	}
 
 	private static class SearchMatch {
-		private static SearchMatch NO_MATCH = new SearchMatch(-1, -1);
+		private static SearchMatch NO_MATCH = new SearchMatch(-1, -1, null);
 		private int start;
 		private int end;
+		private String textLine;
 
-		SearchMatch(int start, int end) {
+		SearchMatch(int start, int end, String textLine) {
 			this.start = start;
 			this.end = end;
+			this.textLine = textLine;
+		}
+
+		@Override
+		public String toString() {
+			if (this == NO_MATCH) {
+				return "NO MATCH";
+			}
+			return "[start=" + start + ",end=" + end + "]: " + textLine;
 		}
 	}
 //==================================================================================================
 // End Search Related Methods
-//==================================================================================================	
+//==================================================================================================
 
 	ClangToken getTokenForLocation(FieldLocation fieldLocation) {
 		int row = fieldLocation.getIndex().intValue();
@@ -573,82 +567,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 	}
 //==================================================================================================
 // Inner Classes
-//==================================================================================================	
-
-	private static class LineNumberFieldElement extends ClangFieldElement {
-		private static final Color FOREGROUND_COLOR = new Color(125, 125, 125);
-		private int uniformWidth;
-
-		private LineNumberFieldElement(int lineNumber, int lineCount, FontMetrics fontMetrics) {
-			super(ClangToken.buildSpacer(null, 0, ""), createAttributedLineNumberString(lineNumber,
-				lineCount, FOREGROUND_COLOR, fontMetrics), 0);
-			uniformWidth = calculateUniformStringWidth(fontMetrics);
-		}
-
-		private static String createLineNumberString(int lineNumber, int lineCount) {
-
-			String lineCountString = Integer.toString(lineCount);
-			int maxNumberOfDigits = lineCountString.length();
-
-			String lineNumberString = Integer.toString(lineNumber);
-			int lineNumberLength = lineNumberString.length();
-			int padLength = maxNumberOfDigits - lineNumberLength;
-
-			StringBuffer buffy = new StringBuffer();
-			for (int i = 0; i < padLength; i++) {
-				buffy.append(' ');
-			}
-			buffy.append(lineNumberString).append(' '); // space for separation
-			return buffy.toString();
-		}
-
-		private static AttributedString createAttributedLineNumberString(int lineNumber,
-				int lineCount, Color foregroundColor, FontMetrics fontMetrics) {
-			return new AttributedString(createLineNumberString(lineNumber, lineCount),
-				foregroundColor, fontMetrics);
-		}
-
-		static int getFieldWidth(FontMetrics fontMetrics, int lineCnt) {
-			int largestCharacterWidth = getLargestCharacterWidth(fontMetrics);
-			int numberOfCharacters = createLineNumberString(0, lineCnt).length();
-			return numberOfCharacters * largestCharacterWidth;
-		}
-
-		private int calculateUniformStringWidth(FontMetrics fontMetrics) {
-			int largestCharacterWidth = getLargestCharacterWidth(fontMetrics);
-			int numberOfCharacters = getText().length();
-			return numberOfCharacters * largestCharacterWidth;
-		}
-
-		private static int getLargestCharacterWidth(FontMetrics fontMetrics) {
-			// use the biggest number char (since that's what we paint in this object)
-			// for determining the a space to use as a guide
-			return fontMetrics.stringWidth("9");
-		}
-
-		@Override
-		public void paint(JComponent c, Graphics g, int x, int y) {
-			// paint our text
-			super.paint(c, g, 0, 0);
-
-			// paint a vertical rule
-			Color color = getColor(0);
-			g.setColor(color);
-
-			FontMetrics fontMetrics = g.getFontMetrics();
-			int topX = fontMetrics.getMaxAscent() + 1; // fudge for font painting differences
-			int maxDescent = fontMetrics.getMaxDescent();
-
-			int baselineX = maxDescent + 1; // fudge for font painting differences
-			g.drawLine(uniformWidth, -topX, uniformWidth, baselineX);
-		}
-
-		@Override
-		// overridden so that our width reflects our custom width
-		public int getStringWidth() {
-			return uniformWidth + 3; // fudge for keeping the c code off the line number bar
-		}
-	}
+//==================================================================================================
 
 	private class FieldNumberColumnPair {
 		private final int fieldNumber;

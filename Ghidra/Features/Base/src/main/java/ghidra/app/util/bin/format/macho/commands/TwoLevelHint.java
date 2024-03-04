@@ -17,8 +17,8 @@ package ghidra.app.util.bin.format.macho.commands;
 
 import java.io.IOException;
 
+import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.StructConverter;
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
 import ghidra.app.util.bin.format.macho.MachConstants;
 import ghidra.program.model.data.*;
 import ghidra.util.exception.DuplicateNameException;
@@ -26,7 +26,7 @@ import ghidra.util.exception.DuplicateNameException;
 /**
  * Represents a twolevel_hint structure.
  * 
- * @see <a href="https://opensource.apple.com/source/xnu/xnu-4570.71.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html">mach-o/loader.h</a> 
+ * @see <a href="https://github.com/apple-oss-distributions/xnu/blob/main/EXTERNAL_HEADERS/mach-o/loader.h">EXTERNAL_HEADERS/mach-o/loader.h</a> 
  */
 public class TwoLevelHint implements StructConverter {
 	public final static int SIZEOF = 4;
@@ -34,20 +34,7 @@ public class TwoLevelHint implements StructConverter {
 	private int isub_image;
 	private int itoc;
 
-	static TwoLevelHint createTwoLevelHint(FactoryBundledWithBinaryReader reader)
-			throws IOException {
-		TwoLevelHint hint = (TwoLevelHint) reader.getFactory().create(TwoLevelHint.class);
-		hint.initTwoLevelHint(reader);
-		return hint;
-	}
-
-	/**
-	 * DO NOT USE THIS CONSTRUCTOR, USE create*(GenericFactory ...) FACTORY METHODS INSTEAD.
-	 */
-	public TwoLevelHint() {
-	}
-
-	private void initTwoLevelHint(FactoryBundledWithBinaryReader reader) throws IOException {
+	TwoLevelHint(BinaryReader reader) throws IOException {
 		int value = reader.readNextInt();
 
 		isub_image = value & 0xff;

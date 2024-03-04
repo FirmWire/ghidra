@@ -26,25 +26,64 @@ dependencies {
 
 	api project(':Base')
 	api project(':Recognizers')
+	api project(':PDB')
 	
-	api ':dex-ir:2.0'
-	api ':dex-reader:2.0'
-	api ':dex-reader-api:2.0'
-	api ':dex-translator:2.0'
+	// Used by "Android DEX to JAR" file system
+	api ':dex-ir:2.1'
+	api ':dex-reader:2.1'
+	api ':dex-reader-api:2.1'
+	api ':dex-translator:2.1'
+	api 'org.ow2.asm:asm-debug-all:5.0.3'
 
-	api 'org.ow2.asm:asm-debug-all:4.1'
+	// Used by "Android DEX to SMALI" file system
+	api 'org.smali:baksmali:2.5.2' // requires guava-27.1-android or later
+	api 'org.smali:dexlib2:2.5.2'  // requires guava-27.1-android or later
+	api 'org.smali:util:2.5.2'     // requires guava-27.1-android or later
 
-	api 'org.smali:baksmali:1.4.0' // TODO: upgrade to 2.2.6
-	api 'org.smali:dexlib:1.4.0'
-	api 'org.smali:util:1.4.0'
-
-	api 'net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01'
+	// Used by "Android XML" file system
 	api ':AXMLPrinter2'
-	
+
+	// Used by "ZIP" and "7zip" file systems
+	api 'net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01'	
 	runtimeOnly 'net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01'
 	
-	helpPath project(path: ":Base", configuration: 'helpPath')
-
 	// include code from src/test/slow in Base
 	testImplementation project(path: ':Base', configuration: 'integrationTestArtifacts')	
 }
+
+// ***********************************************************************************************
+// Sevenzip native library extract task
+// ***********************************************************************************************
+// The following extracts native libraries from upstream's sevenzipjbinding allPlatform jar
+// and places the uncompressed native libraries into a ghidra folder so that they can be used to
+// initialize the sevenzipjbinding library without needing to extract the native libraries at run time.
+// This is necessary due to bugs in upstream's initSevenZipFromPlatformJAR() that can cause core
+// dumps in java processes that have previously loaded the native library.  See comments
+// at the top of ghidra.file.formats.sevenzip.SevenZipCustomInitializer.
+// This gradle task can be removed when SevenZipCustomInitializer is no longer needed.
+String getSevenZipJarPath() {
+    List<String> libs = getExternalRuntimeDependencies(project);
+    for(String lib: libs) {
+        if (lib.contains("sevenzipjbinding-all-platforms")) {
+            return lib;
+        }
+    }
+    return null
+}
+
+task extractSevenZipNativeLibs(type: Copy) {
+    String jarPath = getSevenZipJarPath();
+    from zipTree(jarPath)
+    include  "Linux-amd64/*.so"
+    include  "Windows-amd64/*.dll"
+    include  "Mac-x86_64/*.dylib"
+    exclude "META-INF"
+    exclude "Linux-i386"
+    exclude "Windows-x86"
+    into ("build/data/sevenzipnativelibs")    
+}
+
+rootProject.prepDev.dependsOn extractSevenZipNativeLibs
+jar.dependsOn extractSevenZipNativeLibs
+// end of sevenzip native library extract task code
+

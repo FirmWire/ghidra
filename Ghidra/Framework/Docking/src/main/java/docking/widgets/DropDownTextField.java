@@ -28,6 +28,8 @@ import org.apache.commons.lang3.StringUtils;
 
 import docking.widgets.label.GDHtmlLabel;
 import docking.widgets.list.GList;
+import generic.theme.GColor;
+import generic.theme.GThemeDefaults.Colors.Tooltips;
 import generic.util.WindowUtilities;
 import ghidra.util.StringUtilities;
 import ghidra.util.SystemUtilities;
@@ -37,14 +39,12 @@ import ghidra.util.task.SwingUpdateManager;
 import util.CollectionUtils;
 
 /**
- * A text field that handles comparing text typed by the user to the list of objects
- * and then presenting potential matches in a drop down window.  The items in this window
- * cannot be selected.
+ * A text field that handles comparing text typed by the user to the list of objects and then
+ * presenting potential matches in a drop down window.  The items in this window cannot be selected.
  *
- * <P>This class will fire {@link #fireEditingStopped()} and {@link #fireEditingCancelled()}
- * events when the user makes a choice by pressing the ENTER key, thus allowing the client
- * code to use this class similar in fashion to a property editor.  This behavior can be
- * configured to:
+ * <P>This class will fire {@link #fireEditingStopped()} and {@link #fireEditingCancelled()} events
+ * when the user makes a choice by pressing the ENTER key, thus allowing the client code to use
+ * this class similar in fashion to a property editor.  This behavior can be configured to:
  * <UL>
  * 	<LI>Not consume the ENTER key press (it consumes by default), allowing the parent container
  *      to process the event (see {@link #setConsumeEnterKeyPress(boolean)}
@@ -53,8 +53,8 @@ import util.CollectionUtils;
  *  </LI>
  * </UL>
  *
- * <p>This class is subclassed to not only have the matching behavior, but to also allow for
- * user selections.
+ * <p>This class is subclassed to not only have the matching behavior, but to also allow for user
+ * selections.
  *
  * @param <T> The type of object that this model manipulates
  */
@@ -63,7 +63,8 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	private static final int DEFAULT_MAX_UPDATE_DELAY = 2000;
 	private static final int MIN_HEIGHT = 300;
 	private static final int MIN_WIDTH = 200;
-	protected static final Color TOOLTIP_WINDOW_BGCOLOR = new Color(255, 255, 225);
+	protected static final Color PREVIEW_WINDOW_BGCOLOR = Tooltips.BACKGROUND;
+	protected static final Color PREVIEW_WINDOW_FGCOLOR = Tooltips.FOREGROUND;
 
 	private JWindow toolTipWindow; // delayed initialization for parenting
 	private JWindow matchingWindow; // delayed initialization for parenting
@@ -71,7 +72,8 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 		new DropDownWindowVisibilityListener<>();
 
 	private GDHtmlLabel previewLabel;
-	protected GList<T> list = new GList<>();
+	protected DropDownList list = new DropDownList();
+
 	private WeakSet<DropDownSelectionChoiceListener<T>> choiceListeners =
 		WeakDataStructureFactory.createSingleThreadAccessWeakSet();
 	private Collection<CellEditorListener> cellEditorListeners = new HashSet<>();
@@ -81,7 +83,6 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	private WindowComponentListener parentWindowListener = new WindowComponentListener();
 	private T selectedValue;
 
-	private int cellHeight;
 	private int matchingWindowHeight = MIN_HEIGHT;
 	private Point lastLocation;
 	protected final DropDownTextFieldDataModel<T> dataModel;
@@ -91,17 +92,16 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	private boolean ignoreEnterKeyPress = false; // do not ignore enter by default
 	private boolean ignoreCaretChanges;
 
-	// We use an update manager to buffer requests to update the matches.  This allows us to
-	// be more responsive when the user is attempting to type multiple characters
+	// We use an update manager to buffer requests to update the matches.  This allows us to be
+	// more responsive when the user is attempting to type multiple characters
 	private String pendingTextUpdate;
 	private SwingUpdateManager updateManager;
 
 	/**
-	 * The text that was used to generate the current list of matches.  This can be different
-	 * than the text of this text field, as the user can move the cursor around, which will
-	 * change the list of matches.  Also, we can set the value of the text field as the user
-	 * arrows through the list, which will change the contents of the text field, but not the
-	 * list of matches.
+	 * The text that was used to generate the current list of matches.  This can be different than
+	 * the text of this text field, as the user can move the cursor around, which will change the
+	 * list of matches.  Also, we can set the value of the text field as the user arrows through
+	 * the list, which will change the contents of the text field, but not the list of matches.
 	 */
 	private String currentMatchingText;
 
@@ -121,8 +121,8 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	 *
 	 * @param dataModel provides element storage and search capabilities to this component.
 	 * @param updateMinDelay suggestion list refresh delay, triggered after search results have
-	 * changed. Too low a value may cause an inconsistent view as filtering tasks complete; too high
-	 * a value delivers an unresponsive user experience.
+	 * changed. Too low a value may cause an inconsistent view as filtering tasks complete; too
+	 * high a value delivers an unresponsive user experience.
 	 */
 	public DropDownTextField(DropDownTextFieldDataModel<T> dataModel, int updateMinDelay) {
 		super(30);
@@ -151,14 +151,14 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	}
 
 	protected ListSelectionModel createListSelectionModel() {
-
 		return new NoSelectionAllowedListSelectionModel();
 	}
 
 	protected void setPreviewPaneAttributes() {
 		previewLabel = new GDHtmlLabel();
 		previewLabel.setOpaque(true);
-		previewLabel.setBackground(TOOLTIP_WINDOW_BGCOLOR);
+		previewLabel.setBackground(PREVIEW_WINDOW_BGCOLOR);
+		previewLabel.setForeground(PREVIEW_WINDOW_FGCOLOR);
 		previewLabel.setVerticalAlignment(SwingConstants.TOP);
 		previewLabel.setFocusable(false);
 	}
@@ -218,8 +218,8 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 		}
 
 		// O.K., if we are consuming key presses, then we only want to do so when the selection
-		// window is showing.  This will close the selection window and not send the Enter event
-		// up to our parent component.
+		// window is showing.  This will close the selection window and not send the Enter event up
+		// to our parent component.
 		boolean listShowing = isMatchingListShowing();
 		if (consumeEnterKeyPress) {
 			if (listShowing) {
@@ -252,12 +252,11 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 
 	private void validateChosenItemAgainstText(boolean isListShowing) {
 		//
-		// If the text differs from that of the chosen item, then the implication is the user
-		// has changed the text after the last time an item was chosen and after the drop-down
-		// list was closed (if they haven't changed the text, then it will have been set to
-		// the value of the currently selected item).  The user will do this if they
-		// want a new item that is not in the list, but the new item starts with the same
-		// value as something that is in the list (SCR 7659).
+		// If the text differs from that of the chosen item, then the implication is the user has
+		// changed the text after the last time an item was chosen and after the drop-down list was
+		// closed (if they haven't changed the text, then it will have been set to the value of the
+		// currently selected item).  The user will do this if they want a new item that is not in
+		// the list, but the new item starts with the same value as something that is in the list.
 		//
 		if (selectedValue == null) {
 			return; // nothing to validate
@@ -279,15 +278,6 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 
 	private void initDataList() {
 
-		Font font = list.getFont();
-		FontMetrics fontMetrics = list.getFontMetrics(font);
-		int padding = 2; // top and bottom border height
-		int lineHeight = fontMetrics.getHeight() + padding;
-		int iconAndPaddingHeight = 16 + padding;
-		cellHeight = Math.max(lineHeight, iconAndPaddingHeight);
-
-		list.setFixedCellHeight(cellHeight);
-		list.setFixedCellWidth(MIN_WIDTH - 20); // add some fudge for scrollbars
 		list.setCellRenderer(dataModel.getListRenderer());
 
 		list.addKeyListener(keyListener);
@@ -346,7 +336,9 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 			updateWindowLocation();
 			showMatchingWindow();
 
-			getPreviewPaneComponent().setBackground(TOOLTIP_WINDOW_BGCOLOR);
+			JComponent previewComponent = getPreviewPaneComponent();
+			previewComponent.setBackground(PREVIEW_WINDOW_BGCOLOR);
+			previewComponent.setForeground(PREVIEW_WINDOW_FGCOLOR);
 			toolTipWindow.setVisible(hasPreview());
 		}
 	}
@@ -408,7 +400,7 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 		});
 
 		// adjust the display based upon the list contents
-		if (data.size() == 0) {
+		if (data.isEmpty()) {
 			updateDisplayLocation(false);
 			return;
 		}
@@ -456,27 +448,29 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	/**
 	 * When true, this field will not pass Enter key press events up to it's parent <b>when the
 	 * drop-down selection window is open</b>.  However, an Enter key press will still be
-	 * "unconsumed" when the drop-down window is not open. When set to false, this
-	 * method will always pass the Enter key press up to it's parent.
+	 * "unconsumed" when the drop-down window is not open. When set to false, this method will
+	 * always pass the Enter key press up to it's parent.
 	 *
 	 * <P>The default is true.  Clients will set this to false when they wish to respond to an
 	 * Enter event.  For example, a dialog may want to close itself on an Enter key press, even
-	 * when the drop-down selection text field is still open. Contrastingly, when this field
-	 * is embedded inside of a larger editor, like a multi-editor field dialog,
-	 * the Enter key press should simply
-	 * trigger the drop-down window to close and the editing to stop, but should not trigger the
+	 * when the drop-down selection text field is still open. Contrastingly, when this field is
+	 * embedded inside of a larger editor, like a multi-editor field dialog, the Enter key press
+	 * should simply trigger the drop-down window to close and the editing to stop, but should not
+	 * trigger the overall dialog to close.
+	 * @param consume true to consume
+	 *
 	 */
 	public void setConsumeEnterKeyPress(boolean consume) {
 		this.consumeEnterKeyPress = consume;
 	}
 
 	/**
-	 * True signals to do nothing when the user presses Enter.  The default is to respond
-	 * to the Enter key, using any existing selection to set this field's
-	 * {@link #getSelectedValue() selected value}.
+	 * True signals to do nothing when the user presses Enter.  The default is to respond to the
+	 * Enter key, using any existing selection to set this field's {@link #getSelectedValue()
+	 * selected value}.
 	 *
-	 * <P>This can be set to true to allow clients to show drop-down matches without allowing
-	 * the user to select them, triggering the window to be closed.
+	 * <P>This can be set to true to allow clients to show drop-down matches without allowing the
+	 * user to select them, triggering the window to be closed.
 	 *
 	 * @param ignore true to ignore Enter presses; false is the default
 	 */
@@ -505,8 +499,10 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	 * the text field.
 	 *
 	 * <P>Note: the listener is stored in a {@link WeakDataStructureFactory weak data structure},
-	 *  so you must maintain a reference to the listener you pass in--anonymous
-	 *  classes or lambdas will not work.
+	 * so you must maintain a reference to the listener you pass in--anonymous classes or lambdas
+	 * will not work.
+	 *
+	 * @param listener the listener
 	 */
 	public void addDropDownSelectionChoiceListener(DropDownSelectionChoiceListener<T> listener) {
 		choiceListeners.add(listener);
@@ -573,8 +569,8 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 		matchingWindow = new JWindow(parentWindow);
 		matchingWindow.setFocusable(false);
 		JScrollPane scrollPane = new JScrollPane();
-		scrollPane.setBorder(
-			BorderFactory.createBevelBorder(BevelBorder.RAISED, Color.GRAY, Color.BLACK));
+		scrollPane.setBorder(BorderFactory.createBevelBorder(BevelBorder.RAISED,
+			new GColor("color.border.bevel.highlight"), new GColor("color.border.bevel.shadow")));
 		scrollPane.setFocusable(false);
 		scrollPane.getVerticalScrollBar().setFocusable(false);
 		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -645,12 +641,11 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	}
 
 	/**
-	 * This is more complicated that responding to the user mouse click.  When clicked, the user
-	 * is signalling to use the clicked item.  When pressing Enter, they may have been typing
-	 * and ignoring the list, so we have to do some validation.
+	 * This is more complicated that responding to the user mouse click.  When clicked, the user is
+	 * signalling to use the clicked item.  When pressing Enter, they may have been typing and
+	 * ignoring the list, so we have to do some validation.
 	 */
-	@SuppressWarnings("unchecked")
-	// we know the cast is safe because we put the items in the list
+	@SuppressWarnings("unchecked") // the item better be our type
 	private void setTextFromListOnEnterPress() {
 		Object selectedItem = list.getSelectedValue();
 		if (selectedItem == null) {
@@ -658,13 +653,19 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 		}
 
 		String textFieldText = getText();
-		String listItemText = dataModel.getDisplayText((T) selectedItem);
-		if (!StringUtilities.startsWithIgnoreCase(listItemText, textFieldText)) {
+		if (!shouldReplaceTextFieldTextWithSelectedItem(textFieldText, (T) selectedItem)) {
 			// The selected item text does not start with the text in the text field, which
 			// implies the user has added or changed text and the list has not yet been updated.
 			return;
 		}
+
 		setTextFromList();
+	}
+
+	protected boolean shouldReplaceTextFieldTextWithSelectedItem(String textFieldText,
+			T selectedItem) {
+		String listItemText = dataModel.getDisplayText(selectedItem);
+		return StringUtilities.startsWithIgnoreCase(listItemText, textFieldText);
 	}
 
 	/**
@@ -680,12 +681,12 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 	}
 
 	/**
-	 * Sets the current selection on this text field.  This will store the provided value
-	 * and set the text of the text field to be the name of that value.  If the given value
-	 * is null, then the text of this field will be cleared.
+	 * Sets the current selection on this text field.  This will store the provided value and set
+	 * the text of the text field to be the name of that value.  If the given value is null, then
+	 * the text of this field will be cleared.
 	 *
-	 * @param value The value that is to be the current selection or null to clear the
-	 *        selected value of this text field.
+	 * @param value The value that is to be the current selection or null to clear the selected
+	 * value of this text field.
 	 */
 	public void setSelectedValue(T value) {
 		storeSelectedValue(value);
@@ -733,9 +734,33 @@ public class DropDownTextField<T> extends JTextField implements GComponent {
 		windowVisibilityListener = Objects.requireNonNull(l);
 	}
 
-//==================================================================================================
+//=================================================================================================
 // Inner Classes
-//==================================================================================================
+//=================================================================================================
+
+	protected class DropDownList extends GList<T> {
+		@Override
+		public void setFont(Font f) {
+			super.setFont(f);
+			updateCellDimensions(f);
+		}
+
+		private void updateCellDimensions(Font font) {
+
+			if (font == null || list == null) {
+				return; // UI is initializing
+			}
+
+			FontMetrics fontMetrics = list.getFontMetrics(font);
+			int padding = 2; // top and bottom border height
+			int lineHeight = fontMetrics.getHeight() + padding;
+			int iconAndPaddingHeight = 16 + padding;
+			int cellHeight = Math.max(lineHeight, iconAndPaddingHeight);
+
+			list.setFixedCellHeight(cellHeight);
+			list.setFixedCellWidth(MIN_WIDTH - 20); // add some fudge for scrollbars
+		}
+	}
 
 	private class HideWindowFocusListener extends FocusAdapter {
 		@Override

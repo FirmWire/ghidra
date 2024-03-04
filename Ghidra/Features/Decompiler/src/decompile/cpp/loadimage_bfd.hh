@@ -16,11 +16,37 @@
  */
 // Use the GNU bfd library to manipulate a load image
 
-#ifndef __LOADIMAGE_BFD__
-#define __LOADIMAGE_BFD__
+#ifndef __LOADIMAGE_BFD_HH__
+#define __LOADIMAGE_BFD_HH__
 
 #include "loadimage.hh"
+
+// bfd.h requires PACKAGE/PACKAGE_VERSION to be defined
+// https://sourceware.org/bugzilla/show_bug.cgi?id=14243
+
+#ifndef PACKAGE
+  #define PACKAGE
+  #define __LOADIMAGE_BFD__DEFINED_PACKAGE
+#endif
+
+#ifndef PACKAGE_VERSION
+  #define PACKAGE_VERSION
+  #define __LOADIMAGE_BFD__DEFINED_PACKAGE_VERSION
+#endif
+
 #include <bfd.h>
+
+#ifdef __LOADIMAGE_BFD__DEFINED_PACKAGE
+  #undef PACKAGE
+  #undef __LOADIMAGE_BFD__DEFINED_PACKAGE
+#endif
+
+#ifdef __LOADIMAGE_BFD__DEFINED_PACKAGE_VERSION
+  #undef PACKAGE_VERSION
+  #undef __LOADIMAGE_BFD__DEFINED_PACKAGE_VERSION
+#endif
+
+namespace ghidra {
 
 struct ImportRecord {
   string dllname;
@@ -64,4 +90,5 @@ public:
   virtual void adjustVma(long adjust);
 };
 
+} // End namespace ghidra
 #endif

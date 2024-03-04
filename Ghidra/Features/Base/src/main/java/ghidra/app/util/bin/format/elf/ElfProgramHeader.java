@@ -16,14 +16,16 @@
 package ghidra.app.util.bin.format.elf;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.InputStream;
 import java.util.HashMap;
+import java.util.Objects;
+import java.util.function.BiConsumer;
 
-import ghidra.app.util.bin.BinaryReader;
-import ghidra.app.util.bin.StructConverter;
-import ghidra.app.util.bin.format.*;
+import ghidra.app.util.bin.*;
+import ghidra.app.util.bin.format.MemoryLoadable;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
-import ghidra.util.*;
+import ghidra.util.StringUtilities;
 
 /**
  * An executable or shared object file's program header table is an 
@@ -63,51 +65,33 @@ import ghidra.util.*;
  * </pre>
  */
 public class ElfProgramHeader
-		implements StructConverter, Comparable<ElfProgramHeader>, Writeable, MemoryLoadable {
+		implements StructConverter, Comparable<ElfProgramHeader>, MemoryLoadable {
 
-	protected ElfHeader header;
+	protected final ElfHeader header;
 
-	private int p_type;
-	private int p_flags;
-	private long p_offset;
-	private long p_vaddr;
-	private long p_paddr;
-	private long p_filesz;
-	private long p_memsz;
-	private long p_align;
+	private final int p_type;
+	private final int p_flags;
+	private long p_offset; // may get altered after instantiation
+	private final long p_vaddr;
+	private final long p_paddr;
+	private final long p_filesz;
+	private final long p_memsz;
+	private final long p_align;
 
-	private FactoryBundledWithBinaryReader reader;
-
-	static ElfProgramHeader createElfProgramHeader(FactoryBundledWithBinaryReader reader,
-			ElfHeader header) throws IOException {
-		ElfProgramHeader elfProgramHeader =
-			(ElfProgramHeader) reader.getFactory().create(ElfProgramHeader.class);
-		elfProgramHeader.initElfProgramHeader(reader, header);
-		return elfProgramHeader;
-	}
+	private final BinaryReader reader;
 
 	/**
-	 * DO NOT USE THIS CONSTRUCTOR, USE create*(GenericFactory ...) FACTORY METHODS INSTEAD.
+	 * Construct {@link ElfProgramHeader}
+	 * @param reader dedicated reader instance positioned to the start of the program header data.
+	 * (the reader supplied will be retained and altered).
+	 * @param header ELF header
+	 * @throws IOException if an IO error occurs during parse
 	 */
-	public ElfProgramHeader() {
-	}
-
-	protected void initElfProgramHeader(FactoryBundledWithBinaryReader reader, ElfHeader header)
-			throws IOException {
+	public ElfProgramHeader(BinaryReader reader, ElfHeader header) throws IOException {
 		this.header = header;
 		this.reader = reader;
 
-		if (header.is32Bit()) {
-			p_type = reader.readNextInt();
-			p_offset = reader.readNextInt() & Conv.INT_MASK;
-			p_vaddr = reader.readNextInt() & Conv.INT_MASK;
-			p_paddr = reader.readNextInt() & Conv.INT_MASK;
-			p_filesz = reader.readNextInt() & Conv.INT_MASK;
-			p_memsz = reader.readNextInt() & Conv.INT_MASK;
-			p_flags = reader.readNextInt();
-			p_align = reader.readNextInt() & Conv.INT_MASK;
-		}
-		else if (header.is64Bit()) {
+		if (header.is64Bit()) {
 			p_type = reader.readNextInt();
 			p_flags = reader.readNextInt();
 			p_offset = reader.readNextLong();
@@ -116,6 +100,16 @@ public class ElfProgramHeader
 			p_filesz = reader.readNextLong();
 			p_memsz = reader.readNextLong();
 			p_align = reader.readNextLong();
+		}
+		else {
+			p_type = reader.readNextInt();
+			p_offset = reader.readNextUnsignedInt();
+			p_vaddr = reader.readNextUnsignedInt();
+			p_paddr = reader.readNextUnsignedInt();
+			p_filesz = reader.readNextUnsignedInt();
+			p_memsz = reader.readNextUnsignedInt();
+			p_flags = reader.readNextInt();
+			p_align = reader.readNextUnsignedInt();
 		}
 
 		if (p_memsz > p_filesz) {
@@ -129,53 +123,11 @@ public class ElfProgramHeader
 	}
 
 	/**
-	 * Constructs a new program header with the specified type.
-	 * @param type the new type of the program header
-	 */
-	public ElfProgramHeader(ElfHeader header, int type) {
-		this.header = header;
-
-		p_type = type;
-		p_flags = ElfProgramHeaderConstants.PF_R | ElfProgramHeaderConstants.PF_W |
-			ElfProgramHeaderConstants.PF_X;
-		p_align = 0x1000;
-		p_paddr = 0xffffffff;
-		p_vaddr = 0xffffffff;
-	}
-
-	/**
 	 * Return ElfHeader associated with this program header
 	 * @return ElfHeader
 	 */
 	public ElfHeader getElfHeader() {
 		return header;
-	}
-
-	/**
-	 * @see ghidra.app.util.bin.format.Writeable#write(java.io.RandomAccessFile, ghidra.util.DataConverter)
-	 */
-	@Override
-	public void write(RandomAccessFile raf, DataConverter dc) throws IOException {
-		if (header.is32Bit()) {
-			raf.write(dc.getBytes(p_type));
-			raf.write(dc.getBytes((int) p_offset));
-			raf.write(dc.getBytes((int) p_vaddr));
-			raf.write(dc.getBytes((int) p_paddr));
-			raf.write(dc.getBytes((int) p_filesz));
-			raf.write(dc.getBytes((int) p_memsz));
-			raf.write(dc.getBytes(p_flags));
-			raf.write(dc.getBytes((int) p_align));
-		}
-		else if (header.is64Bit()) {
-			raf.write(dc.getBytes(p_flags));
-			raf.write(dc.getBytes(p_type));
-			raf.write(dc.getBytes(p_offset));
-			raf.write(dc.getBytes(p_vaddr));
-			raf.write(dc.getBytes(p_paddr));
-			raf.write(dc.getBytes(p_filesz));
-			raf.write(dc.getBytes(p_memsz));
-			raf.write(dc.getBytes(p_align));
-		}
 	}
 
 	/**
@@ -251,10 +203,6 @@ public class ElfProgramHeader
 		return p_flags;
 	}
 
-	public void setFlags(int flags) {
-		this.p_flags = flags;
-	}
-
 	/**
 	 * Returns true if this segment is readable when loaded
 	 * @return true if this segment is readable when loaded
@@ -309,6 +257,34 @@ public class ElfProgramHeader
 		return header.getLoadAdapter().getAdjustedLoadSize(this);
 	}
 
+	@Override
+	public boolean hasFilteredLoadInputStream(ElfLoadHelper elfLoadHelper, Address start) {
+		return header.getLoadAdapter().hasFilteredLoadInputStream(elfLoadHelper, this, start);
+	}
+
+	@Override
+	public InputStream getFilteredLoadInputStream(ElfLoadHelper elfLoadHelper, Address start,
+			long dataLength, BiConsumer<String, Throwable> errorConsumer) throws IOException {
+		return header.getLoadAdapter()
+				.getFilteredLoadInputStream(elfLoadHelper, this, start, dataLength,
+					getRawInputStream());
+	}
+
+	@Override
+	public InputStream getRawInputStream() throws IOException {
+		return getRawByteProvider().getInputStream(0);
+	}
+
+	private ByteProvider getRawByteProvider() {
+		if (reader == null) {
+			throw new UnsupportedOperationException("This ElfProgramHeader does not have a reader");
+		}
+		if (p_filesz <= 0) {
+			return ByteProvider.EMPTY_BYTEPROVIDER;
+		}
+		return new ByteProviderWrapper(reader.getByteProvider(), p_offset, p_filesz);
+	}
+
 	/**
 	 * Returns the binary reader.
 	 * @return the binary reader
@@ -324,6 +300,15 @@ public class ElfProgramHeader
 	 */
 	public long getOffset() {
 		return p_offset;
+	}
+
+	/**
+	 * Return true if this program header's offset is invalid.
+	 * 
+	 * @return true if this program header's offset is invalid
+	 */
+	public boolean isInvalidOffset() {
+		return p_offset < 0 || (header.is32Bit() && p_offset == ElfConstants.ELF32_INVALID_OFFSET);
 	}
 
 	/**
@@ -353,23 +338,8 @@ public class ElfProgramHeader
 	 * the ELF file.
 	 * @param offset the new offset value
 	 */
-	public void setOffset(long offset) {
+	void setOffset(long offset) {
 		this.p_offset = offset;
-	}
-
-	/**
-	 * Sets the file and memory size.
-	 * Note: the file size can be less than or
-	 * equal to the memory size. It cannot be larger.
-	 * If the file size is less than the memory size,
-	 * then the rest of the space is considered to be
-	 * uninitialized.
-	 * @param fileSize the new file size
-	 * @param memSize  the new memory size
-	 */
-	public void setSize(long fileSize, long memSize) {
-		p_filesz = fileSize;
-		p_memsz = memSize;
 	}
 
 	/**
@@ -452,19 +422,6 @@ public class ElfProgramHeader
 		return typeEnum;
 	}
 
-	/**
-	 * Sets the new physical and virtual addresses
-	 * @param paddr the new physical address
-	 * @param vaddr the new virtual address
-	 */
-	public void setAddress(long paddr, long vaddr) {
-		this.p_paddr = header.unadjustAddressForPrelink(paddr);
-		this.p_vaddr = header.unadjustAddressForPrelink(vaddr);
-	}
-
-	/**
-	 * @see java.lang.Comparable#compareTo(java.lang.Object)
-	 */
 	@Override
 	public int compareTo(ElfProgramHeader that) {
 		//sort the headers putting 0xffffffff (new guys)
@@ -488,7 +445,7 @@ public class ElfProgramHeader
 
 	@Override
 	public int hashCode() {
-		return (int) ((31 * p_offset) + (p_offset >>> 32));
+		return Objects.hash(p_offset);
 	}
 
 	@Override
@@ -497,8 +454,8 @@ public class ElfProgramHeader
 			return false;
 		}
 		ElfProgramHeader other = (ElfProgramHeader) obj;
-		return reader == other.reader && p_type == other.p_type && p_flags == other.p_flags &&
-			p_offset == other.p_offset && p_vaddr == other.p_vaddr && p_paddr == other.p_paddr &&
-			p_filesz == other.p_filesz && p_memsz == other.p_memsz && p_align == other.p_align;
+		return p_type == other.p_type && p_flags == other.p_flags && p_offset == other.p_offset &&
+			p_vaddr == other.p_vaddr && p_paddr == other.p_paddr && p_filesz == other.p_filesz &&
+			p_memsz == other.p_memsz && p_align == other.p_align;
 	}
 }

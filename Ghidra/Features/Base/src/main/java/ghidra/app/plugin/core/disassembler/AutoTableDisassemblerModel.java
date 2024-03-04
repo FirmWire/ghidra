@@ -22,6 +22,7 @@ import docking.widgets.table.DiscoverableTableUtils;
 import docking.widgets.table.TableColumnDescriptor;
 import ghidra.framework.plugintool.ServiceProvider;
 import ghidra.program.model.address.*;
+import ghidra.program.util.ProgramSelection;
 import ghidra.util.datastruct.Accumulator;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.table.AddressBasedTableModel;
@@ -80,6 +81,20 @@ class AutoTableDisassemblerModel extends AddressBasedTableModel<AddressTable> {
 	}
 
 	@Override
+	public ProgramSelection getProgramSelection(int[] rows) {
+		AddressSet set = new AddressSet();
+		for (int selectedRow : rows) {
+			Address selectedAddress = getAddress(selectedRow);
+			AddressTable addrTab = get(selectedAddress);
+			if (addrTab != null) {
+				set.addRange(selectedAddress,
+					selectedAddress.add(addrTab.getByteLength() - 1));
+			}
+		}
+		return new ProgramSelection(set);
+	}
+
+	@Override
 	protected void doLoad(Accumulator<AddressTable> accumulator, TaskMonitor monitor)
 			throws CancelledException {
 
@@ -95,7 +110,7 @@ class AutoTableDisassemblerModel extends AddressBasedTableModel<AddressTable> {
 		storage = new MapStorage();
 		while (addrIter.hasNext()) {
 			++addrCount;
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			monitor.setProgress(addrCount);
 			Address start = addrIter.next();
 

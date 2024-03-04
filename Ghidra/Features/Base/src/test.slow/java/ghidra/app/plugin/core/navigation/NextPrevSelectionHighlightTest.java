@@ -15,12 +15,12 @@
  */
 package ghidra.app.plugin.core.navigation;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import org.junit.*;
 
 import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.action.DockingActionIf;
 import docking.widgets.EventTrigger;
 import docking.widgets.fieldpanel.FieldPanel;
@@ -101,10 +101,7 @@ public class NextPrevSelectionHighlightTest extends AbstractGhidraHeadedIntegrat
 	}
 
 	private void setSelection(FieldPanel fp, FieldSelection sel) {
-		fp.setSelection(sel);
-		Class<?>[] argClasses = new Class<?>[] { EventTrigger.class };
-		Object[] args = new Object[] { EventTrigger.GUI_ACTION };
-		invokeInstanceMethod("notifySelectionChanged", fp, argClasses, args);
+		runSwing(() -> fp.setSelection(sel, EventTrigger.GUI_ACTION));
 	}
 
 	@Test
@@ -313,7 +310,7 @@ public class NextPrevSelectionHighlightTest extends AbstractGhidraHeadedIntegrat
 	ActionContext getActionContext() {
 		ActionContext context = cb.getProvider().getActionContext(null);
 		if (context == null) {
-			context = new ActionContext();
+			context = new DefaultActionContext();
 		}
 		return context;
 

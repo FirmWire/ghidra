@@ -36,7 +36,7 @@ import javax.swing.undo.UndoableEdit;
 
 import org.junit.*;
 
-import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.action.DockingActionIf;
 import docking.widgets.OptionDialog;
 import docking.widgets.filter.FilterTextField;
@@ -182,9 +182,8 @@ public abstract class AbstractGhidraScriptMgrPluginTest
 	}
 
 	protected void deleteUserScripts() throws IOException {
-
 		Path userScriptDir = Paths.get(GhidraScriptUtil.USER_SCRIPTS_DIR);
-		FileUtilities.forEachFile(userScriptDir, paths -> paths.forEach(p -> delete(p)));
+		FileUtilities.forEachFile(userScriptDir, script -> delete(script));
 	}
 
 //==================================================================================================
@@ -307,7 +306,7 @@ public abstract class AbstractGhidraScriptMgrPluginTest
 
 		DockingActionIf runLastAction = getRunLastScriptAction();
 		final AtomicReference<Boolean> ref = new AtomicReference<>();
-		runSwing(() -> ref.set(runLastAction.isEnabledForContext(new ActionContext())));
+		runSwing(() -> ref.set(runLastAction.isEnabledForContext(new DefaultActionContext())));
 		assertEquals("Run Last Action not enabled as expected", enabled, ref.get());
 	}
 
@@ -1018,9 +1017,7 @@ public abstract class AbstractGhidraScriptMgrPluginTest
 	protected String getConsoleText() {
 		// let the update manager have a chance to run
 		waitForSwing();
-		final String[] container = new String[1];
-		runSwing(() -> container[0] = consoleTextPane.getText());
-		return container[0];
+		return runSwing(() -> consoleTextPane.getText());
 	}
 
 	protected void chooseJavaProvider() throws InterruptedException, InvocationTargetException {
@@ -1586,7 +1583,7 @@ public abstract class AbstractGhidraScriptMgrPluginTest
 
 			try {
 				while (total < DEFAULT_WAIT_TIMEOUT) {
-					monitor.checkCanceled();
+					monitor.checkCancelled();
 					total += sleep(DEFAULT_WAIT_DELAY);
 
 					if (testOver) {

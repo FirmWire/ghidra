@@ -24,8 +24,7 @@ import javax.swing.*;
 
 import org.junit.*;
 
-import docking.ActionContext;
-import docking.DialogComponentProvider;
+import docking.*;
 import docking.action.DockingActionIf;
 import docking.widgets.fieldpanel.*;
 import docking.widgets.fieldpanel.field.Field;
@@ -53,7 +52,7 @@ import ghidra.test.TestEnv;
 public class ClearTest extends AbstractGhidraHeadedIntegrationTest {
 
 	private static final String COMMENTS_CHECK_BOX_TEXT =
-		"<HTML>Comments <FONT SIZE=\"2\">(does not affect automatic comments)</FONT>";
+		"<html>Comments <FONT SIZE=\"2\">(does not affect automatic comments)</FONT>";
 
 	private TestEnv env;
 	private PluginTool tool;
@@ -177,8 +176,9 @@ public class ClearTest extends AbstractGhidraHeadedIntegrationTest {
 	public void testClearActionEnablement() throws Exception {
 
 		closeProgram();
-		ActionContext context = cb.getProvider().getActionContext(null);
-		assertFalse(clearAction.isEnabledForContext(context));
+
+		assertFalse(isEnabled(clearAction, cb.getProvider()));
+		assertFalse(clearAction.isEnabledForContext(new DefaultActionContext()));
 
 		showTool(tool);
 		loadProgram("notepad");
@@ -186,12 +186,10 @@ public class ClearTest extends AbstractGhidraHeadedIntegrationTest {
 		waitForSwing();
 		assertTrue(cb.goToField(addr("0x10026f0"), "Address", 0, 0));
 
-		context = cb.getProvider().getActionContext(null);
-		assertTrue(clearAction.isEnabledForContext(context));
+		assertTrue(isEnabled(clearAction, cb.getProvider()));
 		closeProgram();
 
-		context = cb.getProvider().getActionContext(null);
-		assertFalse(clearAction.isEnabledForContext(context));
+		assertFalse(isEnabled(clearAction, cb.getProvider()));
 	}
 
 	@Test
@@ -204,7 +202,6 @@ public class ClearTest extends AbstractGhidraHeadedIntegrationTest {
 		doClearAction(true);
 
 		assertEquals(numInstructions, program.getListing().getNumInstructions());
-
 	}
 
 	@Test
@@ -287,7 +284,7 @@ public class ClearTest extends AbstractGhidraHeadedIntegrationTest {
 	}
 
 	/*
-	 * This tests that a selection that includes the outermost header of does not change the 
+	 * This tests that a selection that includes the outermost header of does not change the
 	 * selection, but instead removes the structure from the listing at that address.
 	 */
 	@Test

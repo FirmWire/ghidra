@@ -417,7 +417,7 @@ public class JavaAnalyzer extends AbstractJavaAnalyzer implements AnalysisWorker
 			getBootStrapMethodAttribute(classFile, constantPool, indexMap);
 
 		for (Instruction instruction : instructionIt) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 
 			if (!hasConstantPoolReference(instruction.getMnemonicString())) {
 				continue;
@@ -719,6 +719,26 @@ public class JavaAnalyzer extends AbstractJavaAnalyzer implements AnalysisWorker
 			ParameterImpl currentParam = new ParameterImpl("param" + Integer.toString(i + 1),
 				explicitParams.get(i), function.getProgram());
 			params.add(currentParam);
+		}
+		MethodParametersAttribute methodParamsAttr = methodInfo.getMethodParameters();
+		if (methodParamsAttr != null) {
+			MethodParameters[] methodParams = methodParamsAttr.getMethodParameters();
+			int indexAdjust = methodInfo.isStatic() ? 0 : 1;
+			if (methodParams.length == (params.size() - indexAdjust)) {
+				for (int i = 0; i < methodParams.length; ++i) {
+					int nameIndex = methodParams[i].getNameIndex();
+					if (nameIndex == 0) {
+						continue;  // no name
+					}
+					String name = ((ConstantPoolUtf8Info) constantPool[nameIndex]).getString();
+					params.get(i + indexAdjust).setName(name, SourceType.ANALYSIS);
+				}
+			}
+			else {
+				Msg.warn(this, "methodParams/params size mismatch for " + function.getName());
+				Msg.warn(this,
+					"methodParams: " + methodParams.length + "; params: " + params.size());
+			}
 		}
 		function.replaceParameters(params, FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS, true,
 			SourceType.ANALYSIS);

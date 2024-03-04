@@ -18,26 +18,28 @@ package ghidra.app.plugin.core.functionwindow;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.MouseEvent;
+import java.util.HashSet;
+import java.util.Set;
 
 import javax.swing.*;
-import javax.swing.table.JTableHeader;
+import javax.swing.table.*;
 
 import docking.ActionContext;
-import ghidra.app.services.GoToService;
+import docking.DefaultActionContext;
+import generic.theme.GIcon;
 import ghidra.framework.plugintool.ComponentProviderAdapter;
-import ghidra.program.model.listing.Function;
-import ghidra.program.model.listing.Program;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.*;
 import ghidra.program.util.ProgramSelection;
 import ghidra.util.HelpLocation;
 import ghidra.util.table.*;
-import resources.ResourceManager;
 
 /**
  * Provider that displays all functions in the selected program
  */
 public class FunctionWindowProvider extends ComponentProviderAdapter {
 
-	public static final ImageIcon icon = ResourceManager.loadImage("images/functions.gif");
+	public static final Icon ICON = new GIcon("icon.plugin.functionwindow.provider");
 
 	private FunctionWindowPlugin plugin;
 	private GhidraTable functionTable;
@@ -56,7 +58,7 @@ public class FunctionWindowProvider extends ComponentProviderAdapter {
 		super(plugin.getTool(), "Functions Window", plugin.getName());
 		setTitle("Functions");
 		this.plugin = plugin;
-		setIcon(icon);
+		setIcon(ICON);
 		setHelpLocation(new HelpLocation(plugin.getName(), plugin.getName()));
 		tool = plugin.getTool();
 		mainPanel = createWorkPanel();
@@ -75,7 +77,7 @@ public class FunctionWindowProvider extends ComponentProviderAdapter {
 
 	@Override
 	public ActionContext getActionContext(MouseEvent event) {
-		return new ActionContext(this, functionTable);
+		return new DefaultActionContext(this, functionTable);
 	}
 
 	@Override
@@ -118,11 +120,7 @@ public class FunctionWindowProvider extends ComponentProviderAdapter {
 		functionTable = threadedTablePanel.getTable();
 		functionTable.setName("FunctionTable");
 
-		GoToService goToService = tool.getService(GoToService.class);
-		if (goToService != null) {
-			functionTable.installNavigation(goToService, goToService.getDefaultNavigatable());
-		}
-
+		functionTable.installNavigation(tool);
 		functionTable.setAutoLookupColumn(FunctionTableModel.NAME_COL);
 		functionTable.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
 		functionTable.setPreferredScrollableViewportSize(new Dimension(350, 150));
@@ -161,16 +159,44 @@ public class FunctionWindowProvider extends ComponentProviderAdapter {
 	}
 
 	private void setFunctionTableRenderer() {
-		functionTable.getColumnModel()
-				.getColumn(FunctionTableModel.LOCATION_COL)
-				.setPreferredWidth(
-					FunctionTableModel.LOCATION_COL_WIDTH);
+		TableColumnModel columnModel = functionTable.getColumnModel();
+		TableColumn column = columnModel.getColumn(FunctionTableModel.LOCATION_COL);
+		column.setPreferredWidth(FunctionTableModel.LOCATION_COL_WIDTH);
 	}
 
 	void update(Function function) {
-		if (isVisible()) {
-			functionModel.update(function);
+		if (!isVisible()) {
+			return;
 		}
+
+		Set<Function> functions = getRelatedFunctions(function);
+		for (Function f : functions) {
+			functionModel.update(f);
+		}
+	}
+
+	/**
+	 * Gathers this function and any functions that thunk it
+	 * @param f the function
+	 * @return the related functions
+	 */
+	private Set<Function> getRelatedFunctions(Function f) {
+
+		Program program = f.getProgram();
+		FunctionManager functionManager = program.getFunctionManager();
+		Set<Function> functions = new HashSet<>();
+		Address[] addresses = f.getFunctionThunkAddresses(true);
+		if (addresses != null) {
+			for (Address a : addresses) {
+				Function thunk = functionManager.getFunctionAt(a);
+				if (thunk != null) {
+					functions.add(thunk);
+				}
+			}
+		}
+
+		functions.add(f);
+		return functions;
 	}
 
 	void functionAdded(Function function) {

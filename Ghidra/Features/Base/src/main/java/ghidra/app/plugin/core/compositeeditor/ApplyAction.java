@@ -15,25 +15,25 @@
  */
 package ghidra.app.plugin.core.compositeeditor;
 
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 
 import docking.ActionContext;
+import generic.theme.GIcon;
 import ghidra.app.util.datatype.EmptyCompositeException;
 import ghidra.program.model.data.InvalidDataTypeException;
-import resources.ResourceManager;
 
 /**
- * ApplyAction is an action for applying editor changes. 
+ * ApplyAction is an action for applying editor changes.
  */
 public class ApplyAction extends CompositeEditorTableAction {
 
 	public final static String ACTION_NAME = "Apply Editor Changes";
 	private final static String GROUP_NAME = BASIC_ACTION_GROUP;
-	private final static ImageIcon ICON = ResourceManager.loadImage("images/disk.png");
+	private final static Icon ICON = new GIcon("icon.plugin.composite.editor.apply");
 	private final static String[] POPUP_PATH = new String[] { "Apply Edits" };
 
 	public ApplyAction(CompositeEditorProvider provider) {
-		super(provider, EDIT_ACTION_PREFIX + ACTION_NAME, GROUP_NAME, POPUP_PATH, null, ICON);
+		super(provider, ACTION_NAME, GROUP_NAME, POPUP_PATH, null, ICON);
 
 		setDescription("Apply editor changes");
 		adjustEnablement();
@@ -48,11 +48,8 @@ public class ApplyAction extends CompositeEditorTableAction {
 		try {
 			model.apply();
 		}
-		catch (EmptyCompositeException e1) {
-			model.setStatus(e1.getMessage(), true);
-		}
-		catch (InvalidDataTypeException e1) {
-			model.setStatus(e1.getMessage(), true);
+		catch (EmptyCompositeException | InvalidDataTypeException e) {
+			model.setStatus(e.getMessage(), true);
 		}
 		requestTableFocus();
 	}

@@ -16,8 +16,6 @@
 package ghidra.app.util.navigation;
 
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -26,8 +24,8 @@ import javax.swing.border.Border;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 
-import docking.DialogComponentProvider;
 import docking.DockingWindowManager;
+import docking.ReusableDialogComponentProvider;
 import docking.tool.ToolConstants;
 import docking.widgets.HyperlinkComponent;
 import docking.widgets.checkbox.GCheckBox;
@@ -44,7 +42,8 @@ import ghidra.program.model.address.Address;
 import ghidra.util.HelpLocation;
 import ghidra.util.task.TaskMonitorComponent;
 
-public class GoToAddressLabelDialog extends DialogComponentProvider implements GoToServiceListener {
+public class GoToAddressLabelDialog extends ReusableDialogComponentProvider
+		implements GoToServiceListener {
 
 	//////////////////////////////////////////////////////////////////////
 	//                                                                  //
@@ -54,7 +53,8 @@ public class GoToAddressLabelDialog extends DialogComponentProvider implements G
 
 	private static final String DIALOG_TITLE = "Go To ...";
 
-	private static final String ANCHOR_NAME = "EXPRESSION";
+	private static final String EXPRESSION_ANCHOR_NAME = "GoTo_Expression";
+	private static final String FILE_OFFSET_ANCHOR_NAME = "GoTo_File_Offset";
 	private static final int DEFAULT_MAX_GOTO_ENTRIES = 10;
 
 	//////////////////////////////////////////////////////////////////////
@@ -100,6 +100,9 @@ public class GoToAddressLabelDialog extends DialogComponentProvider implements G
 
 	/**
 	 * Popup up the dialog in the center of the tool.
+	 * @param nav the Navigatable
+	 * @param addr the address
+	 * @param tool the PluginTool
 	 */
 	public void show(Navigatable nav, Address addr, PluginTool tool) {
 		this.navigatable = nav;
@@ -157,9 +160,8 @@ public class GoToAddressLabelDialog extends DialogComponentProvider implements G
 
 	private void initializeContents() {
 		if (goToMemory) {
-			JTextField field = (JTextField) comboBox.getEditor().getEditorComponent();
-			field.selectAll();
-			field.requestFocus();
+			comboBox.selectAll();
+			comboBox.requestFocus();
 		}
 		else {
 			comboBox.setSelectedItem(null);
@@ -168,6 +170,7 @@ public class GoToAddressLabelDialog extends DialogComponentProvider implements G
 
 	/**
 	 * Builds the main panel for this dialog.
+	 * @return the main panel for this dialog
 	 */
 	final protected JPanel buildMainPanel() {
 
@@ -181,31 +184,25 @@ public class GoToAddressLabelDialog extends DialogComponentProvider implements G
 		gbc.gridwidth = 2;
 		gbc.insets = new Insets(5, 5, 5, 5);
 
-		hyperlink = new HyperlinkComponent("<html>Enter an address, label or " + "<a href=\"" +
-			ANCHOR_NAME + "\">expression</a>:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;");
-		DockingWindowManager.setHelpLocation(hyperlink,
-			new HelpLocation(HelpTopics.NAVIGATION, "gotoexpression"));
+		hyperlink = new HyperlinkComponent("<html>Enter an address, label, <a href=\"" +
+			EXPRESSION_ANCHOR_NAME + "\">expression</a>, or " + "<a href=\"" +
+			FILE_OFFSET_ANCHOR_NAME + "\">file offset</a>:");
 
-		hyperlink.addHyperlinkListener(ANCHOR_NAME, new HyperlinkListener() {
-			@Override
-			public void hyperlinkUpdate(HyperlinkEvent e) {
-				if (e.getEventType() != HyperlinkEvent.EventType.ACTIVATED) {
-					return;
-				}
-				showExpressionHelp();
+		HyperlinkListener hyperlinkListener = evt -> {
+			if (evt.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+				HelpLocation loc = new HelpLocation(HelpTopics.NAVIGATION, evt.getDescription());
+				DockingWindowManager.getHelpService().showHelp(loc);
 			}
-		});
-		inner.add(hyperlink);
+		};
+		hyperlink.addHyperlinkListener(EXPRESSION_ANCHOR_NAME, hyperlinkListener);
+		hyperlink.addHyperlinkListener(FILE_OFFSET_ANCHOR_NAME, hyperlinkListener);
+
 		inner.add(hyperlink, gbc);
 
 		comboBox = new GhidraComboBox<>();
 		comboBox.setEditable(true);
-		comboBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				okCallback();
-			}
-		});
+		comboBox.addActionListener(evt -> okCallback());
+
 		gbc.insets = new Insets(2, 5, 2, 0);
 		gbc.gridx = 0;
 		gbc.gridy = 1;
@@ -228,11 +225,6 @@ public class GoToAddressLabelDialog extends DialogComponentProvider implements G
 		mainPanel.add(inner, BorderLayout.NORTH);
 
 		return mainPanel;
-	}
-
-	protected void showExpressionHelp() {
-		DockingWindowManager.getHelpService().showHelp(hyperlink, false, hyperlink);
-
 	}
 
 	private void writeHistory(SaveState saveState) {
@@ -386,12 +378,6 @@ public class GoToAddressLabelDialog extends DialogComponentProvider implements G
 
 	// JUnits
 	public void setText(String text) {
-		try {
-			Component comp = comboBox.getEditor().getEditorComponent();
-			((JTextField) comp).setText(text);
-		}
-		catch (Exception e) {
-			throw new RuntimeException(e);
-		}
+		comboBox.setText(text);
 	}
 }

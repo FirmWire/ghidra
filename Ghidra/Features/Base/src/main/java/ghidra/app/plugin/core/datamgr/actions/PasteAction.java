@@ -19,8 +19,7 @@ import java.awt.datatransfer.*;
 import java.awt.dnd.DnDConstants;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import javax.swing.KeyStroke;
 import javax.swing.tree.TreePath;
@@ -124,7 +123,7 @@ public class PasteAction extends DockingAction {
 		for (GTreeNode cutNode : nodeList) {
 			DataTypeTreeNode dataTypeTreeNode = (DataTypeTreeNode) cutNode;
 			ArchiveNode archiveNode = dataTypeTreeNode.getArchiveNode();
-			if (archiveNode != destinationArchiveNode) {
+			if (!Objects.equals(archiveNode, destinationArchiveNode)) {
 				return true; // is invalid
 			}
 		}

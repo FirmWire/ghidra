@@ -15,17 +15,16 @@
  */
 package ghidra.app.plugin.exceptionhandlers.gcc;
 
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
-import ghidra.app.plugin.exceptionhandlers.gcc.datatype.SignedLeb128DataType;
-import ghidra.app.plugin.exceptionhandlers.gcc.datatype.UnsignedLeb128DataType;
+import ghidra.app.util.bin.LEB128Info;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSpace;
-import ghidra.program.model.data.DataType;
-import ghidra.program.model.data.VoidDataType;
+import ghidra.program.model.data.*;
 import ghidra.program.model.listing.Program;
-import ghidra.program.model.mem.*;
-import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.program.model.mem.MemoryBufferImpl;
 
 /**
  * Generate instances of DwarfEHDecoder suitable for various pointer-encodings.
@@ -38,7 +37,7 @@ public class DwarfDecoderFactory {
 	/**
 	 * Get the appropriate decoder for the given 8-bit mode; mode is parsed into
 	 * decode format, application mode, and indirection flag.
-	 * @see #getDecoder(DwarfEHDataDecodeFormat, DwarfEHDataApplicationMode, boolean)
+	 * @see #createDecoder(DwarfEHDataDecodeFormat, DwarfEHDataApplicationMode, boolean)
 	 * @param mode a byte that indicates an encoding
 	 * @return the decoder for the indicated mode of encoding
 	 */
@@ -71,7 +70,7 @@ public class DwarfDecoderFactory {
 
 	private static DwarfEHDecoder createDecoder(DwarfEHDataDecodeFormat style,
 			DwarfEHDataApplicationMode mod, boolean isIndirect) {
-		switch (style) {
+		switch (Objects.requireNonNullElse(style, DwarfEHDataDecodeFormat.DW_EH_PE_omit)) {
 			case DW_EH_PE_absptr:
 				return new DW_EH_PE_absptr_Decoder(mod, isIndirect);
 			case DW_EH_PE_uleb128:
@@ -209,7 +208,7 @@ public class DwarfDecoderFactory {
 
 		@Override
 		public DataType getDataType(Program program) {
-			return new VoidDataType();
+			return VoidDataType.dataType;
 		}
 	}
 
@@ -234,25 +233,15 @@ public class DwarfDecoderFactory {
 			Program program = context.getProgram();
 			Address addr = context.getAddress();
 
-			MemBuffer buf = new DumbMemBufferImpl(program.getMemory(), addr);
-			UnsignedLeb128DataType uleb = UnsignedLeb128DataType.dataType;
-
-			int numAvailBytes = uleb.getLength(buf, -1);
-
-			Scalar scalar = (Scalar) uleb.getValue(buf, uleb.getDefaultSettings(), numAvailBytes);
-			long offset = scalar.getUnsignedValue();
-			int readLen = uleb.getLength(buf, numAvailBytes);
-
-			context.setDecodedValue(offset, readLen);
-
-			return offset;
+			LEB128Info uleb128 = GccAnalysisUtils.readULEB128Info(program, addr);
+			context.setDecodedValue(uleb128.asLong(), uleb128.getLength());
+			return uleb128.asLong();
 		}
 
 		@Override
 		public DataType getDataType(Program program) {
-			return ULEB_DATA_TYPE;
+			return UnsignedLeb128DataType.dataType;
 		}
-
 	}
 
 	static final class DW_EH_PE_udata2_Decoder extends AbstractUnsignedDwarfEHDecoder {
@@ -381,7 +370,7 @@ public class DwarfDecoderFactory {
 
 		@Override
 		public DataType getDataType(Program program) {
-			return new VoidDataType();
+			return VoidDataType.dataType;
 		}
 	}
 
@@ -406,23 +395,15 @@ public class DwarfDecoderFactory {
 			Program program = context.getProgram();
 			Address addr = context.getAddress();
 
-			MemBuffer buf = new DumbMemBufferImpl(program.getMemory(), addr);
-			SignedLeb128DataType sleb = SignedLeb128DataType.dataType;
+			LEB128Info sleb128 = GccAnalysisUtils.readSLEB128Info(program, addr);
+			context.setDecodedValue(sleb128.asLong(), sleb128.getLength());
 
-			int numAvailBytes = sleb.getLength(buf, -1);
-
-			Scalar scalar = (Scalar) sleb.getValue(buf, sleb.getDefaultSettings(), numAvailBytes);
-			long offset = scalar.getSignedValue();
-			int readLen = sleb.getLength(buf, numAvailBytes);
-
-			context.setDecodedValue(offset, readLen);
-
-			return offset;
+			return sleb128.asLong();
 		}
 
 		@Override
 		public DataType getDataType(Program program) {
-			return SLEB_DATA_TYPE;
+			return SignedLeb128DataType.dataType;
 		}
 	}
 

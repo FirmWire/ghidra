@@ -15,16 +15,16 @@
  */
 package ghidra.app.plugin.core.function;
 
-import java.awt.Color;
 import java.math.BigInteger;
 
 import docking.widgets.fieldpanel.field.*;
 import docking.widgets.fieldpanel.support.FieldLocation;
+import generic.theme.GColor;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.app.cmd.function.CallDepthChangeInfo;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
 import ghidra.app.util.viewer.field.*;
 import ghidra.app.util.viewer.format.FieldFormatModel;
-import ghidra.app.util.viewer.options.OptionsGui;
 import ghidra.app.util.viewer.proxy.ProxyObj;
 import ghidra.framework.options.Options;
 import ghidra.framework.options.ToolOptions;
@@ -35,36 +35,27 @@ import ghidra.program.util.StackDepthFieldLocation;
 
 public class StackDepthFieldFactory extends FieldFactory {
 	public static final String FIELD_NAME = "Stack Depth";
+	public static final GColor COLOR = new GColor("color.fg.listing.stack.depth");
 	private Address lastEntry = null;
 	private CallDepthChangeInfo depth = null;
 	private long lastModNumber = -1;
 
-	/**
-	 * 
-	 */
 	public StackDepthFieldFactory() {
 		super(FIELD_NAME);
-		// TODO Auto-generated constructor stub
 	}
 
-	private StackDepthFieldFactory(FieldFormatModel model, HighlightProvider hsProvider,
+	private StackDepthFieldFactory(FieldFormatModel model, ListingHighlightProvider hsProvider,
 			Options displayOptions, Options fieldOptions) {
 		super(FIELD_NAME, model, hsProvider, displayOptions, fieldOptions);
-		color = displayOptions.getColor(OptionsGui.BYTES.getColorOptionName(),
-			OptionsGui.BYTES.getDefaultColor());
-
 	}
 
 	@Override
-	public FieldFactory newInstance(FieldFormatModel newModel, HighlightProvider highlightProvider,
-			ToolOptions displayOptions, ToolOptions fieldOptions) {
-		return new StackDepthFieldFactory(newModel, highlightProvider, displayOptions,
+	public FieldFactory newInstance(FieldFormatModel newModel, ListingHighlightProvider highlightProvider,
+			ToolOptions toolDisplayOptions, ToolOptions fieldOptions) {
+		return new StackDepthFieldFactory(newModel, highlightProvider, toolDisplayOptions,
 			fieldOptions);
 	}
 
-	/**
-	 * @see ghidra.app.util.viewer.field.FieldFactory#getField(ProxyObj, int)
-	 */
 	@Override
 	public ListingField getField(ProxyObj<?> proxy, int varWidth) {
 		Object obj = proxy.getObject();
@@ -89,19 +80,19 @@ public class StackDepthFieldFactory extends FieldFactory {
 		//Register stackReg = cu.getProgram().getCompilerSpec().getStackPointer();
 		int depthChange = depth.getDepth(cu.getMinAddress());
 
-		String depthString = getDepthString(depthChange);
+		String depthString = getDepthString(depthChange, cu.isInDelaySlot());
 
 		// This can be used to display the value of any register symbolically flowing over the program.
 		// depthString = depth.getRegValueRepresentation(cu.getMinAddress(), cu.getProgram().getRegister("ESP"));
 
-		AttributedString as = new AttributedString(depthString, Color.BLUE, getMetrics());
+		AttributedString as = new AttributedString(depthString, COLOR, getMetrics());
 
 		Integer overrideDepth =
 			CallDepthChangeInfo.getStackDepthChange(cu.getProgram(), cu.getMinAddress());
 		if (overrideDepth != null) {
 			String grows = (func.getStackFrame().growsNegative() ? " - " : " + ");
 			depthString = depthString + grows + Integer.toString(overrideDepth, 16);
-			as = new AttributedString(depthString, Color.RED, getMetrics());
+			as = new AttributedString(depthString, Colors.ERROR, getMetrics());
 		}
 
 		FieldElement text = new TextFieldElement(as, 0, 0);
@@ -109,12 +100,13 @@ public class StackDepthFieldFactory extends FieldFactory {
 			width, hlProvider);
 	}
 
-	/**
-	 * @param depthChange
-	 * @return
-	 */
-	private String getDepthString(int depthChange) {
+	private String getDepthString(int depthChange, boolean isInDelaySlot) {
+		if (isInDelaySlot) {
+			return ""; // if in delay slot, stack changes will be on main instruction
+		}
+
 		String stringDepth = "- ? -";
+
 		if (depthChange != Function.UNKNOWN_STACK_DEPTH_CHANGE &&
 			depthChange != Function.INVALID_STACK_DEPTH_CHANGE) {
 			if (depthChange > 0) {
@@ -129,6 +121,7 @@ public class StackDepthFieldFactory extends FieldFactory {
 				stringDepth = filler.substring(len) + stringDepth;
 			}
 		}
+
 		return stringDepth;
 	}
 
@@ -170,5 +163,4 @@ public class StackDepthFieldFactory extends FieldFactory {
 		}
 		return (category == FieldFormatModel.INSTRUCTION_OR_DATA);
 	}
-
 }

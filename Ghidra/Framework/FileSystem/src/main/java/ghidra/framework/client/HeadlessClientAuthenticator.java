@@ -17,10 +17,12 @@ package ghidra.framework.client;
 
 import java.awt.Component;
 import java.io.*;
-import java.net.Authenticator;
-import java.net.PasswordAuthentication;
+import java.net.*;
+import java.security.InvalidKeyException;
 
 import javax.security.auth.callback.*;
+
+import org.apache.commons.lang3.StringUtils;
 
 import ghidra.framework.remote.AnonymousCallback;
 import ghidra.framework.remote.SSHSignatureCallback;
@@ -38,18 +40,37 @@ public class HeadlessClientAuthenticator implements ClientAuthenticator {
 
 	private static Object sshPrivateKey;
 	private static String userID = ClientUtil.getUserName(); // default username
-	private static boolean passwordPromptAlowed;
+	private static boolean passwordPromptAllowed;
 
 	private Authenticator authenticator = new Authenticator() {
 		@Override
 		protected PasswordAuthentication getPasswordAuthentication() {
 			Msg.debug(this, "PasswordAuthentication requested for " + getRequestingURL());
+			String usage = null;
 			String prompt = getRequestingPrompt();
+			if ("security".equals(prompt)) {
+				prompt = null; // squash generic "security" prompt
+			}
+			URL requestingURL = getRequestingURL();
+			if (requestingURL != null) {
+				URL minimalURL = null;
+				try {
+					minimalURL = new URL(requestingURL, "/");
+				}
+				catch (MalformedURLException e) {
+					// ignore
+				}
+				usage = "Access password requested for " +
+					(minimalURL != null ? minimalURL.toExternalForm()
+							: requestingURL.getAuthority());
+				prompt = "Password:";
+			}
 			if (prompt == null) {
+				// Assume Ghidra Server access
 				String host = getRequestingHost();
 				prompt = (host != null ? (host + " ") : "") + "(" + userID + ") Password:";
 			}
-			return new PasswordAuthentication(userID, getPassword(null, prompt));
+			return new PasswordAuthentication(userID, getPassword(usage, prompt));
 		}
 	};
 
@@ -74,7 +95,7 @@ public class HeadlessClientAuthenticator implements ClientAuthenticator {
 	 */
 	public static void installHeadlessClientAuthenticator(String username, String keystorePath,
 			boolean allowPasswordPrompt) throws IOException {
-		passwordPromptAlowed = allowPasswordPrompt;
+		passwordPromptAllowed = allowPasswordPrompt;
 		if (username != null) {
 			userID = username;
 		}
@@ -86,29 +107,23 @@ public class HeadlessClientAuthenticator implements ClientAuthenticator {
 		ClientUtil.setClientAuthenticator(authenticator);
 
 		if (keystorePath != null) {
-			File f = new File(keystorePath);
-			if (!f.exists()) {
+			File keyfile = new File(keystorePath);
+			if (!keyfile.exists()) {
 				// If keystorePath file not found - try accessing as SSH key resource stream
 				// InputStream keyIn = ResourceManager.getResourceAsStream(keystorePath);
-				InputStream keyIn = keystorePath.getClass().getResourceAsStream(keystorePath);
-				if (keyIn != null) {
-					try {
-						sshPrivateKey = SSHKeyManager.getSSHPrivateKey(keyIn);
-						Msg.info(HeadlessClientAuthenticator.class,
-							"Loaded SSH key: " + keystorePath);
-						return;
-					}
-					catch (Exception e) {
-						Msg.error(HeadlessClientAuthenticator.class,
-							"Failed to open keystore for SSH use: " + keystorePath, e);
-						throw new IOException("Failed to parse keystore: " + keystorePath);
-					}
-					finally {
+				try (InputStream keyIn =
+					HeadlessClientAuthenticator.class.getResourceAsStream(keystorePath)) {
+					if (keyIn != null) {
 						try {
-							keyIn.close();
+							sshPrivateKey = SSHKeyManager.getSSHPrivateKey(keyIn);
+							Msg.info(HeadlessClientAuthenticator.class,
+								"Loaded SSH key: " + keystorePath);
+							return;
 						}
-						catch (IOException e) {
-							// ignore
+						catch (Exception e) {
+							Msg.error(HeadlessClientAuthenticator.class,
+								"Failed to open keystore for SSH use: " + keystorePath, e);
+							throw new IOException("Failed to parse keystore: " + keystorePath);
 						}
 					}
 				}
@@ -116,23 +131,26 @@ public class HeadlessClientAuthenticator implements ClientAuthenticator {
 				throw new FileNotFoundException("Keystore not found: " + keystorePath);
 			}
 
+			boolean success = false;
 			try {
-				sshPrivateKey = SSHKeyManager.getSSHPrivateKey(new File(keystorePath));
+				sshPrivateKey = SSHKeyManager.getSSHPrivateKey(keyfile);
+				success = true;
 				Msg.info(HeadlessClientAuthenticator.class, "Loaded SSH key: " + keystorePath);
 			}
-			catch (IOException e) {
-				try {
-					// try keystore as PKI keystore if failed as SSH keystore
-					ApplicationKeyManagerFactory.setKeyStore(keystorePath, false);
-					Msg.info(HeadlessClientAuthenticator.class, "Loaded PKI key: " + keystorePath);
+			catch (InvalidKeyException e) { // keyfile is not a valid SSH private key format
+				// does not appear to be an SSH private key - try PKI keystore parse
+				if (ApplicationKeyManagerFactory.setKeyStore(keystorePath, false)) {
+					success = true;
+					Msg.info(HeadlessClientAuthenticator.class,
+						"Loaded PKI keystore: " + keystorePath);
 				}
-				catch (IOException e1) {
-					Msg.error(HeadlessClientAuthenticator.class,
-						"Failed to open keystore for PKI use: " + keystorePath, e1);
-					Msg.error(HeadlessClientAuthenticator.class,
-						"Failed to open keystore for SSH use: " + keystorePath, e);
-					throw new IOException("Failed to parse keystore: " + keystorePath);
-				}
+			}
+			catch (IOException e) { // SSH key parse failure only
+				Msg.error(HeadlessClientAuthenticator.class,
+					"Failed to open keystore for SSH use: " + keystorePath, e);
+			}
+			if (!success) {
+				throw new IOException("Failed to parse keystore: " + keystorePath);
 			}
 		}
 		else {
@@ -142,7 +160,7 @@ public class HeadlessClientAuthenticator implements ClientAuthenticator {
 
 	private char[] getPassword(String usage, String prompt) {
 
-		if (!passwordPromptAlowed) {
+		if (!passwordPromptAllowed) {
 			Msg.warn(this, "Headless client not configured to supply required password");
 			return BADPASSWORD;
 		}
@@ -210,7 +228,7 @@ public class HeadlessClientAuthenticator implements ClientAuthenticator {
 	public boolean processPasswordCallbacks(String title, String serverType, String serverName,
 			NameCallback nameCb, PasswordCallback passCb, ChoiceCallback choiceCb,
 			AnonymousCallback anonymousCb, String loginError) {
-		if (anonymousCb != null && !passwordPromptAlowed) {
+		if (anonymousCb != null && !passwordPromptAllowed) {
 			// Assume that login error will not occur with anonymous login
 			anonymousCb.setAnonymousAccessRequested(true);
 			return true;
@@ -240,7 +258,7 @@ public class HeadlessClientAuthenticator implements ClientAuthenticator {
 	@Override
 	public char[] getKeyStorePassword(String keystorePath, boolean passwordError) {
 		if (passwordError) {
-			if (passwordPromptAlowed) {
+			if (passwordPromptAllowed) {
 				Msg.error(this, "Incorrect keystore password specified: " + keystorePath);
 			}
 			else {

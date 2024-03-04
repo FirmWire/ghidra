@@ -139,6 +139,10 @@ public class SBData {
     lldbJNI.SBData_SetData(swigCPtr, this, SBError.getCPtr(error), error, SWIGTYPE_p_void.getCPtr(buf), size, endian.swigValue(), addr_size);
   }
 
+  public void SetDataWithOwnership(SBError error, SWIGTYPE_p_void buf, long size, ByteOrder endian, short addr_size) {
+    lldbJNI.SBData_SetDataWithOwnership(swigCPtr, this, SBError.getCPtr(error), error, SWIGTYPE_p_void.getCPtr(buf), size, endian.swigValue(), addr_size);
+  }
+
   public boolean Append(SBData rhs) {
     return lldbJNI.SBData_Append(swigCPtr, this, SBData.getCPtr(rhs), rhs);
   }
@@ -191,8 +195,8 @@ public class SBData {
     return lldbJNI.SBData_SetDataFromDoubleArray(swigCPtr, this, SWIGTYPE_p_double.getCPtr(array), array_len);
   }
 
-  public String __str__() {
-    return lldbJNI.SBData___str__(swigCPtr, this);
+  public String __repr__() {
+    return lldbJNI.SBData___repr__(swigCPtr, this);
   }
 
 }

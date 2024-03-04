@@ -16,8 +16,7 @@
 package ghidra.feature.vt.db;
 
 import static ghidra.feature.vt.db.VTTestUtils.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -33,17 +32,10 @@ import ghidra.feature.vt.api.util.VersionTrackingApplyException;
 import ghidra.program.model.address.Address;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
-import ghidra.util.task.TaskMonitorAdapter;
-import mockit.Mocked;
-import mockit.Verifications;
 
 public class VTAssociationDBTest extends VTBaseTestCase {
 
 	private int testTransactionID;
-
-	public VTAssociationDBTest() {
-		super();
-	}
 
 	@Override
 	@Before
@@ -57,7 +49,6 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	public void tearDown() throws Exception {
 		db.endTransaction(testTransactionID, false);
 		db.release(VTTestUtils.class);
-
 	}
 
 	@Test
@@ -94,15 +85,15 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 
 		//
 		// now test remove
-		// 
+		//
 
-		// just doing an unapply will not remove the DB, since we have put in a custom, 
+		// just doing an unapply will not remove the DB, since we have put in a custom,
 		// USER_DEFINED address above...
 		markupItemFromDB.unapply();
 		markupItems = getStoredMarkupItems(association);
 		assertEquals(1, markupItems.size());
 
-		// ...now that we have unapplied, check that clearing the address will trigger a 
+		// ...now that we have unapplied, check that clearing the address will trigger a
 		// DB removal
 		markupItem.setDestinationAddress(null);
 		markupItems = getStoredMarkupItems(association);
@@ -143,16 +134,16 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 		Object markupItemManager = getInstanceField("markupManager", association);
 		return (Collection<VTMarkupItem>) invokeInstanceMethod("getStoredMarkupItems",
 			markupItemManager, new Class[] { TaskMonitor.class },
-			new Object[] { TaskMonitorAdapter.DUMMY_MONITOR });
+			new Object[] { TaskMonitor.DUMMY });
 	}
 
 	@Test
 	public void testAssociationLocking() {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
-		// To create our locking scenario we will create associations that are related and 
+		// To create our locking scenario we will create associations that are related and
 		// unrelated.  This allows us to test that competing associations will get locked-out
 		// when any related associations are applied.  Also, unrelated associations should not
 		// be locked-out.
@@ -184,7 +175,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 
 		//
 		// test no locked associations when no committed markup items
-		// 
+		//
 		assertEquals(VTAssociationStatus.AVAILABLE, mainAssociation.getStatus());
 		assertEquals(VTAssociationStatus.AVAILABLE, relatedAssociation.getStatus());
 		assertEquals(VTAssociationStatus.AVAILABLE, unrelatedAssociation.getStatus());
@@ -193,10 +184,10 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 
 		Address destinationAddress = addr();
 
-		// 
+		//
 		// commit an item and make sure the association is locked and competing associations are
 		// locked-out
-		// 
+		//
 		mainMarkupItem.setDestinationAddress(destinationAddress);
 		try {
 
@@ -211,9 +202,9 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 		assertEquals(VTAssociationStatus.BLOCKED, conflict1Association.getStatus());
 		assertEquals(VTAssociationStatus.BLOCKED, conflict2Association.getStatus());
 
-		// 
+		//
 		// verify we cannot commit from a competing association (others are locked-out)
-		// 
+		//
 		VTMarkupItem unappliedConflictItem = conflict1MarkupItem;
 		try {
 			unappliedConflictItem.setDestinationAddress(destinationAddress);
@@ -244,7 +235,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testAddNewCompetingAssociationIsLockedOut() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// To create our locking scenario we will create associations that are competing.  First
@@ -283,7 +274,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testAddNewRelatedAssociationIsAccepted() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// To create our locking scenario we will create associations that are related.  First
@@ -320,7 +311,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testGetRelatedAssociations() {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// Exercise the lookup routines for finding related matches
@@ -380,7 +371,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testSetAcceptedFailsWhenNotAccepted() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// To create our locking scenario we will create associations that are related.  First
@@ -427,7 +418,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testSetAssocaiationAccepted_WithNoCompetingAssociations() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// The accepted association
@@ -444,7 +435,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testSetAssocaiationAccepted_WithCompetingAssociations() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// The accepted association
@@ -471,7 +462,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testClearAccepted_WithNoCompetingAssociations() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// The accepted association
@@ -491,7 +482,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testClearAccepted_WithCompetingAssociations() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// The accepted association
@@ -522,7 +513,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testClearAcceptedFailsWithAppliedMatches() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		//
 		// The accepted association
@@ -570,7 +561,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testAcceptingAnEmptyAssociationSetsTheFullyAppliedStatus() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		VTMatchInfo mainMatchInfo = createRandomMatch(db);
 		VTMatch mainMatch = addMatch(matchSet, mainMatchInfo);
@@ -597,8 +588,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 		createRandomMarkupItemStub(match, addr());// second item
 
 		VTAssociation association = match.getAssociation();
-		Collection<VTMarkupItem> items =
-			association.getMarkupItems(TaskMonitorAdapter.DUMMY_MONITOR);
+		Collection<VTMarkupItem> items = association.getMarkupItems(TaskMonitor.DUMMY);
 		assertEquals("Did not find multiple markup items as expected", 2, items.size());
 		VTMarkupItemApplyActionType applyAction = createRandomSuccessfulApplyAction(markupItem);
 
@@ -637,8 +627,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 		VTMarkupItem secondAppliedItem = createRandomMarkupItemStub(match, addr());// second item
 
 		VTAssociation association = match.getAssociation();
-		Collection<VTMarkupItem> items =
-			association.getMarkupItems(TaskMonitorAdapter.DUMMY_MONITOR);
+		Collection<VTMarkupItem> items = association.getMarkupItems(TaskMonitor.DUMMY);
 		assertEquals("Did not find multiple markup items as expected", 2, items.size());
 		VTMarkupItemApplyActionType applyAction = createRandomSuccessfulApplyAction(markupItem);
 
@@ -690,7 +679,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testVotes() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		VTMatchInfo mainMatchInfo = createRandomMatch(db);
 		VTMatch mainMatch = addMatch(matchSet, mainMatchInfo);
@@ -706,30 +695,27 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	}
 
 	@Test
-	public void testAssociationHook(@Mocked final AssociationHook mockHook) throws Exception {
+	public void testAssociationHook() throws Exception {
+
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 		VTMatchInfo mainMatchInfo = createRandomMatch(db);
 		VTMatch mainMatch = addMatch(matchSet, mainMatchInfo);
-		final VTAssociation association = mainMatch.getAssociation();
+		SpyAssociationHook spyHook = new SpyAssociationHook();
 
-		db.addAssociationHook(mockHook);
+		db.addAssociationHook(spyHook);
 		mainMatch.getAssociation().setAccepted();
 		mainMatch.getAssociation().clearStatus();
 
-		new Verifications() {
-			{
-				mockHook.associationAccepted(association);
-				mockHook.associationCleared(association);
-			}
-		};
+		assertTrue(spyHook.acceptedCalled);
+		assertTrue(spyHook.clearedCalled);
 	}
 
 	@Test
 	public void testRejectingAssociation() throws Exception {
 		// reject
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		VTMatchInfo mainMatchInfo = createRandomMatch(db);
 		VTMatch mainMatch = addMatch(matchSet, mainMatchInfo);
@@ -748,7 +734,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	@Test
 	public void testRejectingAssociation_CannotApplyMarkupItems() throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		VTMatchInfo mainMatchInfo = createRandomMatch(db);
 		VTMatch mainMatch = addMatch(matchSet, mainMatchInfo);
@@ -756,8 +742,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 		assertEquals(VTAssociationStatus.AVAILABLE, mainAssociation.getStatus());
 
 		VTMarkupItem markupItem = VTTestUtils.createRandomMarkupItemStub(mainMatch);
-		Collection<VTMarkupItem> items =
-			mainAssociation.getMarkupItems(TaskMonitorAdapter.DUMMY_MONITOR);
+		Collection<VTMarkupItem> items = mainAssociation.getMarkupItems(TaskMonitor.DUMMY);
 		assertEquals(1, items.size());
 
 		mainAssociation.setRejected();
@@ -776,7 +761,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	public void testRejectingAssocation_CannotRejectAssociationWithAppliedMarkupItems()
 			throws Exception {
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 
 		VTMatchInfo mainMatchInfo = createRandomMatch(db);
 		VTMatch mainMatch = addMatch(matchSet, mainMatchInfo);
@@ -784,8 +769,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 		assertEquals(VTAssociationStatus.AVAILABLE, mainAssociation.getStatus());
 
 		VTMarkupItem markupItem = VTTestUtils.createRandomMarkupItemStub(mainMatch);
-		Collection<VTMarkupItem> items =
-			mainAssociation.getMarkupItems(TaskMonitorAdapter.DUMMY_MONITOR);
+		Collection<VTMarkupItem> items = mainAssociation.getMarkupItems(TaskMonitor.DUMMY);
 		assertEquals(1, items.size());
 
 		mainAssociation.setAccepted();
@@ -831,7 +815,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 		//                 implementation for a test dummy.
 		VTAssociationDB associationDB = (VTAssociationDB) newMatch.getAssociation();
 		setInstanceField("markupManager", associationDB,
-			new MarkupItemManagerImplDummy(associationDB));
+			new DummyMarkupItemManagerImpl(associationDB));
 
 		return newMatch;
 	}
@@ -839,7 +823,7 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 	private VTMatch createMatchSetWithOneMatch() {
 		VTMatchInfo match = createRandomMatch(db);
 		VTMatchSet matchSet = db.createMatchSet(
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 		return addMatch(matchSet, match);
 	}
 
@@ -847,9 +831,9 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 // Inner Classes
 //==================================================================================================
 
-	private class MarkupItemManagerImplDummy extends MarkupItemManagerImpl {
+	private class DummyMarkupItemManagerImpl extends MarkupItemManagerImpl {
 
-		MarkupItemManagerImplDummy(VTAssociationDB associationDB) {
+		DummyMarkupItemManagerImpl(VTAssociationDB associationDB) {
 			super(associationDB);
 		}
 
@@ -858,5 +842,27 @@ public class VTAssociationDBTest extends VTBaseTestCase {
 				throws CancelledException {
 			return Collections.emptyList();
 		}
+	}
+
+	private class SpyAssociationHook implements AssociationHook {
+
+		boolean acceptedCalled;
+		boolean clearedCalled;
+
+		@Override
+		public void associationAccepted(VTAssociation association) {
+			acceptedCalled = true;
+		}
+
+		@Override
+		public void associationCleared(VTAssociation association) {
+			clearedCalled = true;
+		}
+
+		@Override
+		public void markupItemStatusChanged(VTMarkupItem markupItem) {
+			// stub
+		}
+
 	}
 }

@@ -95,7 +95,7 @@ public class AddEditDialoglTest extends AbstractGhidraHeadedIntegrationTest {
 
 	@After
 	public void tearDown() throws Exception {
-		dialog.close();
+		close(dialog);
 		env.dispose();
 	}
 
@@ -355,6 +355,34 @@ public class AddEditDialoglTest extends AbstractGhidraHeadedIntegrationTest {
 		editLabel(s);
 		assertEquals("entry", getText());
 		setText("bob");
+		pressOk();
+		program.flushEvents();
+		waitForSwing();
+		assertEquals("bob", function.getName());
+		assertTrue(function.getSymbol().isPrimary());
+	}
+
+	@Test
+	public void testRenameFunction_Trim() throws Exception {
+
+		Symbol s = getUniqueSymbol(program, "entry", null);
+		Function function = program.getFunctionManager().getFunctionAt(s.getAddress());
+		if (function == null) {
+			tool.execute(new CreateFunctionCmd(s.getAddress()), program);
+			program.flushEvents();
+			waitForSwing();
+			function = program.getFunctionManager().getFunctionAt(s.getAddress());
+			s = getUniqueSymbol(program, "entry", null);
+		}
+		// add another label at this address
+		AddLabelCmd cmd = new AddLabelCmd(addr(0x01006420), "fred", SourceType.USER_DEFINED);
+		tool.execute(cmd, program);
+
+		// now attempt to rename the entry label
+		editLabel(s);
+		assertEquals("entry", getText());
+		String newText = "  bob  ";
+		setText(newText);
 		pressOk();
 		program.flushEvents();
 		waitForSwing();
@@ -752,6 +780,32 @@ public class AddEditDialoglTest extends AbstractGhidraHeadedIntegrationTest {
 		Namespace parentNs = newFunction.getParentNamespace();
 		assertFalse(parentNs instanceof Function);
 		assertEquals(nsName, parentNs.getName());
+	}
+
+	@Test
+	public void testSetNamespace_NamespaceWithoutFunctionName() throws Exception {
+
+		//
+		// Test that we can cannot create a new namespace and clear a symbol name using this form:
+		// "Namespace::"
+		//
+		// A blank name is a signal to reset to a default name, but we do not currently support
+		// changing a namespace and resetting the name in the same operation.
+		//
+
+		String functionName = "FUN_010065f0";
+		Symbol functionSymbol = getSymbol(functionName);
+		Namespace originalNamespace = functionSymbol.getParentNamespace();
+		editLabel(functionSymbol);
+		String nsName = "NewNamespace";
+		setText(nsName + Namespace.DELIMITER);
+		pressOk();
+		assertTrue("Rename unsuccesful", dialog.isShowing());
+		assertStatusText("Name cannot be blank while changing namespace");
+
+		Symbol newFunction = functionSymbol;
+		Namespace parentNs = newFunction.getParentNamespace();
+		assertSame(originalNamespace, parentNs);
 	}
 
 //==================================================================================================

@@ -18,9 +18,9 @@ package ghidra.app.plugin.core.script;
 import static org.junit.Assert.*;
 
 import java.io.*;
+import java.nio.file.Path;
 
-import org.apache.logging.log4j.*;
-import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.Level;
 import org.junit.Test;
 
 import docking.test.AbstractDockingTest;
@@ -37,7 +37,6 @@ import utilities.util.FileUtilities;
 public class GhidraScriptMgrPlugin2Test extends AbstractGhidraScriptMgrPluginTest {
 
 	public GhidraScriptMgrPlugin2Test() {
-		super();
 	}
 
 	@Test
@@ -149,8 +148,7 @@ public class GhidraScriptMgrPlugin2Test extends AbstractGhidraScriptMgrPluginTes
 		assertTrue("Unable to delete class files from the user scripts directory", isEmpty);
 
 		// remove all class files from the user script bin dir
-		File userScriptsBinDir =
-			GhidraSourceBundle.getBindirFromScriptFile(new ResourceFile(newScriptFile)).toFile();
+		File userScriptsBinDir = getBinDirFromScriptFile(new ResourceFile(newScriptFile)).toFile();
 		File[] userScriptBinDirFiles;
 		if (userScriptsBinDir.exists()) {
 			userScriptBinDirFiles = userScriptsBinDir.listFiles(classFileFilter);
@@ -194,8 +192,7 @@ public class GhidraScriptMgrPlugin2Test extends AbstractGhidraScriptMgrPluginTes
 		waitForScriptCompletion(scriptID, 20000);
 
 		// verify that the generated class file is placed in the default scripting home/bin
-		File userScriptsBinDir =
-			GhidraSourceBundle.getBindirFromScriptFile(systemScriptFile).toFile();
+		File userScriptsBinDir = getBinDirFromScriptFile(systemScriptFile).toFile();
 		String className = scriptName.replace(".java", ".class");
 		File expectedClassFile = new File(userScriptsBinDir, className);
 
@@ -232,7 +229,7 @@ public class GhidraScriptMgrPlugin2Test extends AbstractGhidraScriptMgrPluginTes
 			waitForScriptCompletion(scriptID, 20000);
 
 			// verify a bin dir was created and that the class file is in it
-			File binDir = GhidraSourceBundle.getBindirFromScriptFile(newScriptFile).toFile();
+			File binDir = getBinDirFromScriptFile(newScriptFile).toFile();
 			assertTrue("bin output dir not created", binDir.exists());
 
 			File scriptClassFile = new File(binDir, rawScriptName + ".class");
@@ -250,8 +247,7 @@ public class GhidraScriptMgrPlugin2Test extends AbstractGhidraScriptMgrPluginTes
 	public void testRenameWithTreeFilter() throws Exception {
 
 		// debug
-		Logger logger = LogManager.getLogger(SelectionManager.class);
-		Configurator.setLevel(logger.getName(), Level.TRACE);
+		setLogLevel(SelectionManager.class, Level.TRACE);
 
 		pressNewButton();
 
@@ -493,4 +489,11 @@ public class GhidraScriptMgrPlugin2Test extends AbstractGhidraScriptMgrPluginTes
 		assertContainsText("The field of the script still has state--the script was not recreated",
 			"*2*", output);
 	}
+
+	private Path getBinDirFromScriptFile(ResourceFile sourceFile) {
+		ResourceFile tmpSourceDir = sourceFile.getParentFile();
+		String tmpSymbolicName = GhidraSourceBundle.sourceDirHash(tmpSourceDir);
+		return GhidraSourceBundle.getCompiledBundlesDir().resolve(tmpSymbolicName);
+	}
+
 }

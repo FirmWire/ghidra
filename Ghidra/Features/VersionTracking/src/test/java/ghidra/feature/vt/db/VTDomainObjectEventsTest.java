@@ -15,8 +15,8 @@
  */
 package ghidra.feature.vt.db;
 
-import static ghidra.feature.vt.db.VTTestUtils.createProgramCorrelator;
-import static org.junit.Assert.assertEquals;
+import static ghidra.feature.vt.db.VTTestUtils.*;
+import static org.junit.Assert.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,14 +25,12 @@ import org.junit.*;
 
 import generic.timer.GhidraTimer;
 import ghidra.feature.vt.api.db.VTMatchTagDB;
-import ghidra.feature.vt.api.impl.VTChangeManager;
+import ghidra.feature.vt.api.impl.VTEvent;
 import ghidra.feature.vt.api.main.*;
 import ghidra.feature.vt.api.util.VTAssociationStatusException;
 import ghidra.framework.model.*;
 import ghidra.program.model.address.Address;
 import ghidra.util.Msg;
-import mockit.Mock;
-import mockit.MockUp;
 
 public class VTDomainObjectEventsTest extends VTBaseTestCase {
 
@@ -52,10 +50,6 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		}
 	};
 
-	public VTDomainObjectEventsTest() {
-		super();
-	}
-
 	@Override
 	@Before
 	public void setUp() throws Exception {
@@ -71,19 +65,14 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 	}
 
 	private <T extends GhidraTimer> void disableDocsTimer() {
-		// The DomainObjectChangeSupport class uses a timer.  In SOP, the timer fires its 
+		// The DomainObjectChangeSupport class uses a timer.  In SOP, the timer fires its
 		// events on the Swing thread.
 		// We are in a headless environment.  Resultingly, we cannot use the Swing thread to
-		// synchronize events when we flush them.  Here we mock the timer, preventing it 
+		// synchronize events when we flush them.  Here we mock the timer, preventing it
 		// from starting. Without the timer, we can rely on our flushing of the queued events.
 
-		new MockUp<T>() {
-			@Mock
-			public void start() {
-				// never let the timer start
-			}
-		};
-
+		// TODO Not sure we need to disable this timer any more.  Leaving this comment here for
+		// a while in case we get sporadic test failures
 	}
 
 	@Override
@@ -99,7 +88,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		createMatchSet();
 
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_MATCH_SET_ADDED, events.get(0).getEventType());
+		assertEquals(VTEvent.MATCH_SET_ADDED, events.get(0).getEventType());
 	}
 
 	@Test
@@ -111,8 +100,8 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		matchSet.addMatch(match);
 
 		assertEventCount(2);
-		assertEquals(VTChangeManager.DOCR_VT_ASSOCIATION_ADDED, events.get(0).getEventType());
-		assertEquals(VTChangeManager.DOCR_VT_MATCH_ADDED, events.get(1).getEventType());
+		assertEquals(VTEvent.ASSOCIATION_ADDED, events.get(0).getEventType());
+		assertEquals(VTEvent.MATCH_ADDED, events.get(1).getEventType());
 	}
 
 	@Test
@@ -127,7 +116,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		matchSet.addMatch(matchInfo);
 
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_MATCH_ADDED, events.get(0).getEventType());
+		assertEquals(VTEvent.MATCH_ADDED, events.get(0).getEventType());
 	}
 
 	@Test
@@ -141,8 +130,8 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		manualMatchSet.removeMatch(match);
 
 		assertEventCount(2);
-		assertEquals(VTChangeManager.DOCR_VT_ASSOCIATION_REMOVED, events.get(0).getEventType());
-		assertEquals(VTChangeManager.DOCR_VT_MATCH_DELETED, events.get(1).getEventType());
+		assertEquals(VTEvent.ASSOCIATION_REMOVED, events.get(0).getEventType());
+		assertEquals(VTEvent.MATCH_DELETED, events.get(1).getEventType());
 	}
 
 	@Test
@@ -156,8 +145,8 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		manualMatchSet.removeMatch(match);
 
 		assertEventCount(2);
-		assertEquals(VTChangeManager.DOCR_VT_ASSOCIATION_REMOVED, events.get(0).getEventType());
-		assertEquals(VTChangeManager.DOCR_VT_MATCH_DELETED, events.get(1).getEventType());
+		assertEquals(VTEvent.ASSOCIATION_REMOVED, events.get(0).getEventType());
+		assertEquals(VTEvent.MATCH_DELETED, events.get(1).getEventType());
 	}
 
 	@Test
@@ -169,8 +158,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		match.getAssociation().setRejected();
 
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_ASSOCIATION_STATUS_CHANGED,
-			events.get(0).getEventType());
+		assertEquals(VTEvent.ASSOCIATION_STATUS_CHANGED, events.get(0).getEventType());
 	}
 
 	@Test
@@ -184,8 +172,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		match.getAssociation().setAccepted();
 
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_ASSOCIATION_STATUS_CHANGED,
-			events.get(0).getEventType());
+		assertEquals(VTEvent.ASSOCIATION_STATUS_CHANGED, events.get(0).getEventType());
 	}
 
 	@Test
@@ -213,8 +200,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		assertEquals(destinationAddress, markupItem.getDestinationAddress());
 
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_MARKUP_ITEM_DESTINATION_CHANGED,
-			events.get(0).getEventType());
+		assertEquals(VTEvent.MARKUP_ITEM_DESTINATION_CHANGED, events.get(0).getEventType());
 	}
 
 	@Test
@@ -234,8 +220,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		markupItem.apply(VTMarkupItemApplyActionType.REPLACE, null);
 
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_MARKUP_ITEM_STATUS_CHANGED,
-			events.get(0).getEventType());
+		assertEquals(VTEvent.MARKUP_ITEM_STATUS_CHANGED, events.get(0).getEventType());
 	}
 
 	@Test
@@ -255,15 +240,14 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		markupItem.setConsidered(VTMarkupItemConsideredStatus.IGNORE_DONT_CARE);
 
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_MARKUP_ITEM_STATUS_CHANGED,
-			events.get(0).getEventType());
+		assertEquals(VTEvent.MARKUP_ITEM_STATUS_CHANGED, events.get(0).getEventType());
 	}
 
 	@Test
 	public void testTagAddedEvent() {
 		db.createMatchTag("TEST");
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_TAG_ADDED, events.get(0).getEventType());
+		assertEquals(VTEvent.TAG_ADDED, events.get(0).getEventType());
 	}
 
 	@Test
@@ -272,7 +256,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		clearEvents();
 		db.deleteMatchTag(tag);
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_TAG_REMOVED, events.get(0).getEventType());
+		assertEquals(VTEvent.TAG_REMOVED, events.get(0).getEventType());
 	}
 
 	@Test
@@ -285,12 +269,12 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		clearEvents();
 		match.setTag(tag);
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_MATCH_TAG_CHANGED, events.get(0).getEventType());
+		assertEquals(VTEvent.MATCH_TAG_CHANGED, events.get(0).getEventType());
 
 		clearEvents();
 		match.setTag(null);
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_MATCH_TAG_CHANGED, events.get(0).getEventType());
+		assertEquals(VTEvent.MATCH_TAG_CHANGED, events.get(0).getEventType());
 
 	}
 
@@ -302,7 +286,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 		clearEvents();
 		match.getAssociation().setVoteCount(4);
 		assertEventCount(1);
-		assertEquals(VTChangeManager.DOCR_VT_VOTE_COUNT_CHANGED, events.get(0).getEventType());
+		assertEquals(VTEvent.VOTE_COUNT_CHANGED, events.get(0).getEventType());
 	}
 
 	private void assertEventCount(int n) {
@@ -325,7 +309,7 @@ public class VTDomainObjectEventsTest extends VTBaseTestCase {
 
 	private VTMatchSet createMatchSet() {
 		VTProgramCorrelator correlator =
-			createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram());
+			createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram());
 		return db.createMatchSet(correlator);
 	}
 }

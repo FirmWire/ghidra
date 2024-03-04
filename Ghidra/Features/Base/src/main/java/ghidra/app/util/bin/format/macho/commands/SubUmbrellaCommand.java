@@ -17,7 +17,7 @@ package ghidra.app.util.bin.format.macho.commands;
 
 import java.io.IOException;
 
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
+import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.format.macho.MachConstants;
 import ghidra.app.util.bin.format.macho.MachHeader;
 import ghidra.app.util.importer.MessageLog;
@@ -29,30 +29,14 @@ import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.task.TaskMonitor;
 
 /**
- * Represents a sub_umbrella_command structure.
- * 
- * @see <a href="https://opensource.apple.com/source/xnu/xnu-4570.71.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html">mach-o/loader.h</a> 
+ * Represents a sub_umbrella_command structure 
  */
 public class SubUmbrellaCommand extends LoadCommand {
 	private LoadCommandString sub_umbrella;
 
-	static SubUmbrellaCommand createSubUmbrellaCommand(FactoryBundledWithBinaryReader reader)
-			throws IOException {
-		SubUmbrellaCommand command =
-			(SubUmbrellaCommand) reader.getFactory().create(SubUmbrellaCommand.class);
-		command.initSubUmbrellaCommand(reader);
-		return command;
-	}
-
-	/**
-	 * DO NOT USE THIS CONSTRUCTOR, USE create*(GenericFactory ...) FACTORY METHODS INSTEAD.
-	 */
-	public SubUmbrellaCommand() {
-	}
-
-	private void initSubUmbrellaCommand(FactoryBundledWithBinaryReader reader) throws IOException {
-		initLoadCommand(reader);
-		sub_umbrella = LoadCommandString.createLoadCommandString(reader, this);
+	SubUmbrellaCommand(BinaryReader reader) throws IOException {
+		super(reader);
+		sub_umbrella = new LoadCommandString(reader, this);
 	}
 
 	public LoadCommandString getSubUmbrellaFrameworkName() {
@@ -75,32 +59,18 @@ public class SubUmbrellaCommand extends LoadCommand {
 	}
 
 	@Override
-	public void markup(MachHeader header, FlatProgramAPI api, Address baseAddress, boolean isBinary,
+	public void markupRawBinary(MachHeader header, FlatProgramAPI api, Address baseAddress,
 			ProgramModule parentModule, TaskMonitor monitor, MessageLog log) {
-		updateMonitor(monitor);
-		if (isBinary) {
-			try {
-				createFragment(api, baseAddress, parentModule);
-			}
-			catch (Exception e) {
-				log.appendException(e);
-			}
+		try {
+			super.markupRawBinary(header, api, baseAddress, parentModule, monitor, log);
+
 			Address addr = baseAddress.getNewAddress(getStartIndex());
-			try {
-				api.createData(addr, toDataType());
-			}
-			catch (Exception e) {
-				log.appendMsg("Unable to create " + getCommandName() + " - " + e.getMessage());
-			}
-			try {
-				int strLen = getCommandSize() - sub_umbrella.getOffset();
-				Address strAddr = addr.add(sub_umbrella.getOffset());
-				api.createAsciiString(strAddr, strLen);
-			}
-			catch (Exception e) {
-				log.appendMsg("Unable to create load command string " + getCommandName() + " - " +
-					e.getMessage());
-			}
+			int strLen = getCommandSize() - sub_umbrella.getOffset();
+			Address strAddr = addr.add(sub_umbrella.getOffset());
+			api.createAsciiString(strAddr, strLen);
+		}
+		catch (Exception e) {
+			log.appendMsg("Unable to create " + getCommandName() + " - " + e.getMessage());
 		}
 	}
 }

@@ -18,13 +18,17 @@ package ghidra.app.plugin.core.debug.service.model.interfaces;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
-import ghidra.app.plugin.core.debug.mapping.DebuggerMemoryMapper;
 import ghidra.dbg.target.*;
+import ghidra.debug.api.model.DebuggerMemoryMapper;
 import ghidra.program.model.address.*;
 
 public interface AbstractRecorderMemory {
 
+	public void addMemory(TargetMemory memory);
+
 	public void addRegion(TargetMemoryRegion region, TargetMemory memory);
+
+	public void removeMemory(TargetMemory invalid);
 
 	public boolean removeRegion(TargetObject invalid);
 
@@ -32,9 +36,15 @@ public interface AbstractRecorderMemory {
 
 	public CompletableFuture<Void> writeMemory(Address address, byte[] data);
 
+	/**
+	 * Get accessible memory, as viewed in the trace
+	 * 
+	 * @param pred an additional predicate applied via "AND" with accessibility
+	 * @param memMapper target-to-trace mapping utility
+	 * @return the computed set
+	 */
 	public AddressSet getAccessibleMemory(Predicate<TargetMemory> pred,
 			DebuggerMemoryMapper memMapper);
 
 	public AddressRange alignAndLimitToFloor(Address targetAddress, int length);
-
 }

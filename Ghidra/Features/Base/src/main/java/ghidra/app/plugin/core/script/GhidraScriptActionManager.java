@@ -38,6 +38,7 @@ import docking.actions.KeyBindingUtils;
 import docking.tool.ToolConstants;
 import docking.widgets.table.GTable;
 import generic.jar.ResourceFile;
+import generic.theme.GIcon;
 import ghidra.app.script.GhidraScriptInfoManager;
 import ghidra.app.script.ScriptInfo;
 import ghidra.framework.Application;
@@ -45,7 +46,6 @@ import ghidra.framework.options.SaveState;
 import ghidra.util.*;
 import ghidra.util.task.*;
 import resources.Icons;
-import resources.ResourceManager;
 import utilities.util.FileUtilities;
 
 class GhidraScriptActionManager {
@@ -210,7 +210,7 @@ class GhidraScriptActionManager {
 
 	private void createActions() {
 		createScriptAction("Run", "Run Script", "Run Script",
-			ResourceManager.loadImage("images/play.png"), RESOURCE_FILE_ACTION_RUN_GROUP,
+			new GIcon("icon.plugin.scriptmanager.run"), RESOURCE_FILE_ACTION_RUN_GROUP,
 			provider::runScript);
 
 		runLastAction = new RerunLastScriptAction(RESOURCE_FILE_ACTION_RUN_GROUP);
@@ -220,33 +220,40 @@ class GhidraScriptActionManager {
 		plugin.getTool().addAction(globalRunLastAction);
 
 		createScriptAction("Edit", "Edit with basic editor", "Edit Script with basic editor",
-			ResourceManager.loadImage("images/accessories-text-editor.png"), null,
+			new GIcon("icon.plugin.scriptmanager.edit"), null,
 			provider::editScriptBuiltin);
 
 		createScriptAction("EditEclipse", "Edit with Eclipse", "Edit Script with Eclipse",
-			ResourceManager.loadImage("images/eclipse.png"), null, provider::editScriptEclipse);
+			new GIcon("icon.plugin.scriptmanager.edit.eclipse"), null, provider::editScriptEclipse);
 
 		keyBindingAction =
 			createScriptAction("Key Binding", "Assign Key Binding", "Assign Key Binding",
-				ResourceManager.loadImage("images/key.png"), null, provider::assignKeyBinding);
+				new GIcon("icon.plugin.scriptmanager.keybinding"), null,
+				provider::assignKeyBinding);
 
 		createScriptAction("Delete", "Delete", "Delete Script",
-			ResourceManager.loadImage("images/edit-delete.png"), null, provider::deleteScript);
+			new GIcon("icon.plugin.scriptmanager.delete"), null, provider::deleteScript);
 
 		renameAction = createScriptAction("Rename", "Rename", "Rename Script",
-			ResourceManager.loadImage("images/textfield_rename.png"), null, provider::renameScript);
+			new GIcon("icon.plugin.scriptmanager.rename"), null, provider::renameScript);
 
 		newAction = createScriptTableAction("New", "Create New Script",
-			ResourceManager.loadImage("images/script_add.png"), provider::newScript);
+			new GIcon("icon.plugin.scriptmanager.new"), provider::newScript);
 
 		createScriptTableAction("Refresh", "Refresh Script List", Icons.REFRESH_ICON,
 			provider::refresh);
 
 		showBundleStatusAction = createScriptTableAction("Script Directories",
-			"Manage Script Directories", ResourceManager.loadImage("images/text_list_bullets.png"),
+			"Manage Script Directories", new GIcon("icon.plugin.scriptmanager.manage"),
 			provider::showBundleStatusComponent);
 
-		Icon icon = ResourceManager.loadImage("images/red-cross.png");
+		new ActionBuilder("Script Quick Launch", plugin.getName())
+				.keyBinding(KeyStroke.getKeyStroke(KeyEvent.VK_S,
+					DockingUtils.CONTROL_KEY_MODIFIER_MASK | InputEvent.SHIFT_DOWN_MASK))
+				.onAction(this::chooseScript)
+				.buildAndInstall(plugin.getTool());
+
+		Icon icon = new GIcon("icon.plugin.scriptmanager.api");
 		Predicate<ActionContext> test = context -> {
 			Object contextObject = context.getContextObject();
 			return (contextObject instanceof GTable) || (contextObject instanceof ResourceFile);
@@ -270,6 +277,20 @@ class GhidraScriptActionManager {
 				.inWindow(ActionBuilder.When.ALWAYS)
 				.onAction(context -> showGhidraScriptJavadoc())
 				.buildAndInstall(plugin.getTool());
+	}
+
+	private void chooseScript(ActionContext actioncontext1) {
+
+		List<ScriptInfo> scriptInfos = provider.getScriptInfos();
+		ScriptSelectionDialog dialog = new ScriptSelectionDialog(plugin, scriptInfos);
+		dialog.show();
+
+		ScriptInfo chosenInfo = dialog.getUserChoice();
+		if (chosenInfo == null) {
+			return;
+		}
+
+		provider.runScript(chosenInfo.getSourceFile());
 	}
 
 	private void showGhidraScriptJavadoc() {
@@ -486,7 +507,7 @@ class GhidraScriptActionManager {
 			super(RERUN_LAST_SHARED_ACTION_NAME, plugin.getName(), KeyBindingType.SHARED);
 
 			setToolBarData(
-				new ToolBarData(ResourceManager.loadImage("images/play_again.png"), toolbarGroup));
+				new ToolBarData(new GIcon("icon.plugin.scriptmanager.run.again"), toolbarGroup));
 			setDescription("Rerun the last run script");
 			setHelpLocation(new HelpLocation(plugin.getName(), "Run_Last"));
 

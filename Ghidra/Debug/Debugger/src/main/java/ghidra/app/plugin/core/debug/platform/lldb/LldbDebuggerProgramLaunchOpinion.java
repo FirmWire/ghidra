@@ -15,18 +15,22 @@
  */
 package ghidra.app.plugin.core.debug.platform.lldb;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
 
 import ghidra.app.plugin.core.debug.service.model.launch.*;
-import ghidra.app.services.DebuggerModelService;
 import ghidra.dbg.DebuggerModelFactory;
-import ghidra.dbg.target.TargetLauncher.TargetCmdLineLauncher;
-import ghidra.dbg.target.TargetMethod.ParameterDescription;
 import ghidra.dbg.util.PathUtils;
+import ghidra.debug.api.model.DebuggerProgramLaunchOffer;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.listing.Program;
 
-public class LldbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOpinion {
+public class LldbDebuggerProgramLaunchOpinion extends AbstractDebuggerProgramLaunchOpinion {
+	protected static final List<Class<? extends DebuggerProgramLaunchOffer>> OFFER_CLASSES =
+		List.of(
+			InVmLldbDebuggerProgramLaunchOffer.class,
+			GadpLldbDebuggerProgramLaunchOffer.class);
+
 	protected static abstract class AbstractLldbDebuggerProgramLaunchOffer
 			extends AbstractDebuggerProgramLaunchOffer {
 
@@ -36,25 +40,15 @@ public class LldbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOp
 		}
 
 		@Override
-		public String getMenuParentTitle() {
-			return "Debug " + program.getName();
-		}
-
-		@Override
 		protected List<String> getLauncherPath() {
 			return PathUtils.parse("");
 		}
 
-		@Override
-		protected Map<String, ?> generateDefaultLauncherArgs(
-				Map<String, ParameterDescription<?>> params) {
-			return Map.of(TargetCmdLineLauncher.CMDLINE_ARGS_NAME, program.getExecutablePath());
-		}
 	}
 
-	protected class InVmLldbDebuggerProgramLaunchOffer
+	@FactoryClass("agent.lldb.LldbInJvmDebuggerModelFactory")
+	protected static class InVmLldbDebuggerProgramLaunchOffer
 			extends AbstractLldbDebuggerProgramLaunchOffer {
-		private static final String FACTORY_CLS_NAME = "agent.lldb.LldbInJvmDebuggerModelFactory";
 
 		public InVmLldbDebuggerProgramLaunchOffer(Program program, PluginTool tool,
 				DebuggerModelFactory factory) {
@@ -72,10 +66,9 @@ public class LldbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOp
 		}
 	}
 
-	protected class GadpLldbDebuggerProgramLaunchOffer
+	@FactoryClass("agent.lldb.gadp.LldbGadpDebuggerModelFactory")
+	protected static class GadpLldbDebuggerProgramLaunchOffer
 			extends AbstractLldbDebuggerProgramLaunchOffer {
-		private static final String FACTORY_CLS_NAME =
-			"agent.lldb.gadp.LldbLocalDebuggerModelFactory";
 
 		public GadpLldbDebuggerProgramLaunchOffer(Program program, PluginTool tool,
 				DebuggerModelFactory factory) {
@@ -94,25 +87,7 @@ public class LldbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOp
 	}
 
 	@Override
-	public Collection<DebuggerProgramLaunchOffer> getOffers(Program program, PluginTool tool,
-			DebuggerModelService service) {
-		String exe = program.getExecutablePath();
-		if (exe == null || "".equals(exe.trim())) {
-			return List.of();
-		}
-		List<DebuggerProgramLaunchOffer> offers = new ArrayList<>();
-		for (DebuggerModelFactory factory : service.getModelFactories()) {
-			if (!factory.isCompatible()) {
-				continue;
-			}
-			String clsName = factory.getClass().getName();
-			if (clsName.equals(InVmLldbDebuggerProgramLaunchOffer.FACTORY_CLS_NAME)) {
-				offers.add(new InVmLldbDebuggerProgramLaunchOffer(program, tool, factory));
-			}
-			else if (clsName.equals(GadpLldbDebuggerProgramLaunchOffer.FACTORY_CLS_NAME)) {
-				offers.add(new GadpLldbDebuggerProgramLaunchOffer(program, tool, factory));
-			}
-		}
-		return offers;
+	protected Collection<Class<? extends DebuggerProgramLaunchOffer>> getOfferClasses() {
+		return OFFER_CLASSES;
 	}
 }

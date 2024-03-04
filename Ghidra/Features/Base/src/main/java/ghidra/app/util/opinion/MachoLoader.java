@@ -15,18 +15,19 @@
  */
 package ghidra.app.util.opinion;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 
-import generic.continues.RethrowContinuesFactory;
-import ghidra.app.util.*;
-import ghidra.app.util.bin.*;
+import ghidra.app.util.MemoryBlockUtils;
+import ghidra.app.util.Option;
+import ghidra.app.util.bin.ByteProvider;
+import ghidra.app.util.bin.ByteProviderWrapper;
 import ghidra.app.util.bin.format.macho.*;
-import ghidra.app.util.bin.format.macho.prelink.PrelinkMap;
+import ghidra.app.util.bin.format.swift.SwiftUtils;
 import ghidra.app.util.bin.format.ubi.*;
 import ghidra.app.util.importer.MessageLog;
-import ghidra.framework.model.DomainFolder;
+import ghidra.formats.gfilesystem.*;
 import ghidra.program.database.mem.FileBytes;
 import ghidra.program.model.listing.Program;
 import ghidra.util.LittleEndianDataConverter;
@@ -40,13 +41,6 @@ public class MachoLoader extends AbstractLibrarySupportLoader {
 
 	public final static String MACH_O_NAME = "Mac OS X Mach-O";
 	private static final long MIN_BYTE_LENGTH = 4;
-
-	/** Loader option to add relocation entries for each fixed chain pointer */
-	static final String ADD_RELOCATION_ENTRIES_OPTION_NAME =
-		"Add relocation entries for fixed chain pointers";
-
-	/** Default value for loader option add relocation entries */
-	static final boolean ADD_RELOCATION_ENTRIES_OPTION_DEFAULT = true;
 
 	@Override
 	public Collection<LoadSpec> findSupportedLoadSpecs(ByteProvider provider) throws IOException {
@@ -64,11 +58,16 @@ public class MachoLoader extends AbstractLibrarySupportLoader {
 		}
 
 		try {
-			MachHeader machHeader =
-				MachHeader.createMachHeader(RethrowContinuesFactory.INSTANCE, provider);
+			MachHeader machHeader = new MachHeader(provider);
 			String magic =
 				CpuTypes.getMagicString(machHeader.getCpuType(), machHeader.getCpuSubType());
-			List<QueryResult> results = QueryOpinionService.query(getName(), magic, null);
+			List<String> sectionNames = machHeader.parseSegments()
+					.stream()
+					.flatMap(seg -> seg.getSections().stream())
+					.map(section -> section.getSectionName())
+					.toList();
+			String compiler = SwiftUtils.isSwift(sectionNames) ? "swift" : null;
+			List<QueryResult> results = QueryOpinionService.query(MACH_O_NAME, magic, compiler);
 			for (QueryResult result : results) {
 				loadSpecs.add(new LoadSpec(this, machHeader.getImageBase(), result));
 			}
@@ -89,22 +88,17 @@ public class MachoLoader extends AbstractLibrarySupportLoader {
 		try {
 			FileBytes fileBytes = MemoryBlockUtils.createFileBytes(program, provider, monitor);
 
-			if (MachoPrelinkUtils.hasChainedLoadCommand(provider, monitor)) {
-				MachoPrelinkProgramBuilder.buildProgram(program, provider, fileBytes,
-					Collections.emptyList(), shouldAddRelocationEntries(options), log, monitor);
-				return;
-			}
-
 			// A Mach-O file may contain PRELINK information.  If so, we use a special
 			// program builder that knows how to deal with it.
-			List<PrelinkMap> prelinkList = MachoPrelinkUtils.parsePrelinkXml(provider, monitor);
-			if (!prelinkList.isEmpty()) {
-				MachoPrelinkProgramBuilder.buildProgram(program, provider, fileBytes, prelinkList,
-					shouldAddRelocationEntries(options), log, monitor);
-				return;
+			if (MachoPrelinkUtils.isMachoPrelink(provider, monitor)) {
+				MachoPrelinkProgramBuilder.buildProgram(program, provider, fileBytes, log, monitor);
 			}
-
-			MachoProgramBuilder.buildProgram(program, provider, fileBytes, log, monitor);
+			else {
+				MachoProgramBuilder.buildProgram(program, provider, fileBytes, log, monitor);
+			}
+		}
+		catch (CancelledException e) {
+			return;
 		}
 		catch (IOException e) {
 			throw e;
@@ -119,11 +113,6 @@ public class MachoLoader extends AbstractLibrarySupportLoader {
 		return MACH_O_NAME;
 	}
 
-	private boolean shouldAddRelocationEntries(List<Option> options) {
-		return OptionUtils.getOption(ADD_RELOCATION_ENTRIES_OPTION_NAME, options,
-			ADD_RELOCATION_ENTRIES_OPTION_DEFAULT);
-	}
-
 	/**
 	 * Overrides the default implementation to account for Universal Binary (UBI) files. 
 	 * These must be specially parsed to find the internal file matching the current architecture.
@@ -133,50 +122,37 @@ public class MachoLoader extends AbstractLibrarySupportLoader {
 	 * found that is successful (meaning it matches the correct architecture). Only one file
 	 * in the UBI will ever be imported. If the provided file is NOT a UBI, default 
 	 * import method will be invoked. 
+	 * <hr>
+	 * {@inheritDoc}
 	 */
 	@Override
-	protected boolean importLibrary(String libName, DomainFolder libFolder, File libFile,
-			LoadSpec loadSpec, List<Option> options, MessageLog log, Object consumer,
-			Set<String> unprocessedLibs, List<Program> programList, TaskMonitor monitor)
-			throws CancelledException, IOException {
+	protected ByteProvider createLibraryByteProvider(FSRL libFsrl, LoadSpec loadSpec,
+			MessageLog log, TaskMonitor monitor) throws IOException, CancelledException {
 
-		if (!libFile.isFile()) {
-			return false;
-		}
 
-		try (ByteProvider provider = new RandomAccessByteProvider(libFile)) {
+		ByteProvider provider = super.createLibraryByteProvider(libFsrl, loadSpec, log, monitor);
 
-			FatHeader header =
-				FatHeader.createFatHeader(RethrowContinuesFactory.INSTANCE, provider);
+		try {
+			FatHeader header = new FatHeader(provider);
 			List<FatArch> architectures = header.getArchitectures();
 
 			if (architectures.isEmpty()) {
-				log.appendMsg("WARNING! No archives found in the UBI: " + libFile);
-				return false;
+				log.appendMsg("WARNING! No archives found in the UBI: " + libFsrl);
+				return null;
 			}
 
 			for (FatArch architecture : architectures) {
+				ByteProvider bp = new ByteProviderWrapper(provider, architecture.getOffset(),
+					architecture.getSize()) {
 
-				// Note: The creation of the byte provider that we pass to the importer deserves a
-				// bit of explanation:
-				//
-				// At this point in the process we have a FatArch, which provides access to the 
-				// underlying bytes for the Macho in the form of an input stream. From that we could
-				// create a byte provider. That doesn't work however. Here's why:
-				//
-				// The underlying input stream in the FatArch has already been parsed and the first
-				// 4 (magic) bytes read. If we create a provider from that stream and pass it to 
-				// the parent import method, we'll have a problem because that parent method will 
-				// try to read those first 4 magic bytes again, which violates the contract of the 
-				// input stream provider (you can't read the same bytes over again) and will throw 
-				// an exception. To avoid that, just create the provider from the original file 
-				// provider, and not from the FatArch input stream. 
-				try (ByteProvider bp = new ByteProviderWrapper(provider, architecture.getOffset(),
-					architecture.getSize())) {
-					if (super.importLibrary(libName, libFolder, libFile, bp, loadSpec, options, log,
-						consumer, unprocessedLibs, programList, monitor)) {
-						return true;
+					@Override // Ensure the parent provider gets closed when the wrapper does
+					public void close() throws IOException {
+						super.provider.close();
 					}
+				};
+				LoadSpec libLoadSpec = matchSupportedLoadSpec(loadSpec, bp);
+				if (libLoadSpec != null) {
+					return bp;
 				}
 			}
 		}
@@ -185,7 +161,47 @@ public class MachoLoader extends AbstractLibrarySupportLoader {
 			// not an error condition so no need to log.
 		}
 
-		return super.importLibrary(libName, libFolder, libFile, loadSpec, options, log, consumer,
-			unprocessedLibs, programList, monitor);
+		return provider;
+	}
+
+	/**
+	 * Special Mach-O library file resolver to account for a "Versions" subdirectory being inserted
+	 * in the library lookup path.  For example, a reference to:
+	 * <p>
+	 * {@code /System/Library/Frameworks/Foundation.framework/Foundation}
+	 * <p>
+	 * might be found at:
+	 * <p>
+	 * {@code /System/Library/Frameworks/Foundation.framework//Versions/C/Foundation}
+	 * <hr>
+	 * {@inheritDoc}
+	 */
+	@Override
+	protected FSRL resolveLibraryFile(GFileSystem fs, Path libraryParentPath, String libraryName)
+			throws IOException {
+		GFile libraryParentDir =
+			fs.lookup(libraryParentPath != null ? libraryParentPath.toString() : null);
+		if (libraryParentDir != null) {
+			for (GFile file : fs.getListing(libraryParentDir)) {
+				if (file.isDirectory() && file.getName().equals("Versions")) {
+					Path versionsPath = libraryParentPath.resolve(file.getName());
+					List<GFile> versionListion = fs.getListing(file);
+					if (!versionListion.isEmpty()) {
+						GFile specificVersionDir = versionListion.get(0);
+						if (specificVersionDir.isDirectory()) {
+							return resolveLibraryFile(fs,
+								versionsPath.resolve(specificVersionDir.getName()), libraryName);
+						}
+					}
+				}
+				else if (file.isDirectory()) {
+					continue;
+				}
+				if (file.getName().equals(libraryName)) {
+					return file.getFSRL();
+				}
+			}
+		}
+		return null;
 	}
 }

@@ -24,6 +24,7 @@ import ghidra.app.plugin.processors.sleigh.expression.TokenField;
 /**
  * Solves expressions of a token (instruction encoding) field
  * 
+ * <p>
  * Essentially, this just encodes the goal into the field, if it can be represented in the given
  * space and format. Otherwise, there is no solution.
  */
@@ -34,34 +35,37 @@ public class TokenFieldSolver extends AbstractExpressionSolver<TokenField> {
 	}
 
 	@Override
-	public AssemblyResolution solve(TokenField tf, MaskedLong goal, Map<String, Long> vals,
-			Map<Integer, Object> res, AssemblyResolvedConstructor cur, Set<SolverHint> hints,
-			String description) {
+	public AssemblyResolution solve(AbstractAssemblyResolutionFactory<?, ?> factory,
+			TokenField tf, MaskedLong goal, Map<String, Long> vals, AssemblyResolvedPatterns cur,
+			Set<SolverHint> hints, String description) {
 		assert tf.minValue() == 0; // In case someone decides to do signedness there.
 		if (!goal.isInRange(tf.maxValue(), tf.hasSignbit())) {
-			return AssemblyResolution.error("Value " + goal + " is not valid for " + tf,
-				description, null);
+			return factory.newErrorBuilder()
+					.error("Value " + goal + " is not valid for " + tf)
+					.description(description)
+					.build();
 		}
 		AssemblyPatternBlock block = AssemblyPatternBlock.fromTokenField(tf, goal);
-		return AssemblyResolution.instrOnly(block, description, null);
+		return factory.instrOnly(block, description);
 	}
 
 	@Override
-	public MaskedLong getValue(TokenField tf, Map<String, Long> vals, Map<Integer, Object> res,
-			AssemblyResolvedConstructor cur) {
+	public MaskedLong getValue(TokenField tf, Map<String, Long> vals,
+			AssemblyResolvedPatterns cur) {
 		if (cur == null) {
 			return null;
 		}
-		return valueForResolution(tf, cur);
+		return valueForResolution(tf, vals, cur);
 	}
 
 	@Override
-	public int getInstructionLength(TokenField tf, Map<Integer, Object> res) {
+	public int getInstructionLength(TokenField tf) {
 		return tf.getByteEnd() + 1;
 	}
 
 	@Override
-	public MaskedLong valueForResolution(TokenField tf, AssemblyResolvedConstructor rc) {
+	public MaskedLong valueForResolution(TokenField tf, Map<String, Long> vals,
+			AssemblyResolvedPatterns rc) {
 		int size = tf.getByteEnd() - tf.getByteStart() + 1;
 		MaskedLong res = rc.readInstruction(tf.getByteStart(), size);
 		if (!tf.isBigEndian()) {

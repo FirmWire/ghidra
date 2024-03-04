@@ -56,7 +56,7 @@ public class AddressEvaluator {
 		}
 		else if (obj instanceof Long) {
 			try {
-				return af.getDefaultAddressSpace().getAddress(((Long) obj).longValue());
+				return af.getDefaultAddressSpace().getAddress(((Long) obj).longValue(), true);
 			}
 			catch (Exception e) {
 				// ignore
@@ -100,7 +100,7 @@ public class AddressEvaluator {
 			}
 
 			// = must be followed by =, others can be followed
-			if (tok.equals("=") || tok.equals("!") || tok.equals("<") || tok.equals(">")) {
+			if ("=!<>|&".contains(tok)) {
 				lookahead = parser.nextToken();
 				tok = checkDoubleToken(tok, lookahead);
 				// if tok is now longer, consumed lookahead
@@ -149,6 +149,18 @@ public class AddressEvaluator {
 			case "!":
 				if (lookahead.equals("=")) {
 					return "!=";
+				}
+				break;
+				
+			case "|":
+				if (lookahead.equals("|")) {
+					return "||";
+				}
+				break;
+				
+			case "&":
+				if (lookahead.equals("&")) {
+					return "&&";
 				}
 				break;
 		}
@@ -245,7 +257,7 @@ public class AddressEvaluator {
 		if (globalSymbols.size() == 1) {
 			return globalSymbols.get(0).getAddress();
 		}
-		return null;
+		return getValueObject(tok);
 	}
 
 	private static Object getValueObject(String strValue) {
@@ -256,10 +268,14 @@ public class AddressEvaluator {
 				start = 2;
 				radix = 16;
 			}
-			if (strValue.endsWith("UL")) {
+			strValue = strValue.toLowerCase();
+			if (strValue.endsWith("ull") || strValue.endsWith("llu")) {
+				strValue = strValue.substring(start, strValue.length() - 3);
+			}
+			else if (strValue.endsWith("ul") || strValue.endsWith("lu") || strValue.endsWith("ll")) {
 				strValue = strValue.substring(start, strValue.length() - 2);
 			}
-			else if (strValue.endsWith("L") || strValue.endsWith("l") || strValue.endsWith("U")) {
+			else if (strValue.endsWith("l") || strValue.endsWith("u")) {
 				strValue = strValue.substring(start, strValue.length() - 1);
 			}
 			else {
@@ -363,6 +379,14 @@ public class AddressEvaluator {
 		}
 
 		if (!evaluateOperator(list, Operator.LESSEQUALS, Operator.GREATEREQUALS)) {
+			return null;
+		}
+		
+		if (!evaluateOperator(list, Operator.LOG_AND, null)) {
+			return null;
+		}
+		
+		if (!evaluateOperator(list, Operator.LOG_OR, null)) {
 			return null;
 		}
 
@@ -498,6 +522,18 @@ public class AddressEvaluator {
 				return diff > 0L ? 1L : 0L;
 			}
 		}
+		else if (op == Operator.LOG_AND) {
+			if ((v1 instanceof Long) && (v2 instanceof Long)) {
+				boolean test = (((Long) v1).longValue()) != 0 && (((Long) v2).longValue()) != 0;
+				return test ? 1L : 0L;
+			}
+		}
+		else if (op == Operator.LOG_OR) {
+			if ((v1 instanceof Long) && (v2 instanceof Long)) {
+				boolean test = (((Long) v1).longValue()) != 0 || (((Long) v2).longValue()) != 0;
+				return test ? 1L : 0L;
+			}
+		}
 		return null;
 	}
 
@@ -544,6 +580,8 @@ class Operator {
 	static Operator RIGHTSHIFT = new Operator(">>");
 	static Operator LEFT_PAREN = new Operator("(");
 	static Operator RIGHT_PAREN = new Operator(")");
+	static Operator LOG_OR = new Operator("||");
+	static Operator LOG_AND = new Operator("&&");
 	static Operator EQUALS = new Operator("==");
 	static Operator NOTEQUALS = new Operator("!=");
 	static Operator LESS = new Operator("<");
@@ -621,6 +659,12 @@ class Operator {
 		}
 		else if (tok.equals(">=")) {
 			return GREATEREQUALS;
+		}
+		else if (tok.equals("||")) {
+			return LOG_OR;
+		}
+		else if (tok.equals("&&")) {
+			return LOG_AND;
 		}
 		return null;
 	}

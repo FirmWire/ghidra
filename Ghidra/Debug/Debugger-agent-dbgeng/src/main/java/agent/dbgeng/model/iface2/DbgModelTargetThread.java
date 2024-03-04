@@ -17,18 +17,18 @@ package agent.dbgeng.model.iface2;
 
 import java.util.concurrent.CompletableFuture;
 
-import agent.dbgeng.dbgeng.DebugSystemObjects;
-import agent.dbgeng.dbgeng.DebugThreadId;
+import agent.dbgeng.dbgeng.*;
 import agent.dbgeng.manager.*;
-import agent.dbgeng.manager.cmd.DbgSetActiveThreadCommand;
 import agent.dbgeng.manager.impl.*;
 import agent.dbgeng.model.iface1.*;
 import agent.dbgeng.model.impl.DbgModelTargetStackImpl;
-import ghidra.dbg.target.TargetThread;
+import ghidra.dbg.target.*;
 import ghidra.dbg.util.PathUtils;
+import ghidra.program.model.address.Address;
 
 public interface DbgModelTargetThread extends //
 		TargetThread, //
+		TargetAggregate, //
 		DbgModelTargetAccessConditioned, //
 		DbgModelTargetExecutionStateful, //
 		DbgModelTargetSteppable, //
@@ -36,18 +36,23 @@ public interface DbgModelTargetThread extends //
 		DbgModelSelectableObject {
 
 	public default DbgThread getThread() {
+		return getThread(false);
+	}
+
+	public default DbgThread getThread(boolean fire) {
 		DbgManagerImpl manager = getManager();
-		DebugSystemObjects so = manager.getSystemObjects();
 		try {
+			DbgModelTargetProcess parentProcess = getParentProcess();
+			DbgProcessImpl process = parentProcess == null ? null : (DbgProcessImpl) parentProcess.getProcess();
 			String index = PathUtils.parseIndex(getName());
-			int tid = Integer.decode(index);
-			DebugThreadId id = so.getThreadIdBySystemId(tid);
+			Long tid = Long.decode(index);
+			
+			DebugSystemObjects so = manager.getSystemObjects();
+			DebugThreadId id = so.getThreadIdBySystemId(tid.intValue());
 			if (id == null) {
 				id = so.getCurrentThreadId();
 			}
-			DbgModelTargetProcess parentProcess = getParentProcess();
-			DbgProcessImpl process = (DbgProcessImpl) parentProcess.getProcess();
-			DbgThreadImpl thread = manager.getThreadComputeIfAbsent(id, process, tid);
+			DbgThreadImpl thread = manager.getThreadComputeIfAbsent(id, process, tid, fire);
 			return thread;
 		}
 		catch (IllegalArgumentException e) {
@@ -55,11 +60,30 @@ public interface DbgModelTargetThread extends //
 		}
 	}
 
+	@TargetMethod.Export("Step to Address (pa)")
+	public default CompletableFuture<Void> stepToAddress(
+			@TargetMethod.Param(
+				description = "The target address",
+				display = "StopAddress",
+				name = "address") Address address) {
+		return getModel().gateFuture(getThread().stepToAddress(address.toString(false)));
+	}
+
+	@TargetMethod.Export("Trace to Address (ta)")
+	public default CompletableFuture<Void> traceToAddress(
+			@TargetMethod.Param(
+				description = "The target address",
+				display = "StopAddress",
+				name = "address") Address address) {
+		return getModel().gateFuture(getThread().traceToAddress(address.toString(false)));
+	}
+
 	@Override
 	public default CompletableFuture<Void> setActive() {
 		DbgManagerImpl manager = getManager();
-		DbgThread thread = getThread();
-		return manager.execute(new DbgSetActiveThreadCommand(manager, thread, null));
+		DbgProcessImpl process = (DbgProcessImpl) getParentProcess().getProcess();
+		manager.setActiveProcess(process);
+		return manager.setActiveThread(getThread());
 	}
 
 	public DbgModelTargetStackImpl getStack();

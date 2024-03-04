@@ -26,8 +26,7 @@ import ghidra.framework.options.ToolOptions;
 import ghidra.util.Swing;
 
 /**
- * A partial implementation of {@link Tool} that serves as a place to share common 
- * functionality
+ * A partial implementation of {@link Tool} that serves as a place to share common functionality
  */
 public abstract class AbstractDockingTool implements Tool {
 
@@ -94,6 +93,11 @@ public abstract class AbstractDockingTool implements Tool {
 	}
 
 	@Override
+	public String getStatusInfo() {
+		return winMgr.getStatusText();
+	}
+
+	@Override
 	public void clearStatusInfo() {
 		winMgr.setStatusText("");
 	}
@@ -114,6 +118,11 @@ public abstract class AbstractDockingTool implements Tool {
 	}
 
 	@Override
+	public Set<DockingActionIf> getLocalActions(ComponentProvider provider) {
+		return toolActions.getLocalActions(provider);
+	}
+
+	@Override
 	public void removeLocalAction(ComponentProvider provider, DockingActionIf action) {
 		toolActions.removeLocalAction(provider, action);
 	}
@@ -121,6 +130,11 @@ public abstract class AbstractDockingTool implements Tool {
 	@Override
 	public Set<DockingActionIf> getAllActions() {
 		return toolActions.getAllActions();
+	}
+
+	@Override
+	public Set<DockingActionIf> getGlobalActions() {
+		return toolActions.getGlobalActions();
 	}
 
 	@Override
@@ -185,12 +199,12 @@ public abstract class AbstractDockingTool implements Tool {
 	}
 
 	/**
-	 * Set the menu group associated with a cascaded submenu.  This allows
-	 * a cascading menu item to be grouped with a specific set of actions.
-	 * The default group for a cascaded submenu is the name of the submenu.
+	 * Set the menu group associated with a cascaded submenu. This allows a cascading menu item to
+	 * be grouped with a specific set of actions. The default group for a cascaded submenu is the
+	 * name of the submenu.
 	 *
-	 * @param menuPath menu name path where the last element corresponds
-	 * to the specified group name.
+	 * @param menuPath menu name path where the last element corresponds to the specified group
+	 *            name.
 	 * @param group group name
 	 * @see #setMenuGroup(String[], String, String)
 	 */

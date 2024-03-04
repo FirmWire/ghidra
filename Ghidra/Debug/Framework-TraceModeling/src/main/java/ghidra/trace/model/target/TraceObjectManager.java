@@ -18,13 +18,12 @@ package ghidra.trace.model.target;
 import java.util.Collection;
 import java.util.stream.Stream;
 
-import com.google.common.collect.Range;
-
 import ghidra.dbg.DebuggerObjectModel;
 import ghidra.dbg.target.TargetObject;
 import ghidra.dbg.target.schema.TargetObjectSchema;
 import ghidra.dbg.util.PathPredicates;
 import ghidra.program.model.address.AddressRange;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.Trace;
 
 /**
@@ -53,13 +52,12 @@ public interface TraceObjectManager {
 	TraceObjectValue createRootObject(TargetObjectSchema schema);
 
 	/**
-	 * Create an object with the given canonical path having the given lifespan
+	 * Create (or get) an object with the given canonical path
 	 * 
 	 * @param path the object's canonical path
-	 * @param lifespan the initial lifespan
 	 * @return the new object
 	 */
-	TraceObject createObject(TraceObjectKeyPath path, Range<Long> lifespan);
+	TraceObject createObject(TraceObjectKeyPath path);
 
 	/**
 	 * Get the schema of the root object
@@ -93,7 +91,7 @@ public interface TraceObjectManager {
 	 * @param path the canonical path of the desired objects
 	 * @return the collection of objects
 	 */
-	Collection<? extends TraceObject> getObjectsByCanonicalPath(TraceObjectKeyPath path);
+	TraceObject getObjectByCanonicalPath(TraceObjectKeyPath path);
 
 	/**
 	 * Get objects in the database having the given path intersecting the given span
@@ -102,7 +100,7 @@ public interface TraceObjectManager {
 	 * @param span the span that desired objects' lifespans must intersect
 	 * @return the iterable of objects
 	 */
-	Stream<? extends TraceObject> getObjectsByPath(Range<Long> span,
+	Stream<? extends TraceObject> getObjectsByPath(Lifespan span,
 			TraceObjectKeyPath path);
 
 	/**
@@ -119,15 +117,40 @@ public interface TraceObjectManager {
 	 * @param predicates predicates to match the desired objects
 	 * @return an iterator over the matching objects
 	 */
-	Stream<? extends TraceObjectValPath> getValuePaths(Range<Long> span,
+	Stream<? extends TraceObjectValPath> getValuePaths(Lifespan span,
 			PathPredicates predicates);
 
 	/**
 	 * Get all the objects in the database
 	 * 
-	 * @return the collection of all objects
+	 * @return the stream of all objects
 	 */
-	Collection<? extends TraceObject> getAllObjects();
+	Stream<? extends TraceObject> getAllObjects();
+
+	/**
+	 * Get the number of objects in the database
+	 * 
+	 * @return the number of objects
+	 */
+	int getObjectCount();
+
+	/**
+	 * Get all the values (edges) in the database
+	 * 
+	 * @return the stream of all values
+	 */
+	Stream<? extends TraceObjectValue> getAllValues();
+
+	/**
+	 * Get all address-ranged values intersecting the given span and address range
+	 * 
+	 * @param span the span that desired values lifespans must intersect
+	 * @param range the range that desired address-ranged values must intersect
+	 * @param entryKey the entry key if a single one should be matched, or null for any
+	 * @return the collection of values
+	 */
+	Collection<? extends TraceObjectValue> getValuesIntersecting(Lifespan span,
+			AddressRange range, String entryKey);
 
 	/**
 	 * Get all address-ranged values intersecting the given span and address range
@@ -136,8 +159,10 @@ public interface TraceObjectManager {
 	 * @param range the range that desired address-ranged values must intersect
 	 * @return the collection of values
 	 */
-	Collection<? extends TraceObjectValue> getValuesIntersecting(Range<Long> span,
-			AddressRange range);
+	default Collection<? extends TraceObjectValue> getValuesIntersecting(Lifespan span,
+			AddressRange range) {
+		return getValuesIntersecting(span, range, null);
+	}
 
 	/**
 	 * Get all interfaces of the given type in the database
@@ -147,8 +172,17 @@ public interface TraceObjectManager {
 	 * @param ifClass the class of the desired interface
 	 * @return the collection of all instances of the given interface
 	 */
-	<I extends TraceObjectInterface> Stream<I> queryAllInterface(Range<Long> span,
+	<I extends TraceObjectInterface> Stream<I> queryAllInterface(Lifespan span,
 			Class<I> ifClass);
+
+	/**
+	 * For maintenance, remove all disconnected objects
+	 * 
+	 * <p>
+	 * An object is disconnected if it is neither the child nor parent of any value for any span. In
+	 * other words, it's unused.
+	 */
+	void cullDisconnectedObjects();
 
 	/**
 	 * Delete the <em>entire object model</em>, including the schema

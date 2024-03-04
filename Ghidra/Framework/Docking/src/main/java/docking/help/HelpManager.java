@@ -28,7 +28,6 @@ import java.util.Map.Entry;
 import javax.help.*;
 import javax.help.Map.ID;
 import javax.swing.JButton;
-import javax.swing.UIManager;
 
 import docking.ComponentProvider;
 import docking.action.DockingActionIf;
@@ -38,6 +37,7 @@ import ghidra.util.*;
 import ghidra.util.exception.AssertException;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
+import help.*;
 import resources.ResourceManager;
 import utilities.util.reflection.ReflectionUtilities;
 
@@ -50,6 +50,12 @@ import utilities.util.reflection.ReflectionUtilities;
  * the {@link DockingActionIf} and the {@link ComponentProvider} base classes.
  */
 public class HelpManager implements HelpService {
+
+	/**
+	 * The hardcoded value to use for all HelpSet 'home id' values.  Subclasses may change this 
+	 * value by overriding {@link #getHomeId()}.
+	 */
+	private static final String HOME_ID = "Misc_Help_Contents";
 
 	public static final String SHOW_AID_KEY = "SHOW.HELP.NAVIGATION.AID";
 	private static final String TABLE_OF_CONTENTS_FILENAME_KEY = "data";
@@ -83,11 +89,10 @@ public class HelpManager implements HelpService {
 	 * @throws HelpSetException if HelpSet could not be created
 	 */
 	protected HelpManager(URL url) throws HelpSetException {
-		mainHS = new GHelpSet(new GHelpClassLoader(null), url);
+		mainHS = new DockingHelpSet(new GHelpClassLoader(null), url);
+		mainHS.setHomeID(getHomeId());
 		mainHB = mainHS.createHelpBroker();
 		mainHS.setTitle(GHIDRA_HELP_TITLE);
-
-		setColorResources();
 
 		isValidHelp = isValidHelp();
 	}
@@ -123,6 +128,15 @@ public class HelpManager implements HelpService {
 		}
 	}
 
+	/**
+	 * Returns the 'home id' to be used by all help sets in the system (as opposed to allowing each
+	 * help set to define its own home id.
+	 * @return the home id
+	 */
+	protected String getHomeId() {
+		return HOME_ID;
+	}
+
 	@Override
 	public void excludeFromHelp(Object helpObject) {
 		excludedFromHelp.add(helpObject);
@@ -141,6 +155,12 @@ public class HelpManager implements HelpService {
 
 	@Override
 	public void registerHelp(Object helpObject, HelpLocation location) {
+
+		if (helpObject == null) {
+			Throwable t = ReflectionUtilities.createJavaFilteredThrowable();
+			Msg.debug(this, "Incorrect use of registerHelp() - 'helpObject' cannot be null\n", t);
+			return;
+		}
 
 		if (location == null) {
 			Throwable t = ReflectionUtilities.createJavaFilteredThrowable();
@@ -175,12 +195,6 @@ public class HelpManager implements HelpService {
 		return false;
 	}
 
-	/**
-	 * Returns the Help location associated with the specified object
-	 * or null if no help has been registered for the object.
-	 * @param helpObj help object
-	 * @return help location
-	 */
 	@Override
 	public HelpLocation getHelpLocation(Object helpObj) {
 		return helpLocations.get(helpObj);
@@ -194,15 +208,18 @@ public class HelpManager implements HelpService {
 		return mainHS;
 	}
 
-	/**
-	 * Display the help page for the given URL.  This is a specialty method for displaying
-	 * help when a specific file is desired, like an introduction page.  Showing help for
-	 * objects within the system is accomplished by calling
-	 * {@link #showHelp(Object, boolean, Component)}.
-	 *
-	 * @param url the URL to display
-	 * @see #showHelp(Object, boolean, Component)
-	 */
+	@Override
+	public void reload() {
+
+		if (!(mainHB instanceof GHelpBroker)) {
+			// not our broker installed; can't force a reload
+			return;
+		}
+
+		GHelpBroker gHelpBroker = (GHelpBroker) mainHB;
+		gHelpBroker.reload();
+	}
+
 	@Override
 	public void showHelp(URL url) {
 		if (!isValidHelp) {
@@ -211,10 +228,20 @@ public class HelpManager implements HelpService {
 			return;
 		}
 
-		KeyboardFocusManager keyboardFocusManager =
-			KeyboardFocusManager.getCurrentKeyboardFocusManager();
-		Window window = keyboardFocusManager.getActiveWindow();
+		Window window = getBestParent(null);
 		displayHelp(url, window);
+	}
+
+	@Override
+	public void showHelp(HelpLocation loc) {
+		if (!isValidHelp) {
+			Msg.warn(this, "Help is not in a valid state.  " +
+				"This can happen when help has not been built.");
+			return;
+		}
+
+		Window window = getBestParent(null);
+		showHelpLocation(loc, window);
 	}
 
 	@Override
@@ -226,44 +253,67 @@ public class HelpManager implements HelpService {
 			return;
 		}
 
-		while (owner != null && !(owner instanceof Window)) {
-			owner = owner.getParent();
-		}
-
-		Window window = (Window) owner;
-		Dialog modalDialog = WindowUtilities.findModalestDialog();
-		if (modalDialog != null) {
-			window = modalDialog;
-		}
-
+		Window window = getBestParent(owner);
 		HelpLocation loc = findHelpLocation(helpObj);
 
 		if (infoOnly) {
 			displayHelpInfo(helpObj, loc, window);
+		}
+		else {
+			showHelpLocation(loc, window);
+		}
+	}
+
+	private void showHelpLocation(HelpLocation loc, Window window) {
+		if (loc == null) {
+			showDefaultHelpPage(window);
 			return;
 		}
 
-		if (loc != null) {
-
-			URL url = loc.getHelpURL();
-			if (url != null) {
-				displayHelp(url, window);
-				return;
-			}
-
-			String helpIDString = loc.getHelpId();
-			if (helpIDString != null) {
-				try {
-					displayHelp(createHelpID(helpIDString), window);
-					return;
-				}
-				catch (BadIDException e) {
-					Msg.info(this, "Could not find help for ID: \"" + helpIDString +
-						"\" from HelpLocation: " + loc);
-				}
-			}
+		URL url = loc.getHelpURL();
+		if (url != null) {
+			displayHelp(url, window);
+			return;
 		}
-		displayHelp(mainHS.getHomeID(), window);
+
+		String helpId = loc.getHelpId();
+		if (helpId == null) {
+			showDefaultHelpPage(window);
+			return;
+		}
+
+		try {
+			displayHelp(createHelpID(helpId), window);
+		}
+		catch (BadIDException e) {
+			Msg.info(this,
+				"Could not find help for ID: \"" + helpId + "\" from HelpLocation: " + loc);
+			displayHelp(HELP_NOT_FOUND_PAGE_URL, window);
+		}
+	}
+
+	private void showDefaultHelpPage(Window w) {
+		displayHelp(mainHS.getHomeID(), w);
+	}
+
+	private Window getBestParent(Component c) {
+
+		if (c == null) {
+			KeyboardFocusManager keyboardFocusManager =
+				KeyboardFocusManager.getCurrentKeyboardFocusManager();
+			c = keyboardFocusManager.getActiveWindow();
+		}
+
+		while (c != null && !(c instanceof Window)) {
+			c = c.getParent();
+		}
+
+		Window window = (Window) c;
+		Dialog modalDialog = WindowUtilities.findModalestDialog();
+		if (modalDialog != null) {
+			window = modalDialog;
+		}
+		return window;
 	}
 
 	private ID createHelpID(String helpIDString) {
@@ -478,7 +528,7 @@ public class HelpManager implements HelpService {
 		monitor.initialize(helpLocationsCopy.size());
 		Set<Entry<Object, HelpLocation>> entries = helpLocationsCopy.entrySet();
 		for (Entry<Object, HelpLocation> entry : entries) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 
 			Object helpee = entry.getKey();
 			HelpLocation location = entry.getValue();
@@ -535,18 +585,18 @@ public class HelpManager implements HelpService {
 			return;
 		}
 
-		mainHB.setCurrentURL(validateUrl(helpUrl));
+		mainHB.setCurrentURL(helpUrl);
 	}
 
 	/** This forces page to be redisplayed when location has not changed */
 	private void reloadPage(URL helpURL) {
 
-		if (!(mainHB instanceof GHelpBroker)) {
+		if (!(mainHB instanceof DockingHelpBroker)) {
 			// not our broker installed; can't force a reload
 			return;
 		}
 
-		((GHelpBroker) mainHB).reloadHelpPage(validateUrl(helpURL));
+		((DockingHelpBroker) mainHB).reloadHelpPage(validateUrl(helpURL));
 	}
 
 	private URL getURLForID(ID ID) {
@@ -661,19 +711,11 @@ public class HelpManager implements HelpService {
 	private HelpSet createHelpSet(URL url, GHelpClassLoader classLoader) throws HelpSetException {
 		if (!urlToHelpSets.containsKey(url)) {
 			GHelpSet hs = new GHelpSet(classLoader, url);
+			hs.setHomeID(getHomeId());
 			urlToHelpSets.put(url, hs);
 			return hs;
 		}
 		return null;
-	}
-
-	/**
-	 * Set the color resources on the JEditorPane for selection so that
-	 * you can see the highlights when you do a search in the JavaHelp.
-	 */
-	private void setColorResources() {
-		UIManager.put("EditorPane.selectionBackground", new Color(204, 204, 255));
-		UIManager.put("EditorPane.selectionForeground", UIManager.get("EditorPane.foreground"));
 	}
 
 	private void displayHelpInfo(Object helpObj, HelpLocation loc, Window parent) {

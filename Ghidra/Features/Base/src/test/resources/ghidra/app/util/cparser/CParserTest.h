@@ -17,7 +17,139 @@
 /** Test parsing header file for CParser.  Most of the file is just checked to make sure it gets through parsing.
  ** Some data types are checked.  More checking of the parsed information would be beneficial at some point.
  **/
+
+
+/**
+ * Check initial anonymous __func_1, is give an name blarg
+ *  Note: This must be first function for junit tests to pass
+ **/
+
+void blarg(int *, long[][][]);
+
+/**
+ ** Function typedef use in function body
+ **/
+typedef int ExternFunc(int);
+    
+void testFunc()
+{
+    ExternFunc * func = (ExternFunc*)0;
+}
+
+void testFunc()
+{
+    typedef int InternFunc(int);
+    
+    InternFunc * func = (InternFunc *) 0;
+}
+
+
+ /**
+ * Test arrays of anonymous functions in a structure
+ **/
+typedef struct SomeStruct {
+   int first_member;
+   int *second_member[3];
+   char (*procArray1[2])(int *, short *);
+   int anotherMember;
+   int (*procArray2[2])(int *, int *);
+   int (*LoneProc1)(char, int);
+   int (*LoneProc2)(char, int);
+   int finalMember;
+} SomeStruct;
+
+
+/**
+ * Test forward declaration
+ **/
+ typedef struct ThisStruct {
+     ThisStruct *prev;
+     struct ThisStruct *next;
+} ThisStruct;
+
+ typedef struct _ThatStruct {
+     _ThatStruct *prev;
+     struct ThatStruct *next;
+} ThatStruct;
+
+
+/**
+ * Test name used as field
+ */
+struct fieldname {
+        unsigned char a, b, c;
+};
+
+struct mainname {
+        unsigned int field1;
+        struct fieldname fieldname[256];    // field with same name as struct name
+};
+
+
+/**
+ *   Anonymous function parameter definitions
+ **/
+void funcParam(void (*)(void));
+
+void funcParmWithName(void (*_func_arg)(void));
+
+double funcParamNoPtr(double x, double func(double, void *));
+
+double funcParam1( double, double (*)( double ) );
+double funcParam2( double, double( double ) );  // this guy _func_
+double funcParam3( const double, double (*)( double ) );
+double funcParam4( const double, double( double ) );  // this guy _func_
+double funcParam5( double, double (*)( const double ) );
+double funcParam6( double, double( const double ) ); // this guy _func_
+double funcParam7( const double, double (*)( const double ) );
+double funcParam8( const double, double( const double ) );  // this guy _func_
+double funcParam9(double, double (* const)(double ) );
+double funcParam10(double, double (__cdecl *)(double ) );
+
+
+typedef unsigned int size_t;
+
+typedef unsigned long size_t;
+
+void* __cdecl memset(
+     void*  _Dst,
+                              int    _Val,
+                              size_t _Size
+    );
+
+typedef size_t rsize_t;
  
+static __inline int __cdecl memcpy_s(
+         void*       const _Destination,
+         rsize_t     const _DestinationSize,
+         void const* const _Source,
+         rsize_t     const _SourceSize
+        ) {
+                if (_SourceSize == 0)
+        {
+            return 0;
+        }
+        memset(_Destination, 0, _DestinationSize);
+}
+        
+ void __mem_func (void *, char **, int ***, long (*) (size_t),
+                                      short *(*) (size_t),
+                                      void *(*) (void *, size_t));
+
+ void * foo;
+
+ typedef void *bar;
+
+ typedef int size_t;
+ typedef int pid_t;
+
+
+typedef long _Once_t;
+void __cdecl _Once(_Once_t *, void (__cdecl *)(void));
+
+void __stdcall _Twice(void (__cdecl *)(void));
+
+void _Thrice(void (__cdecl *)(void));
 
 /**
  ** use of long as an attribute
@@ -31,36 +163,82 @@ typedef long unsigned long int LULI_size_t;
 typedef unsigned long long int ULLI_size_t;
 typedef long long unsigned int LLUI_size_t;
 typedef unsigned int  UI_size_t;
- 
+
 /**
  ** pragma usage
  **/
 int (__stdcall * GetSectionBlock) (
-        int section, 
-        long len, 
-        long align=1, 
+        int section,
+        long len,
+        long align=1,
         void **ppBytes=0) ;
- 
+
+
  #pragma region Input compatibility macros
- 
+
+// nothing will parse after this line if the this fails
+  #pragma test for, pragma, with, commas outside parens
+  
+  #pragma region System Family (kernel drivers) with Desktop Family for compat
+
    #pragma warning(disable)
-   
+
   #pragma warning(disable:4035 4793)               // re-enable below
-  
+
    #pragma section(".CRTMP$XCA",long,read)
-  
-  
+
+#pragma GCC poison (*(volatile uint8_t *)(0xB3))
+ 
+ #pragma our macros nachos (for use only within FileProvider.h)
+ 
+ #pragma warning (suppress: 28128)
+ 
+struct pragmaPassed {
+    char dummy;
+};
+
+int whileWithPragma(int a)
+{
+    do {
+        a++;
+    } while (0 __pragma(warning(disable: 28110)));
+    
+    __pragma(warning(push)) __pragma(warning(disable : 4548)) do {__noop(pszDest);} while((0,0) __pragma(warning(pop)) );
+    
+    return a;
+}
+
+
+int g(int a, int b, int c)
+{
+    return a+b+c;
+}
+int f(void)
+{
+    return g(1,
+        2,3);
+}
+
+int f(void)
+{
+    return g(1,
+#pragma warning (suppress: 28128)
+        2,3);
+}
+
+
+
 /**
  ** Packing tests
  **/
  #pragma pack(push,2)
-        
+
  #pragma pack(push, PlaceHolder)
- 
+
  #pragma pack(push, 4)
- 
+
  __pragma(pack(push, MyName, 8))
-struct packed8 {
+struct __declspec(align(16)) __pragma(warning(push)) __pragma(warning(disable:4845)) __declspec(no_init_all) __pragma(warning(pop)) packed8 {
     char a;
     short b;
     int c;
@@ -90,6 +268,10 @@ struct packed2 {
 struct packed1 {
     char a;
 };
+
+#pragma pack(push);
+#pragma pack(1);
+#pragma pack(pop);
 
 #pragma pack();  // reset to none
 
@@ -159,15 +341,15 @@ union wait
   int w_status;
   struct
   {
-	unsigned int t:7; 
-	unsigned int c:1; 
-	unsigned int r:8; 
+	unsigned int t:7;
+	unsigned int c:1;
+	unsigned int r:8;
 	unsigned int:16;
   } __wait_terminated;
   struct
   {
-	unsigned int v:8; 
-	unsigned int s:8; 
+	unsigned int v:8;
+	unsigned int s:8;
 	unsigned int:0;
 	unsigned int:8;
 	unsigned int:8;
@@ -217,7 +399,37 @@ int      fputs( char * , void * ) __asm("_" "fputs" "$FPOOTS");
 
 void     _exit(int) __attribute__((noreturn));
 
+// NoReturn
+
+extern void gcc_exit (int __status) __attribute__ ((__noreturn__));
+
+__declspec(noreturn) void __cdecl win_exit(int _Code);
+
+void     _exit(int) __attribute__((noreturn));
+
+// C11 noreturn
+void     _Noreturn _Noreturn_exit(int);
+
+
+// C23 Attributes
+int      [[deprecated]] imDeprecated(int);
+int      [[gnu::deprecated]] imDeprecatedToo(int) ;
+int      [[deprecated("bad design")]] imDeprecatedToo(int) ;
+int      [[deprecated("bad design")]] imDeprecatedToo(int) ;
+
+[[gnu::always_inline]] [[gnu::hot]] [[gnu::const]] [[nodiscard]]
+int f(void); // declare f with four attributes
+ 
+[[gnu::always_inline, gnu::const, gnu::hot, nodiscard]]
+int f(void); // same as above, but uses a single attr specifier that contains four attributes
+ 
+ 
+// __attribute__
 int      abs(int) __attribute__((bob));
+
+enum __attribute__((enum_extensibility(open))) OpenEnum {
+  B0, B1
+};
 
 typedef int (__cdecl * _onexit_t)(void);
 
@@ -229,17 +441,34 @@ __checkint(int val, int* err) {
         if (val < (-2147483647-1) || val > 2147483647) {
                 *err |= OVR_ERR;
         }
-        
+
         val = 8 * sizeof(val);
 
         return (int32_t) val;
 }
 
+
+/**
+ ** Structure extension
+ **/
+struct __declspec(align(8)) System_Exception_Fields {
+    int _HResult;
+};
+
+struct System_SystemException_Fields : System_Exception_Fields {
+     int foo;
+};
+
+struct System_System_SystemException_Fields : System_SystemException_Fields {
+     int foo;
+     short bar;
+};
+
 typedef enum {} EmptyEnum;
 
 
 typedef struct fstruct;
- 
+
 typedef int (*fnptr)(struct fstruct);
 
 
@@ -270,9 +499,15 @@ struct fowstruct {
     fstruct *next;
 };
 
+
 @protocol  Bubba
 bob
 marley
+@end
+
+@protocol SwiftProtocol
+@required
+- (void) method;
 @end
 
 typedef struct __attribute__ ((packed))
@@ -359,6 +594,31 @@ typedef struct
 } cpu_set_t;
 
 
+typedef struct testStruct
+{
+    char test[8];
+} *pTestStruct;
+
+int testFunction(pTestStruct ptr)
+{
+	struct cpu_set_t cpset;
+
+    int a = sizeof(ptr->test);
+    int b = sizeof(ptr);
+    int c = sizeof(cpset.__bits);
+
+    return a;
+}
+
+struct _IO_FILE_complete
+{
+ size_t __pad5;
+ int _mode;
+ /* Make sure we don't get into trouble again.  */
+ char _unused2[15 * sizeof (int) - 4 * sizeof (void **) - sizeof (size_t)];
+};
+
+
  void __mem_func (void *, char **, int ***, long (*) (size_t),
                                       short *(*) (size_t),
                                       void *(*) (void *, size_t));
@@ -437,6 +697,8 @@ typedef union __declspec(intrin_type) __declspec(align(8)) __m64
     unsigned __int16    m64_u16[4];
     unsigned __int32    m64_u32[2];
 } __m64;
+
+
 
 extern __m64 _mm_loadh_pi1(__m64, const __m64 *);
 extern __m64 _mm_loadh_pi2(__m64, __m64 const *);
@@ -553,6 +815,23 @@ HandleToHandle64(
     return((void * __ptr64) h );
 }
 
+/**
+ * Test const before / after TypeName
+**/
+typedef long long TEST_TYPE_A;
+
+void funcA(TEST_TYPE_A const * arg);
+
+void funcB(void)
+{
+    funcA((const TEST_TYPE_A *)0);
+}
+
+void funcB(void)
+{
+    funcA((TEST_TYPE_A const *)0);
+}
+
 
 /**
  **  pragma usage
@@ -600,7 +879,7 @@ typedef struct _arraysInStruct
         unsigned int num;
         unsigned long flexTwo[0];
 } ArraysInStruct;
- 
+
 struct EmptyBuffer {
 	int x;
 	char buf[];
@@ -609,7 +888,7 @@ struct EmptyBuffer {
 
 /**
  ** Array Size allocation with expression
- **/ 
+ **/
 struct ivd {
         char type[(1-1+1)];
         char id[(6-2+1)];
@@ -640,23 +919,37 @@ enum options_enum {
 	ONE_UP,
 
 	PLUS_SET   =    4 + 12,
+	
+	PLUS_SET   =    4 + 12,
+	
+#pragma endit
 
 	MINUS_SET   =    12 - 1,
-	
+
 	SHIFTED1 = 1 << 1 >> 1,
-	
+
 	SHIFTED3 = 7 >> 3 << 3,
-	
+
 	SHIFTED4 = 15 >> 3 << 3,
-	
+
 	ISONE = 1 - 1 + 1,
-	
+
 	ISNEGATIVE = -5-1,
-	
+
 	BIGNUM = 64 * 16 + 16,
-	
+
 	TRINARY =  (0 ? 10 : 11),
 };
+
+/**
+ ** Predeclare Enum
+ **/
+ 
+typedef enum _PARAM_TYPE PARAM_TYPE;
+
+typedef int FuncUseEnum(PARAM_TYPE ptype);
+
+typedef enum _PARAM_TYPE { A, B, C } PARAM_TYPE;
 
 
 /**
@@ -668,7 +961,7 @@ char * retInitedStorage(int i)
 
   return  (char *) (void) { 'a', 'b', 'c'};
 }
- 
+
 typedef float __m128 __attribute__ ((__vector_size__ (16), __may_alias__));
 
 
@@ -683,11 +976,11 @@ _mm_set1_ps (float __F)
 
 /**
  ** Structure Initializers / casting
- **/ 
+ **/
 struct { int a[3], b; } w[] =
 {
    { { 1, 0, 0 }, 0 },
-   { { 2, 0, 0 }, 0 } 
+   { { 2, 0, 0 }, 0 }
 };
 
 int *ptr = (int *){ 10, 20, 30, 40 };
@@ -705,6 +998,28 @@ struct s fs_pi = (struct s){ .z = "Pi", .x = 3, .y = 3.1415 };
 struct { int a[3], b; } w[] = { [0].a = {1}, [1].a[0] = 2 };
 
 
+/**
+ ** _Alignas
+ **/
+ 
+ // every object of type struct data will be aligned to 128-byte boundary
+struct data {
+  char x;
+  _Alignas(128) char cacheline[128]; // over-aligned array of char, 
+                                    // not array of over-aligned chars
+};
+
+int aligning(void)
+{
+    int sof = sizeof(struct data);
+    int aof = _Alignof(struct data);
+    
+    printf("sizeof(data) = %zu \n", sizeof(struct data));
+ 
+    printf("alignment of data = %zu\n", _Alignof(struct data));
+ 
+    _Alignas(2048) struct data d; // this instance of data is aligned even stricter
+}
 
 typedef long long LRESULT;
 
@@ -737,9 +1052,9 @@ typedef unsigned int __uint32_t;
  **/
 struct arm_exception_state
 {
-	__uint32_t	exception; 
-	__uint32_t	fsr; 
-	__uint32_t  far; 
+	__uint32_t	exception;
+	__uint32_t	fsr;
+	__uint32_t  far;
 };
 
 
@@ -850,8 +1165,25 @@ unsigned char _interlockedbittestandset(long *Base, long Offset)
 	return old;
 }
 
-unsigned char _interlockedbittestandset2(long *Base, long Offset) { unsigned char old; __asm__ __volatile__ ("lock bts{l %[Offset],%[Base] | %[Base],%[Offset]} ; setc %[old]" : [old] "=qm" (old), [Base] "+m" (*Base) : [Offset] "I" "r" (Offset) : "memory", "cc"); return old; }
+extern __inline__ __attribute__((__always_inline__,__gnu_inline__))
+unsigned char _interlockedbittestandset64(long long volatile *Base, long long Offset) { unsigned char old; __asm__ __volatile__ ("lock bts{q %[Offset],%[Base] | %[Base],%[Offset]}" "\n\tsetc %[old]" : [old] "=qm" (old), [Base] "+m" (*Base) : [Offset] "J" "r" (Offset) : "memory" , "cc"); return old; }
+
 /**/
+
+/**
+ ** Multi-Line String constants
+ **/
+ 
+void singleLineStrings(void)
+{
+    char a[] = "Hello " "World";
+}
+void multilineStrings(void)
+{
+    char b[] = "This is a "
+               "multiline string.";
+}
+ 
 
 
 /**
@@ -874,9 +1206,37 @@ typedef struct mystruct {
 char lineInFunc(int i) {
  #line 1 "first/line.h"
  int j;
- 
+
  #line 2 "second/line.h"
      return 'a';
  #line 3 "third/line.h"
  }
  
+
+/**
+ ** Check _Static_assert support
+ **/
+#line 1 "static_assert.h"
+int check_assert(void)
+{
+	// test with message
+    _Static_assert(1 + 2 + 3 < 6, "With message");
+    static_assert(1 + 1 != 2, "math fail!");
+
+    // test no message
+    _Static_assert(sizeof(int) < sizeof(char));
+    static_assert(sizeof(int) < sizeof(char));
+
+    int x;
+    static_assert(sizeof(int) > sizeof(char));
+}
+
+struct statcheck {
+   int a;
+   static_assert(1 + 1 == 3, "1 + 1 == 3, fail!");
+   int b;
+};
+
+typedef int test_before;
+static_assert(1 + 1 == 2, "That's true!");
+typedef int test_after;

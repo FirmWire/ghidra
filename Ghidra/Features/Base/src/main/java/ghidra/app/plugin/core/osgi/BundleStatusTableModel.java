@@ -15,36 +15,43 @@
  */
 package ghidra.app.plugin.core.osgi;
 
-import java.awt.*;
+import java.awt.Color;
+import java.awt.Component;
 import java.util.*;
-import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import javax.swing.*;
+import javax.swing.JLabel;
 import javax.swing.event.TableModelEvent;
 
 import org.osgi.framework.Bundle;
 
 import docking.widgets.table.*;
 import generic.jar.ResourceFile;
+import generic.theme.GColor;
+import generic.theme.GThemeDefaults.Colors;
 import generic.util.Path;
 import ghidra.docking.settings.Settings;
 import ghidra.framework.plugintool.ServiceProvider;
-import ghidra.util.*;
-import ghidra.util.table.column.*;
+import ghidra.util.Swing;
+import ghidra.util.SystemUtilities;
+import ghidra.util.table.column.AbstractGColumnRenderer;
+import ghidra.util.table.column.GColumnRenderer;
 
 /**
  * Model for {@link BundleStatus} objects. 
  */
 public class BundleStatusTableModel
 		extends GDynamicColumnTableModel<BundleStatus, List<BundleStatus>> {
-	private static final Color COLOR_BUNDLE_ERROR = Color.RED;
-	private static final Color COLOR_BUNDLE_DISABLED = Color.DARK_GRAY;
-	private static final Color COLOR_BUNDLE_BUSY = Color.GRAY;
-	private static final Color COLOR_BUNDLE_INACTIVE = Color.BLACK;
-	private static final Color COLOR_BUNDLE_ACTIVE = new Color(0.0f, .6f, 0.0f); // a dark green
+
+	//@formatter:off
+	private static final Color COLOR_BUNDLE_ERROR = Colors.ERROR;
+	private static final Color COLOR_BUNDLE_DISABLED = new GColor("color.fg.table.bundle.disabled");
+	private static final Color COLOR_BUNDLE_BUSY = new GColor("color.fg.table.bundle.busy");
+	private static final Color COLOR_BUNDLE_INACTIVE = new GColor("color.fg.table.bundle.inactive");
+	private static final Color COLOR_BUNDLE_ACTIVE = new GColor("color.fg.table.bundle.active"); 
+	//@formatter:on
 
 	private BundleHost bundleHost;
 	private BundleStatusComponentProvider provider;
@@ -73,10 +80,10 @@ public class BundleStatusTableModel
 	}
 
 	private BundleStatus getStatus(GhidraBundle bundle) {
-		return getStatusFromLoc(bundle.getLocationIdentifier());
+		return getStatusFromLocation(bundle.getLocationIdentifier());
 	}
 
-	private BundleStatus getStatusFromLoc(String bundleLoc) {
+	private BundleStatus getStatusFromLocation(String bundleLoc) {
 		return bundleLocToStatusMap.get(bundleLoc);
 	}
 
@@ -143,8 +150,6 @@ public class BundleStatusTableModel
 			fireTableDataChanged();
 		});
 	}
-
-	/***************************************************/
 
 	@Override
 	public boolean isCellEditable(int rowIndex, int columnIndex) {
@@ -254,7 +259,7 @@ public class BundleStatusTableModel
 		// wrap the assigned comparator to detect if the order changes
 
 		AtomicBoolean changed = new AtomicBoolean(false);
-		Comparator<BundleStatus> wrapper = new Comparator<BundleStatus>() {
+		Comparator<BundleStatus> wrapper = new Comparator<>() {
 			Comparator<BundleStatus> comparator = sortingContext.getComparator();
 
 			@Override
@@ -332,7 +337,7 @@ public class BundleStatusTableModel
 				for (GhidraBundle bundle : bundles) {
 					addNewStatusNoFire(bundle);
 				}
-				fireTableRowsInserted(index, bundles.size() - 1);
+				fireTableRowsInserted(index, index + bundles.size() - 1);
 			});
 		}
 
@@ -367,7 +372,7 @@ public class BundleStatusTableModel
 		@Override
 		public void bundleException(GhidraBundleException exception) {
 			Swing.runLater(() -> {
-				BundleStatus status = getStatusFromLoc(exception.getBundleLocation());
+				BundleStatus status = getStatusFromLocation(exception.getBundleLocation());
 				if (status != null) {
 					status.setSummary(exception.getMessage());
 					int rowIndex = getRowIndex(status);
@@ -551,7 +556,6 @@ public class BundleStatusTableModel
 			BundleStatus status = (BundleStatus) data.getRowObject();
 			ResourceFile file = (ResourceFile) data.getValue();
 			JLabel label = (JLabel) super.getTableCellRendererComponent(data);
-			label.setFont(defaultFont.deriveFont(defaultFont.getStyle() | Font.BOLD));
 			label.setText(Path.toPathString(file));
 			GhidraBundle bundle = bundleHost.getGhidraBundle(file);
 			if (bundle == null || bundle instanceof GhidraPlaceholderBundle || !file.exists()) {
@@ -571,6 +575,7 @@ public class BundleStatusTableModel
 					label.setForeground(COLOR_BUNDLE_INACTIVE);
 				}
 			}
+
 			return label;
 		}
 

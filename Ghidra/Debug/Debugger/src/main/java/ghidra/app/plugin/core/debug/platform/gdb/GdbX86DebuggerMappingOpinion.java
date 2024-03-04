@@ -20,6 +20,7 @@ import java.util.Set;
 
 import ghidra.app.plugin.core.debug.mapping.*;
 import ghidra.dbg.target.*;
+import ghidra.debug.api.model.*;
 import ghidra.program.model.lang.*;
 import ghidra.util.Msg;
 
@@ -100,8 +101,12 @@ public class GdbX86DebuggerMappingOpinion implements DebuggerMappingOpinion {
 	}
 
 	@Override
-	public Set<DebuggerMappingOffer> offersForEnv(TargetEnvironment env, TargetProcess process,
+	public Set<DebuggerMappingOffer> offersForEnv(TargetEnvironment env, TargetObject target,
 			boolean includeOverrides) {
+		if (!(target instanceof TargetProcess)) {
+			return Set.of();
+		}
+		TargetProcess process = (TargetProcess) target;
 		if (!env.getDebugger().toLowerCase().contains("gdb")) {
 			return Set.of();
 		}

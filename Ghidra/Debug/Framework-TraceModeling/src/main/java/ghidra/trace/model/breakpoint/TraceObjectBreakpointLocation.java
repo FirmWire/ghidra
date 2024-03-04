@@ -15,11 +15,12 @@
  */
 package ghidra.trace.model.breakpoint;
 
-import com.google.common.collect.Range;
+import java.util.Collection;
 
 import ghidra.dbg.target.TargetBreakpointLocation;
 import ghidra.dbg.target.TargetObject;
 import ghidra.program.model.address.AddressRange;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.target.TraceObjectInterface;
 import ghidra.trace.model.target.annot.TraceObjectInfo;
 import ghidra.util.exception.DuplicateNameException;
@@ -29,18 +30,30 @@ import ghidra.util.exception.DuplicateNameException;
 	shortName = "breakpoint location",
 	fixedKeys = {
 		TargetObject.DISPLAY_ATTRIBUTE_NAME,
-		TargetBreakpointLocation.ADDRESS_ATTRIBUTE_NAME,
-		TargetBreakpointLocation.LENGTH_ATTRIBUTE_NAME,
+		TargetBreakpointLocation.RANGE_ATTRIBUTE_NAME,
 		TraceObjectBreakpointLocation.KEY_COMMENT,
-		TraceObjectBreakpointLocation.KEY_RANGE,
+		TraceObjectBreakpointLocation.KEY_EMU_ENABLED,
 	})
 public interface TraceObjectBreakpointLocation extends TraceBreakpoint, TraceObjectInterface {
 	String KEY_COMMENT = "_comment";
-	String KEY_RANGE = "_range"; // Duplicates address,length
+	String KEY_EMU_ENABLED = "_emu_enabled";
+	String KEY_EMU_SLEIGH = "_emu_sleigh";
 
 	TraceObjectBreakpointSpec getSpecification();
 
-	void setLifespan(Range<Long> lifespan) throws DuplicateNameException;
+	void setLifespan(Lifespan lifespan) throws DuplicateNameException;
 
-	void setRange(AddressRange range);
+	void setRange(Lifespan lifespan, AddressRange range);
+
+	void setName(Lifespan lifespan, String name);
+
+	void setKinds(Lifespan lifespan, Collection<TraceBreakpointKind> kinds);
+
+	void setEnabled(Lifespan lifespan, boolean enabled);
+
+	void setEmuEnabled(Lifespan lifespan, boolean emuEnabled);
+
+	void setEmuSleigh(Lifespan lifespan, String sleigh);
+
+	void setComment(Lifespan lifespan, String comment);
 }

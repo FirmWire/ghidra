@@ -27,6 +27,7 @@ import javax.swing.tree.TreePath;
 import docking.widgets.tree.*;
 import docking.widgets.tree.internal.DefaultGTreeDataTransformer;
 import docking.widgets.tree.support.GTreeRenderer;
+import generic.theme.GIcon;
 import ghidra.app.plugin.core.datamgr.*;
 import ghidra.app.plugin.core.datamgr.archive.DataTypeManagerHandler;
 import ghidra.app.plugin.core.datamgr.archive.FileArchive;
@@ -39,16 +40,13 @@ import ghidra.program.model.listing.Program;
 import ghidra.util.UniversalID;
 import ghidra.util.task.TaskMonitor;
 import resources.MultiIcon;
-import resources.ResourceManager;
 import resources.icons.TranslateIcon;
 
 public class DataTypeArchiveGTree extends GTree {
-	private static ImageIcon LOCAL_DELTA_ICON =
-		ResourceManager.loadImage("images/smallRightArrow.png");
-	private static ImageIcon SOURCE_DELTA_ICON =
-		ResourceManager.loadImage("images/smallLeftArrow.png");
-	private static ImageIcon CONFLICT_ICON = ResourceManager.loadImage("images/doubleArrow.png");
-	private static ImageIcon MISSING_ICON = ResourceManager.loadImage("images/redQuestionMark.png");
+	private static Icon LOCAL_DELTA_ICON = new GIcon("icon.plugin.datatypes.tree.change.local");
+	private static Icon SOURCE_DELTA_ICON = new GIcon("icon.plugin.datatypes.tree.change.source");
+	private static Icon CONFLICT_ICON = new GIcon("icon.plugin.datatypes.tree.conflict");
+	private static Icon MISSING_ICON = new GIcon("icon.plugin.datatypes.tree.missing");
 
 	private DataTypeManagerPlugin plugin;
 	private GTreeNode armedNode;
@@ -122,6 +120,13 @@ public class DataTypeArchiveGTree extends GTree {
 	}
 
 	@Override
+	protected boolean supportsPopupActions() {
+		// The base tree adds collapse/ expand actions, which we already provide, so signal that we
+		// do not want those actions.
+		return false;
+	}
+
+	@Override
 	public void dispose() {
 		((ArchiveRootNode) getModelRoot()).dispose();
 		PluginTool tool = plugin.getTool();
@@ -153,9 +158,21 @@ public class DataTypeArchiveGTree extends GTree {
 		reloadTree();
 	}
 
-	public void setIncludeDataTypeMembersInSearch(boolean includeDataTypes) {
-		setDataTransformer(
-			includeDataTypes ? new DataTypeTransformer() : new DefaultGTreeDataTransformer());
+	public void updateDataTransformer(DataTypesProvider provider) {
+
+		boolean includeMembers = provider.isIncludeDataMembersInSearch();
+		boolean filterOnNameOnly = provider.isFilterOnNameOnly();
+
+		DefaultDtTreeDataTransformer transformer;
+		if (includeMembers) {
+			transformer = new DataTypeTransformer(filterOnNameOnly);
+		}
+		else {
+			transformer = new DefaultDtTreeDataTransformer(filterOnNameOnly);
+		}
+
+		setDataTransformer(transformer);
+
 		reloadTree();
 	}
 
@@ -242,9 +259,32 @@ public class DataTypeArchiveGTree extends GTree {
 
 //==================================================================================================
 // Inner Classes
-//==================================================================================================	
+//==================================================================================================
 
-	private class DataTypeTransformer extends DefaultGTreeDataTransformer {
+	/** Only filters on name or display name, not dt contents */
+	private class DefaultDtTreeDataTransformer extends DefaultGTreeDataTransformer {
+
+		private boolean filterOnNameOnly;
+
+		DefaultDtTreeDataTransformer(boolean filterOnNameOnly) {
+			this.filterOnNameOnly = filterOnNameOnly;
+		}
+
+		@Override
+		protected String toString(GTreeNode node) {
+			if (filterOnNameOnly) {
+				return node.getName(); // the node name is the type name
+			}
+			return super.toString(node); // display text
+		}
+	}
+
+	/** Filters on dt contents */
+	private class DataTypeTransformer extends DefaultDtTreeDataTransformer {
+
+		DataTypeTransformer(boolean filterOnNameOnly) {
+			super(filterOnNameOnly);
+		}
 
 		@Override
 		public List<String> transform(GTreeNode node) {
@@ -270,7 +310,7 @@ public class DataTypeArchiveGTree extends GTree {
 
 		private void addFunctionDefinitionStrings(FunctionDefinition function,
 				List<String> results) {
-			// the prototype string will include name, return type and parameter 
+			// the prototype string will include name, return type and parameter
 			// data types and names...so use that, unless it turns out to be bad
 			results.add(function.getPrototypeString());
 
@@ -331,11 +371,14 @@ public class DataTypeArchiveGTree extends GTree {
 			JLabel label = (JLabel) super.getTreeCellRendererComponent(tree, value, isSelected,
 				expanded, leaf, row, focus);
 
-			// Background icon uses the label's color so set it to match the 
-			// tree's background. Otherwise the icon's in the tree might have a 
-			// different background and look odd.
-			MultiIcon multiIcon = new MultiIcon(new BackgroundIcon(ICON_WIDTH, ICON_HEIGHT, false));
+			if (!label.isOpaque()) {
+				// work around an issue on some platforms where the label is painting a color that
+				// does not match the tree
+				label.setBackground(
+					isSelected ? getBackgroundSelectionColor() : getBackgroundNonSelectionColor());
+			}
 
+			MultiIcon multiIcon = new MultiIcon(new DtBackgroundIcon());
 			Icon icon = getIcon();
 			multiIcon.addIcon(new CenterVerticalIcon(icon, ICON_HEIGHT));
 
@@ -358,7 +401,6 @@ public class DataTypeArchiveGTree extends GTree {
 			}
 
 			setIcon(multiIcon);
-
 			return label;
 		}
 

@@ -17,31 +17,23 @@ package ghidra.app.plugin.core.assembler;
 
 import static org.junit.Assert.*;
 
-import java.util.List;
-import java.util.Objects;
-
-import javax.swing.JTextField;
-
 import org.junit.*;
 
+import db.Transaction;
 import ghidra.app.plugin.assembler.Assembler;
 import ghidra.app.plugin.assembler.Assemblers;
-import ghidra.app.plugin.core.assembler.AssemblyDualTextField.AssemblyCompletion;
-import ghidra.app.plugin.core.assembler.AssemblyDualTextField.AssemblyInstruction;
 import ghidra.app.plugin.core.codebrowser.CodeBrowserPlugin;
 import ghidra.app.plugin.core.codebrowser.CodeViewerProvider;
 import ghidra.app.plugin.core.progmgr.ProgramManagerPlugin;
 import ghidra.docking.settings.FormatSettingsDefinition;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.database.ProgramDB;
-import ghidra.program.database.util.ProgramTransaction;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.data.ShortDataType;
 import ghidra.program.model.data.TerminatedStringDataType;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.mem.Memory;
-import ghidra.program.util.ProgramLocation;
 import ghidra.test.AbstractGhidraHeadedIntegrationTest;
 import ghidra.test.TestEnv;
 import ghidra.util.task.TaskMonitor;
@@ -55,8 +47,7 @@ public class AssemblerPluginTest extends AbstractGhidraHeadedIntegrationTest {
 
 	private CodeViewerProvider codeViewer;
 
-	private AssemblyDualTextField instructionInput;
-	private JTextField dataInput;
+	private AssemblerPluginTestHelper helper;
 
 	private ProgramDB program;
 	private AddressSpace space;
@@ -73,23 +64,18 @@ public class AssemblerPluginTest extends AbstractGhidraHeadedIntegrationTest {
 		assemblerPlugin = addPlugin(tool, AssemblerPlugin.class);
 
 		codeViewer = waitForComponentProvider(CodeViewerProvider.class);
-
-		instructionInput = assemblerPlugin.patchInstructionAction.input;
-		dataInput = assemblerPlugin.patchDataAction.input;
-
 		program = createDefaultProgram(getName(), "Toy:BE:64:default", this);
+
 		space = program.getAddressFactory().getDefaultAddressSpace();
 		memory = program.getMemory();
 		listing = program.getListing();
 
-		try (ProgramTransaction trans = ProgramTransaction.open(program, "Setup")) {
+		helper = new AssemblerPluginTestHelper(assemblerPlugin, codeViewer, program);
+
+		try (Transaction tx = program.openTransaction("Setup")) {
 			memory.createInitializedBlock(".text", space.getAddress(0x00400000), 0x1000, (byte) 0,
 				TaskMonitor.DUMMY, false);
-			trans.commit();
 		}
-
-		// Snuff the assembler's warning prompt
-		assemblerPlugin.patchInstructionAction.shownWarning.put(program.getLanguage(), true);
 
 		env.showTool();
 		programManager.openProgram(program);
@@ -100,144 +86,74 @@ public class AssemblerPluginTest extends AbstractGhidraHeadedIntegrationTest {
 		env.dispose();
 	}
 
-	protected void assertDualFields() {
-		assertFalse(instructionInput.getAssemblyField().isVisible());
-		assertTrue(instructionInput.getMnemonicField().isVisible());
-		assertTrue(instructionInput.getOperandsField().isVisible());
-	}
-
-	protected List<AssemblyCompletion> inputAndGetCompletions(String text) {
-		return runSwing(() -> {
-			instructionInput.setText(text);
-			instructionInput.auto.startCompletion(instructionInput.getOperandsField());
-			instructionInput.auto.flushUpdates();
-			return instructionInput.auto.getSuggestions();
-		});
-	}
-
-	private void goTo(Address address) {
-		runSwing(() -> codeViewer.goTo(program, new ProgramLocation(program, address)));
-		waitForSwing();
-	}
-
 	@Test
 	public void testActionPatchInstructionNoExisting() throws Exception {
 		Address address = space.getAddress(0x00400000);
-		goTo(address);
-
-		performAction(assemblerPlugin.patchInstructionAction, codeViewer, true);
-		assertDualFields();
-		assertEquals("", instructionInput.getText());
-		assertEquals(address, assemblerPlugin.patchInstructionAction.getAddress());
-
-		List<AssemblyCompletion> completions = inputAndGetCompletions("imm r0, #1234");
-		AssemblyCompletion first = completions.get(0);
-		assertTrue(first instanceof AssemblyInstruction);
-		AssemblyInstruction ai = (AssemblyInstruction) first;
-
-		runSwing(() -> assemblerPlugin.patchInstructionAction.accept(ai));
-		waitForProgram(program);
-
-		Instruction ins = Objects.requireNonNull(listing.getInstructionAt(address));
-		assertEquals("imm r0,#0x4d2", ins.toString());
+		Instruction ins = helper.patchInstructionAt(address, "", "imm r0, #911");
+		assertEquals("imm r0,#0x38f", ins.toString());
 	}
 
 	@Test
 	public void testActionPatchInstructionExisting() throws Exception {
 		Address address = space.getAddress(0x00400000);
 		Assembler asm = Assemblers.getAssembler(program);
-		try (ProgramTransaction trans = ProgramTransaction.open(program, "Assemble pre-existing")) {
-			asm.assemble(address, "imm r0,#0x4d2");
-			trans.commit();
+		try (Transaction tx = program.openTransaction("Assemble pre-existing")) {
+			asm.assemble(address, "imm r0,#0x3d2");
 		}
 
-		goTo(address);
-
-		performAction(assemblerPlugin.patchInstructionAction, codeViewer, true);
-		assertDualFields();
-		assertEquals("imm r0,#0x4d2", instructionInput.getText());
-		assertEquals(address, assemblerPlugin.patchInstructionAction.getAddress());
-
-		List<AssemblyCompletion> completions = inputAndGetCompletions("imm r0, #123");
-		AssemblyCompletion first = completions.get(0);
-		assertTrue(first instanceof AssemblyInstruction);
-		AssemblyInstruction ai = (AssemblyInstruction) first;
-
-		runSwing(() -> assemblerPlugin.patchInstructionAction.accept(ai));
-		waitForProgram(program);
-
-		Instruction ins = Objects.requireNonNull(listing.getInstructionAt(address));
+		Instruction ins = helper.patchInstructionAt(address, "imm r0,#0x3d2", "imm r0, #123");
 		assertEquals("imm r0,#0x7b", ins.toString());
 	}
 
 	// TODO: Test disabled on uninitialized memory
 	// TODO: Test disabled on read-only listings
 
-	protected Data doPatchAt(Address address, String expText, String newText) {
-		goTo(address);
-
-		performAction(assemblerPlugin.patchDataAction, codeViewer, true);
-		assertTrue(dataInput.isVisible());
-		assertEquals(expText, dataInput.getText());
-		assertEquals(address, assemblerPlugin.patchDataAction.getAddress());
-
-		runSwing(() -> {
-			dataInput.setText(newText);
-			assemblerPlugin.patchDataAction.accept();
-		});
-		waitForProgram(program);
-
-		return Objects.requireNonNull(listing.getDataAt(address));
-	}
-
 	@Test
 	public void testActionPatchDataShortHexValid() throws Exception {
 		Address address = space.getAddress(0x00400000);
-		try (ProgramTransaction trans = ProgramTransaction.open(program, "Place short")) {
+		try (Transaction tx = program.openTransaction("Place short")) {
 			listing.createData(address, ShortDataType.dataType);
-			trans.commit();
 		}
 
-		Data data = doPatchAt(address, "0h", "1234h");
+		Data data = helper.patchDataAt(address, "0h", "1234h");
 		assertEquals("1234h", data.getDefaultValueRepresentation());
 	}
 
 	@Test
 	public void testActionPatchDataShortDecValid() throws Exception {
 		Address address = space.getAddress(0x00400000);
-		try (ProgramTransaction trans = ProgramTransaction.open(program, "Place short")) {
+		try (Transaction tx = program.openTransaction("Place short")) {
 			Data data = listing.createData(address, ShortDataType.dataType);
 			FormatSettingsDefinition.DEF.setChoice(data, FormatSettingsDefinition.DECIMAL);
-			trans.commit();
 		}
 
-		Data data = doPatchAt(address, "0", "1234");
+		Data data = helper.patchDataAt(address, "0", "1234");
 		assertEquals("1234", data.getDefaultValueRepresentation());
 	}
 
 	@Test
 	public void testActionPatchDataUTF8StringSameLength() throws Exception {
 		Address address = space.getAddress(0x00400000);
-		try (ProgramTransaction trans = ProgramTransaction.open(program, "Place string")) {
+		try (Transaction tx = program.openTransaction("Place string")) {
 			memory.setBytes(address, "Hello, World!\0".getBytes("utf-8"));
 			listing.createData(address, TerminatedStringDataType.dataType);
-			trans.commit();
 		}
 
-		Data data = doPatchAt(address, "\"Hello, World!\"", "\"Hello, Patch!\"");
+		Data data = helper.patchDataAt(address, "\"Hello, World!\"",
+			"\"Hello, Patch!\"");
 		assertEquals("\"Hello, Patch!\"", data.getDefaultValueRepresentation());
 	}
 
 	@Test
 	public void testActionPatchDataUTF8StringShorter() throws Exception {
 		Address address = space.getAddress(0x00400000);
-		try (ProgramTransaction trans = ProgramTransaction.open(program, "Place string")) {
+		try (Transaction tx = program.openTransaction("Place string")) {
 			memory.setBytes(address, "Hello, World!\0".getBytes("utf-8"));
 			listing.createData(address, TerminatedStringDataType.dataType);
-			trans.commit();
 		}
 
-		Data data = doPatchAt(address, "\"Hello, World!\"", "\"Hello!\"");
+		Data data =
+			helper.patchDataAt(address, "\"Hello, World!\"", "\"Hello!\"");
 		assertEquals("\"Hello!\"", data.getDefaultValueRepresentation());
 		assertEquals(7, data.getLength());
 	}
@@ -245,13 +161,12 @@ public class AssemblerPluginTest extends AbstractGhidraHeadedIntegrationTest {
 	@Test
 	public void testActionPatchDataUTF8StringLonger() throws Exception {
 		Address address = space.getAddress(0x00400000);
-		try (ProgramTransaction trans = ProgramTransaction.open(program, "Place string")) {
+		try (Transaction tx = program.openTransaction("Place string")) {
 			memory.setBytes(address, "Hello, World!\0".getBytes("utf-8"));
 			listing.createData(address, TerminatedStringDataType.dataType);
-			trans.commit();
 		}
 
-		Data data = doPatchAt(address, "\"Hello, World!\"", "\"Hello to you, too!\"");
+		Data data = helper.patchDataAt(address, "\"Hello, World!\"", "\"Hello to you, too!\"");
 		assertEquals("\"Hello to you, too!\"", data.getDefaultValueRepresentation());
 		assertEquals(19, data.getLength());
 	}

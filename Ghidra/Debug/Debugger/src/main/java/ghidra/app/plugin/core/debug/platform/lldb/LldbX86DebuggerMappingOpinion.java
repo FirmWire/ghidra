@@ -18,8 +18,9 @@ package ghidra.app.plugin.core.debug.platform.lldb;
 import java.util.Set;
 
 import ghidra.app.plugin.core.debug.mapping.*;
-import ghidra.dbg.target.TargetEnvironment;
-import ghidra.dbg.target.TargetProcess;
+import ghidra.dbg.target.*;
+import ghidra.debug.api.model.DebuggerMappingOffer;
+import ghidra.debug.api.model.DebuggerMappingOpinion;
 import ghidra.program.model.lang.CompilerSpecID;
 import ghidra.program.model.lang.LanguageID;
 import ghidra.util.Msg;
@@ -71,8 +72,12 @@ public class LldbX86DebuggerMappingOpinion implements DebuggerMappingOpinion {
 	}
 
 	@Override
-	public Set<DebuggerMappingOffer> offersForEnv(TargetEnvironment env, TargetProcess process,
+	public Set<DebuggerMappingOffer> offersForEnv(TargetEnvironment env, TargetObject target,
 			boolean includeOverrides) {
+		if (!(target instanceof TargetProcess)) {
+			return Set.of();
+		}
+		TargetProcess process = (TargetProcess) target;
 		if (!env.getDebugger().toLowerCase().contains("lldb")) {
 			return Set.of();
 		}

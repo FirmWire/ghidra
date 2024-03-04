@@ -24,7 +24,6 @@ import ghidra.framework.main.AppInfo;
 import ghidra.framework.model.DomainFolder;
 import ghidra.framework.model.ProjectDataUtils;
 import ghidra.framework.plugintool.Plugin;
-import ghidra.plugin.importer.ImporterUtilities;
 import ghidra.plugin.importer.ProgramMappingService;
 import ghidra.program.model.lang.LanguageService;
 import ghidra.program.model.listing.Program;
@@ -140,8 +139,7 @@ public class GFileSystemLoadKernelTask extends Task {
 					file.getParentFile().getPath());
 				String fileName = ProjectDataUtils.getUniqueName(folder, program.getName());
 
-				GhidraProgramUtilities.setAnalyzedFlag(program, true);
-				ImporterUtilities.setProgramProperties(program, file.getFSRL(), monitor);
+				GhidraProgramUtilities.markProgramAnalyzed(program);
 
 				folder.createFile(fileName, program, monitor);
 

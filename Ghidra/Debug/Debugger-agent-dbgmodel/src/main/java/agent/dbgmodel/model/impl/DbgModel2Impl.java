@@ -72,6 +72,7 @@ public class DbgModel2Impl extends AbstractDbgModel
 	protected DbgModelTargetSession session;
 
 	protected Map<Object, TargetObject> objectMap = new HashMap<>();
+	private boolean suppressDescent = false;
 
 	public DbgModel2Impl() {
 		this.dbg = new DbgManager2Impl();
@@ -120,7 +121,7 @@ public class DbgModel2Impl extends AbstractDbgModel
 
 	@Override
 	public void terminate() throws IOException {
-		listeners.fire.modelClosed(DebuggerModelClosedReason.NORMAL);
+		broadcast().modelClosed(DebuggerModelClosedReason.NORMAL);
 		root.invalidateSubtree(root, "Dbgmodel is terminating");
 		dbg.terminate();
 	}
@@ -148,7 +149,7 @@ public class DbgModel2Impl extends AbstractDbgModel
 		}
 		catch (RejectedExecutionException e) {
 			reportError(this, "Model is already closing", e);
-			return AsyncUtils.NIL;
+			return AsyncUtils.nil();
 		}
 		catch (Throwable t) {
 			return CompletableFuture.failedFuture(t);
@@ -197,5 +198,14 @@ public class DbgModel2Impl extends AbstractDbgModel
 			}
 			return ExceptionUtils.rethrow(ex);
 		});
+	}
+
+	@Override
+	public boolean isSuppressDescent() {
+		return suppressDescent;
+	}
+
+	public void setSuppressDescent(boolean suppressDescent) {
+		this.suppressDescent = suppressDescent;
 	}
 }

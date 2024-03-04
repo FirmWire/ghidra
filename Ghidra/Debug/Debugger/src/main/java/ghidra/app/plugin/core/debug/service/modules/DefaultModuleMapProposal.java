@@ -17,20 +17,30 @@ package ghidra.app.plugin.core.debug.service.modules;
 
 import java.util.*;
 
-import com.google.common.collect.Range;
-
 import ghidra.app.services.DebuggerStaticMappingService;
-import ghidra.app.services.ModuleMapProposal;
-import ghidra.app.services.ModuleMapProposal.ModuleMapEntry;
+import ghidra.debug.api.modules.ModuleMapProposal;
+import ghidra.debug.api.modules.ModuleMapProposal.ModuleMapEntry;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.memory.TraceMemoryRegion;
+import ghidra.trace.model.memory.TraceObjectMemoryRegion;
 import ghidra.trace.model.modules.TraceModule;
 
 public class DefaultModuleMapProposal
 		extends AbstractMapProposal<TraceModule, Program, ModuleMapEntry>
 		implements ModuleMapProposal {
+	protected static final int BLOCK_BITS = 12;
+	protected static final int BLOCK_SIZE = 1 << BLOCK_BITS;
+	protected static final long BLOCK_MASK = -1L << BLOCK_BITS;
+
+	protected static AddressRange quantize(AddressRange range) {
+		AddressSpace space = range.getAddressSpace();
+		Address min = space.getAddress(range.getMinAddress().getOffset() & BLOCK_MASK);
+		Address max = space.getAddress(range.getMaxAddress().getOffset() | ~BLOCK_MASK);
+		return new AddressRangeImpl(min, max);
+	}
 
 	/**
 	 * A module-program entry in a proposed module map
@@ -56,7 +66,7 @@ public class DefaultModuleMapProposal
 				// TODO: Determine how to handle these.
 				return false;
 			}
-			if (MemoryBlock.EXTERNAL_BLOCK_NAME.equals(block.getName())) {
+			if (block.isExternalBlock()) {
 				return false;
 			}
 			return true;
@@ -85,6 +95,7 @@ public class DefaultModuleMapProposal
 		}
 
 		protected AddressRange moduleRange;
+		protected boolean memorize = false;
 
 		/**
 		 * Construct a module map entry
@@ -110,7 +121,7 @@ public class DefaultModuleMapProposal
 		}
 
 		@Override
-		public Range<Long> getFromLifespan() {
+		public Lifespan getFromLifespan() {
 			return getModule().getLifespan();
 		}
 
@@ -128,8 +139,8 @@ public class DefaultModuleMapProposal
 		public void setProgram(Program program) {
 			setToObject(program, program);
 			try {
-				this.moduleRange =
-					new AddressRangeImpl(getModule().getBase(), computeImageSize(program));
+				this.moduleRange = quantize(
+					new AddressRangeImpl(getModule().getBase(), computeImageSize(program)));
 			}
 			catch (AddressOverflowException e) {
 				// This is terribly unlikely
@@ -146,6 +157,16 @@ public class DefaultModuleMapProposal
 			catch (AddressOverflowException e) {
 				throw new AssertionError(e);
 			}
+		}
+
+		@Override
+		public boolean isMemorize() {
+			return memorize;
+		}
+
+		@Override
+		public void setMemorize(boolean memorize) {
+			this.memorize = memorize;
 		}
 	}
 
@@ -192,15 +213,19 @@ public class DefaultModuleMapProposal
 	private void processModule() {
 		moduleBase = module.getBase();
 		try {
-			moduleRange = new AddressRangeImpl(moduleBase, imageSize);
+			moduleRange = quantize(new AddressRangeImpl(moduleBase, imageSize));
 		}
 		catch (AddressOverflowException e) {
 			return; // Just score it as having no matches?
 		}
+		Lifespan lifespan = module.getLifespan();
 		for (TraceMemoryRegion region : module.getTrace()
 				.getMemoryManager()
-				.getRegionsIntersecting(module.getLifespan(), moduleRange)) {
-			getMatcher(region.getMinAddress().subtract(moduleBase)).region = region;
+				.getRegionsIntersecting(lifespan, moduleRange)) {
+			Address min = region instanceof TraceObjectMemoryRegion objReg
+					? objReg.getMinAddress(lifespan.lmin())
+					: region.getMinAddress();
+			getMatcher(min.subtract(moduleBase)).region = region;
 		}
 	}
 

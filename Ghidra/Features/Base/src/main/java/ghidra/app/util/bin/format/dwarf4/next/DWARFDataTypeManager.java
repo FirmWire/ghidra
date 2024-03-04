@@ -15,20 +15,24 @@
  */
 package ghidra.app.util.bin.format.dwarf4.next;
 
-import java.util.*;
+import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFTag.*;
 
 import java.io.IOException;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import ghidra.app.util.bin.format.dwarf4.*;
-import ghidra.app.util.bin.format.dwarf4.encoding.DWARFEncoding;
-import ghidra.app.util.bin.format.dwarf4.encoding.DWARFTag;
+import ghidra.app.util.bin.format.dwarf4.encoding.*;
 import ghidra.app.util.bin.format.dwarf4.expression.DWARFExpressionException;
 import ghidra.app.util.bin.format.dwarf4.next.DWARFDataTypeImporter.DWARFDataType;
 import ghidra.program.model.data.*;
+import ghidra.program.model.lang.CompilerSpec;
 import ghidra.program.model.listing.Program;
 import ghidra.util.Msg;
 import ghidra.util.Swing;
 import ghidra.util.exception.CancelledException;
+import ghidra.util.exception.InvalidInputException;
 import ghidra.util.task.TaskMonitor;
 import utility.function.Dummy;
 
@@ -37,10 +41,17 @@ import utility.function.Dummy;
  */
 public class DWARFDataTypeManager {
 
+	private static final Set<Integer> TYPE_TAGS = Set.of(DW_TAG_base_type, DW_TAG_array_type,
+		DW_TAG_typedef, DW_TAG_class_type, DW_TAG_interface_type, DW_TAG_structure_type,
+		DW_TAG_union_type, DW_TAG_enumeration_type, DW_TAG_pointer_type, DW_TAG_reference_type,
+		DW_TAG_rvalue_reference_type, DW_TAG_const_type, DW_TAG_volatile_type,
+		DW_TAG_ptr_to_member_type, DW_TAG_unspecified_type, DW_TAG_subroutine_type);
+
 	private final DataTypeManager dataTypeManager;
 	private final DataTypeManager builtInDTM;
 	private final DWARFProgram prog;
 	private final DWARFImportSummary importSummary;
+	private final DWARFImportOptions importOptions;
 
 	/**
 	 * Maps DWARF DIE offsets to Ghidra {@link DataType datatypes}, using the
@@ -66,9 +77,6 @@ public class DWARFDataTypeManager {
 	private DataType baseDataTypeBool;
 	private DataType baseDataTypeChar;
 	private DataType baseDataTypeUchar;
-	private DataType baseDataTypeFloats[];
-	private DataType baseDataTypeSignedInts[];
-	private DataType baseDataTypeUnsignedInts[];
 	private DataType baseDataTypeUntyped[];
 	private DataType baseDataTypeChars[];
 	private DataType baseDataTypeUndefined1;
@@ -78,16 +86,13 @@ public class DWARFDataTypeManager {
 	 *
 	 * @param prog {@link DWARFProgram} that holds the Ghidra {@link Program} being imported.
 	 * @param dataTypeManager {@link DataTypeManager} of the Ghidra Program.
-	 * @param builtInDTM {@link DataTypeManager} with built-in data types.
-	 * @param importSummary {@link DWARFImportSummary} where summary information will be stored
-	 * during the import session.
 	 */
-	public DWARFDataTypeManager(DWARFProgram prog, DataTypeManager dataTypeManager,
-			DataTypeManager builtInDTM, DWARFImportSummary importSummary) {
+	public DWARFDataTypeManager(DWARFProgram prog, DataTypeManager dataTypeManager) {
 		this.prog = prog;
 		this.dataTypeManager = dataTypeManager;
-		this.builtInDTM = builtInDTM;
-		this.importSummary = importSummary;
+		this.builtInDTM = BuiltInDataTypeManager.getDataTypeManager();
+		this.importSummary = prog.getImportSummary();
+		this.importOptions = prog.getImportOptions();
 		initBaseDataTypes();
 	}
 
@@ -121,8 +126,7 @@ public class DWARFDataTypeManager {
 		// This does slow us down a little bit but this makes the GUI responsive to the user.
 		Swing.runNow(Dummy.runnable());
 
-		DWARFDataTypeImporter ddtImporter =
-			new DWARFDataTypeImporter(prog, this, prog.getImportOptions());
+		DWARFDataTypeImporter ddtImporter = new DWARFDataTypeImporter(prog, this);
 
 		// Convert the DWARF DIE record into a Ghidra DataType (probably impls)
 		DWARFDataType pre = ddtImporter.getDataType(diea, null);
@@ -254,6 +258,15 @@ public class DWARFDataTypeManager {
 		return null;
 	}
 
+	public DataType getDataTypeForVariable(DIEAggregate diea) {
+		DataType type = getDataType(diea, getVoidType());
+		if (type instanceof FunctionDefinition) {
+			type = getPtrTo(type);
+		}
+		return type;
+
+	}
+
 	/**
 	 * Returns a pointer to the specified data type.
 	 *
@@ -262,6 +275,10 @@ public class DWARFDataTypeManager {
 	 */
 	public DataType getPtrTo(DataType dt) {
 		return dataTypeManager.getPointer(dt);
+	}
+
+	public DataType getPtrTo(DataType dt, int ptrSize) {
+		return dataTypeManager.getPointer(dt, ptrSize);
 	}
 
 	/**
@@ -321,15 +338,6 @@ public class DWARFDataTypeManager {
 	}
 
 	/**
-	 * Returns datatype to hold a 1 byte undefined value.
-	 *
-	 * @return undefined 1 byte {@link DataType}.
-	 */
-	public DataType getUndefined1Type() {
-		return baseDataTypeUndefined1;
-	}
-
-	/**
 	 * Returns a DWARF base data type based on its name, or null if it does not exist.
 	 *
 	 * @param name base type name
@@ -362,7 +370,7 @@ public class DWARFDataTypeManager {
 	 * will be returned.
 	 * <p>
 	 * If the returned data type is not a direct named match, the returned data type
-	 * will be wrapped in a Ghdira typedef using the dwarf type's name.
+	 * will be wrapped in a Ghidra typedef using the dwarf type's name.
 	 * <p>
 	 * Any newly created Ghidra data types will be cached and the same instance will be returned
 	 * if the same DWARF named base type is requested again.
@@ -371,15 +379,21 @@ public class DWARFDataTypeManager {
 	 * @param dwarfSize
 	 * @param dwarfEncoding
 	 * @param isBigEndian
+	 * @param isExplictSize boolean flag, if true the returned data type will not be linked to
+	 * the dataOrganization's compiler specified data types (eg. if type is something like int32_t, 
+	 * the returned type should never change size, even if the dataOrg changes).  If false,
+	 * the returned type will be linked to the dataOrg's compiler specified data types if possible,
+	 * except for data types that have a name that include a bitsize in the name, such as "int64_t". 
 	 * @return
 	 */
 	public DataType getBaseType(String name, int dwarfSize, int dwarfEncoding,
-			boolean isBigEndian) {
+			boolean isBigEndian, boolean isExplictSize) {
+
 		DataType dt = null;
 		String mangledName = null;
 		if (name != null) {
 			dt = baseDataTypes.get(name);
-			if (dt != null && dt.getLength() == dwarfSize &&
+			if (dt != null && dt.getAlignedLength() == dwarfSize &&
 				isEncodingCompatible(dwarfEncoding, dt)) {
 				return dt;
 			}
@@ -389,55 +403,31 @@ public class DWARFDataTypeManager {
 				return dt;
 			}
 		}
-		switch (dwarfEncoding) {
-			case DWARFEncoding.DW_ATE_address:
-				// TODO: Check if bytesize != 0 - may want to make a void pointer
-				dt = baseDataTypeVoid;
-				break;
-			case DWARFEncoding.DW_ATE_boolean:
-				if (dwarfSize == 1) {
-					dt = baseDataTypeBool;
-				}
-				break;
-			case DWARFEncoding.DW_ATE_float:
-				dt = findMatchingDataTypeBySize(baseDataTypeFloats, dwarfSize);
-				break;
-			case DWARFEncoding.DW_ATE_signed:
-				dt = findMatchingDataTypeBySize(baseDataTypeSignedInts, dwarfSize);
-				break;
-			case DWARFEncoding.DW_ATE_unsigned:
-				dt = findMatchingDataTypeBySize(baseDataTypeUnsignedInts, dwarfSize);
-				break;
-			case DWARFEncoding.DW_ATE_signed_char:
-				dt = baseDataTypeChar;
-				break;
-			case DWARFEncoding.DW_ATE_unsigned_char:
-				dt = baseDataTypeUchar;
-				break;
-
-			case DWARFEncoding.DW_ATE_UTF:
-				dt = findMatchingDataTypeBySize(baseDataTypeChars, dwarfSize);
-				break;
-
-			// unsupported DWARF encodings
-			case DWARFEncoding.DW_ATE_packed_decimal:
-			case DWARFEncoding.DW_ATE_numeric_string:
-			case DWARFEncoding.DW_ATE_edited:
-			case DWARFEncoding.DW_ATE_signed_fixed:
-			case DWARFEncoding.DW_ATE_unsigned_fixed:
-			case DWARFEncoding.DW_ATE_decimal_float:
-			case DWARFEncoding.DW_ATE_complex_float:
-			case DWARFEncoding.DW_ATE_imaginary_float:
-				break;
-		}
+		dt = switch (dwarfEncoding) {
+			case DWARFEncoding.DW_ATE_address -> baseDataTypeVoid; // TODO: Check if bytesize != 0 - may want to make a void pointer
+			case DWARFEncoding.DW_ATE_boolean -> dwarfSize == 1 ? baseDataTypeBool : null;
+			// TODO: Float lookup by length must use "raw" encoding size since "aligned" lengths
+			// may be duplicated across different float types.  Lookup by name is preferred.
+			// May need to add name lookup capability to AbstractFloatDataType
+			case DWARFEncoding.DW_ATE_float -> AbstractFloatDataType.getFloatDataType(dwarfSize,
+				getCorrectDTMForFixedLengthTypes(name, dwarfSize, isExplictSize));
+			case DWARFEncoding.DW_ATE_signed -> AbstractIntegerDataType.getSignedDataType(dwarfSize,
+				getCorrectDTMForFixedLengthTypes(name, dwarfSize, isExplictSize));
+			case DWARFEncoding.DW_ATE_unsigned -> AbstractIntegerDataType.getUnsignedDataType(
+				dwarfSize, getCorrectDTMForFixedLengthTypes(name, dwarfSize, isExplictSize));
+			case DWARFEncoding.DW_ATE_signed_char -> baseDataTypeChar;
+			case DWARFEncoding.DW_ATE_unsigned_char -> baseDataTypeUchar;
+			case DWARFEncoding.DW_ATE_UTF -> findMatchingDataTypeBySize(baseDataTypeChars,
+				dwarfSize);
+			default -> null;
+		};
 
 		if (dt == null) {
 			dt = findMatchingDataTypeBySize(baseDataTypeUntyped, dwarfSize);
 		}
 
 		if (dt == null) {
-			dt = new ArrayDataType(DataType.DEFAULT, dwarfSize, DataType.DEFAULT.getLength(),
-				dataTypeManager);
+			dt = new ArrayDataType(DataType.DEFAULT, dwarfSize, -1, dataTypeManager);
 		}
 
 		if (name != null /* mangledName also will be non-null */) {
@@ -451,14 +441,26 @@ public class DWARFDataTypeManager {
 		return dt;
 	}
 
-	/**
+
+	private DataTypeManager getCorrectDTMForFixedLengthTypes(String name, int dwarfSize,
+			boolean predeterminedHasExplictSize) {
+		// If the requested name of the base type appears to have a bitsize string
+		// embedded in it, this chunk of code will switch between using the normal DTM
+		// to using a null DTM to force the Abstract(Integer|Float)DataType helper method to
+		// create compiler independent data types that don't change size when the architecture is
+		// changed.
+		int typenameExplicitSize;
+		boolean usedFixedSizeType = predeterminedHasExplictSize ||
+			(importOptions.isSpecialCaseSizedBaseTypes() &&
+				(typenameExplicitSize = getExplicitSizeFromTypeName(name)) != -1 &&
+				typenameExplicitSize / 8 == dwarfSize);
+		return usedFixedSizeType ? null : dataTypeManager;
+	}
+
+	/*
 	 * Create a string with the data type's size and type info so that
 	 * the data type can be stored in the same map as the regular named base types without
 	 * conflicting.
-	 * <p>
-	 * @param dwarfLength
-	 * @param dwarfEncoding
-	 * @return
 	 */
 	private String mangleDataTypeInfo(int dwarfLength, int dwarfEncoding) {
 		return String.format("%s_%d_%d", BASETYPE_MANGLE_PREFIX, dwarfLength, dwarfEncoding);
@@ -503,9 +505,6 @@ public class DWARFDataTypeManager {
 		DataType longlongDT = findGhidraType("longlong");
 		DataType ulonglongDT = findGhidraType("ulonglong");
 
-		baseDataTypeSignedInts = new DataType[] { shortDT, intDT, longDT, longlongDT };
-		baseDataTypeUnsignedInts = new DataType[] { ushortDT, uintDT, ulongDT, ulonglongDT };
-
 		baseDataTypes.put("short", shortDT);
 		baseDataTypes.put("short int", shortDT);
 		baseDataTypes.put("signed short int", shortDT);
@@ -531,7 +530,6 @@ public class DWARFDataTypeManager {
 		DataType floatDT = findGhidraType("float");
 		DataType doubleDT = findGhidraType("double");
 		DataType ldoubleDT = findGhidraType("longdouble");
-		baseDataTypeFloats = new DataType[] { floatDT, doubleDT, ldoubleDT };
 		baseDataTypes.put("double", doubleDT);
 		baseDataTypes.put("long double", ldoubleDT);
 		baseDataTypes.put("float", floatDT);
@@ -555,29 +553,29 @@ public class DWARFDataTypeManager {
 			throws IOException, DWARFException, CancelledException {
 		int dtCountBefore = dataTypeManager.getDataTypeCount(true);
 
-		for (DIEAggregate diea : DIEAMonitoredIterator.iterable(prog, "DWARF Import Types",
-			monitor)) {
-			monitor.checkCanceled();
+		monitor.initialize(prog.getTotalAggregateCount(), "DWARF Import Types");
+		for (DIEAggregate diea : prog.allAggregates()) {
+			monitor.increment();
 
 			try {
-				if (isDataType(diea)) {
+				if (TYPE_TAGS.contains(diea.getTag())) {
 					doGetDataType(diea);
 				}
 			}
 			catch (IllegalArgumentException iae) {
 				// squelch full stack trace for data type errors where structure is defined to
 				// have itself inside itself.
-				Msg.error(this,
-					"Failed to process DWARF DIE " + diea.getHexOffset() + ": " + iae.getMessage());
+				Msg.error(this, "Failed to process DWARF DIE %x: %s".formatted(diea.getOffset(),
+					iae.getMessage()));
 			}
 			catch (OutOfMemoryError oom) {
 				throw oom;
 			}
 			catch (Throwable th) {
-				// Aggressively catch pretty much everything to allow the import to
-				// try to continue with the next compunit.
-				Msg.error(this,
-					"Error when processing DWARF information for DIE " + diea.getHexOffset(), th);
+				// Aggressively catch pretty much everything to allow the import to continue
+				Msg.error(this, "Error when processing DWARF information for DIE %x"
+						.formatted(diea.getOffset()),
+					th);
 				Msg.info(this, "DIE info:\n" + diea.toString());
 			}
 		}
@@ -585,10 +583,6 @@ public class DWARFDataTypeManager {
 		int dtCountAfter = dataTypeManager.getDataTypeCount(true);
 
 		importSummary.dataTypesAdded = (dtCountAfter - dtCountBefore);
-
-		if (prog.getImportOptions().isCreateFuncSignatures()) {
-			importFuncSignatures(monitor);
-		}
 	}
 
 	private DIEAggregate getFuncDIEA(DIEAggregate diea) {
@@ -629,88 +623,12 @@ public class DWARFDataTypeManager {
 		return null;
 	}
 
-	private void importFuncSignatures(TaskMonitor monitor) throws CancelledException {
-
-		int dtCountBefore = dataTypeManager.getDataTypeCount(true);
-
-		for (DIEAggregate diea : DIEAMonitoredIterator.iterable(prog,
-			"DWARF Import Function Signatures", monitor)) {
-			monitor.checkCanceled();
-			try {
-				diea = getFuncDIEA(diea);
-				if (diea != null) {
-					DWARFNameInfo dni = prog.getName(diea);
-					DataType funcDefDT = createFunctionDefinitionDataType(diea, dni);
-					if (funcDefDT != null) {
-						// submit the temp 'impl' funcdef datatype to the DTM and get back a permanent
-						// db instance.
-						funcDefDT = dataTypeManager.addDataType(funcDefDT,
-							DataTypeConflictHandler.DEFAULT_HANDLER);
-
-						// Look for the source info in the funcdef die and fall back to its
-						// parent's source info (handles auto-generated ctors and such)
-						addDataType(diea.getOffset(), funcDefDT,
-							DWARFSourceInfo.getSourceInfoWithFallbackToParent(diea));
-
-						Swing.runNow(Dummy.runnable());
-					}
-				}
-			}
-			catch (OutOfMemoryError oom) {
-				throw oom;
-			}
-			catch (Throwable th) {
-				// Aggressively catch pretty much everything to allow the import to
-				// try to continue with the next compunit.
-				Msg.error(this,
-					"Error when processing DWARF information for DIE " + diea.getHexOffset(), th);
-				Msg.info(this, "DIE info:\n" + diea.toString());
-			}
-		}
-
-		int dtCountAfter = dataTypeManager.getDataTypeCount(true);
-		importSummary.funcSignaturesAdded = (dtCountAfter - dtCountBefore);
-	}
-
-	private boolean isDataType(DIEAggregate diea) {
-		switch (diea.getTag()) {
-			case DWARFTag.DW_TAG_base_type:
-			case DWARFTag.DW_TAG_array_type:
-			case DWARFTag.DW_TAG_typedef:
-			case DWARFTag.DW_TAG_class_type:
-			case DWARFTag.DW_TAG_interface_type:
-			case DWARFTag.DW_TAG_structure_type:
-			case DWARFTag.DW_TAG_union_type:
-			case DWARFTag.DW_TAG_enumeration_type:
-			case DWARFTag.DW_TAG_pointer_type:
-			case DWARFTag.DW_TAG_reference_type:
-			case DWARFTag.DW_TAG_rvalue_reference_type:
-			case DWARFTag.DW_TAG_const_type:
-			case DWARFTag.DW_TAG_volatile_type:
-			case DWARFTag.DW_TAG_ptr_to_member_type:
-			case DWARFTag.DW_TAG_unspecified_type:
-			case DWARFTag.DW_TAG_subroutine_type:
-				return true;
-
-			default:
-				return false;
-		}
-	}
-
 	/**
 	 * Creates a new {@link FunctionDefinitionDataType} from the specified {@link DIEAggregate}
 	 * using already known datatypes.
 	 * <p>
-	 * The logic of this impl is the same as {@link DWARFDataTypeImporter#makeDataTypeForFunctionDefinition(DIEAggregate, boolean)}
-	 * but the impls can't be shared without excessive over-engineering.
-	 * <p>
 	 * This impl uses DataType's that have already been resolved and committed to the DTM, and
 	 * a cache mapping entry of the DWARF die -&gt; DataType has been registered via {@link #addDataType(long, DataType, DWARFSourceInfo)}.
-	 * <p>
-	 * This approach is necessary because of speed issues that arise if the referred datatypes
-	 * are created from scratch from the DWARF information and then have to go through a
-	 * resolve() before being used in the FunctionDefinition.
-	 *
 	 *
 	 * @param diea DWARF {@link DIEAggregate} that points to a subprogram or subroutine_type.
 	 * @param dni DWARF name info for the new function def
@@ -718,13 +636,14 @@ public class DWARFDataTypeManager {
 	 */
 	private FunctionDefinitionDataType createFunctionDefinitionDataType(DIEAggregate diea,
 			DWARFNameInfo dni) {
-		DataType returnDataType = getDataType(diea.getTypeRef(), baseDataTypeVoid);
+		DataType returnDataType = getDataTypeForVariable(diea.getTypeRef());
 		boolean foundThisParam = false;
 		List<ParameterDefinition> params = new ArrayList<>();
 		for (DIEAggregate paramDIEA : diea.getFunctionParamList()) {
 
 			String paramName = paramDIEA.getName();
-			DataType paramDT = getDataType(paramDIEA.getTypeRef(), null);
+			DataType paramDT = getDataTypeForVariable(paramDIEA.getTypeRef());
+
 			if (paramDT == null || paramDT.getLength() <= 0) {
 				Msg.error(this,
 					"Bad function parameter type for function " + dni.asCategoryPath() +
@@ -742,16 +661,52 @@ public class DWARFDataTypeManager {
 		FunctionDefinitionDataType funcDef =
 			new FunctionDefinitionDataType(dni.getParentCP(), dni.getName(), dataTypeManager);
 		funcDef.setReturnType(returnDataType);
+		funcDef.setNoReturn(diea.getBool(DWARFAttribute.DW_AT_noreturn, false));
 		funcDef.setArguments(params.toArray(new ParameterDefinition[params.size()]));
 
 		if (!diea.getHeadFragment().getChildren(DWARFTag.DW_TAG_unspecified_parameters).isEmpty()) {
 			funcDef.setVarArgs(true);
 		}
 		if (foundThisParam) {
-			funcDef.setGenericCallingConvention(GenericCallingConvention.thiscall);
+			try {
+				funcDef.setCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall);
+			}
+			catch (InvalidInputException e) {
+				Msg.error(this, "Unexpected calling convention error", e);
+			}
 		}
 
 		return funcDef;
 	}
+	
+	/**
+	 * Regex to match common fixed-size type names like "int64", "int64_t", etc, by triggering
+	 * off some known size designators in the string.
+	 * <p>
+	 * <pre>
+	 * \D+ &larr; one or more non-digits
+	 *    (8|16|32|64|128) &larr; list of common sizes that we are triggering on
+	 *                    \D* &larr; with optional non-digit trailing characters
+	 * </pre>
+	 */
+	private static final Pattern FIXED_SIZED_TYPE_NAME_PATTERN =
+		Pattern.compile("\\D+(8|16|32|64|128)\\D*");
+
+	private int getExplicitSizeFromTypeName(String name) {
+		if (name == null) {
+			return -1;
+		}
+		Matcher m = FIXED_SIZED_TYPE_NAME_PATTERN.matcher(name);
+		if (m.matches()) {
+			try {
+				return Integer.parseInt(m.group(1));
+			}
+			catch (NumberFormatException e) {
+				// shouldn't happen
+			}
+		}
+		return -1;
+	}
+
 
 }

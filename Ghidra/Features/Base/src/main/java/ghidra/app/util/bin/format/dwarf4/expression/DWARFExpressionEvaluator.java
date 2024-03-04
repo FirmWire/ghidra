@@ -18,6 +18,7 @@ package ghidra.app.util.bin.format.dwarf4.expression;
 import static ghidra.app.util.bin.format.dwarf4.expression.DWARFExpressionOpCodes.*;
 
 import java.util.ArrayDeque;
+import java.util.Objects;
 
 import ghidra.app.util.bin.format.dwarf4.DWARFCompilationUnit;
 import ghidra.app.util.bin.format.dwarf4.DebugInfoEntry;
@@ -90,7 +91,7 @@ public class DWARFExpressionEvaluator {
 
 	public static DWARFExpressionEvaluator create(DebugInfoEntry die) {
 		DWARFCompilationUnit compUnit = die.getCompilationUnit();
-		DWARFProgram prog = die.getCompilationUnit().getProgram();
+		DWARFProgram prog = die.getProgram();
 		DWARFExpressionEvaluator evaluator = new DWARFExpressionEvaluator(compUnit.getPointerSize(),
 			!prog.isBigEndian(), compUnit.getFormat(), prog.getRegisterMappings());
 
@@ -102,7 +103,8 @@ public class DWARFExpressionEvaluator {
 		this.pointerSize = pointerSize;
 		this.isLittleEndian = isLittleEndian;
 		this.dwarfFormat = dwarfFormat;
-		this.registerMappings = registerMappings;
+		this.registerMappings =
+			Objects.requireNonNullElse(registerMappings, DWARFRegisterMappings.DUMMY);
 	}
 
 	public void setFrameBase(long fb) {
@@ -275,6 +277,8 @@ public class DWARFExpressionEvaluator {
 			else {
 				useUnknownRegister = true;
 				if (offset == 0) {
+					// if offset is 0, we can represent the location as a ghidra register location
+					// also implies a deref by the user of this location info
 					registerLoc = true;
 				}
 			}
@@ -364,6 +368,7 @@ public class DWARFExpressionEvaluator {
 
 				case DW_OP_call_frame_cfa: {
 					push(registerMappings.getCallFrameCFA());
+					lastStackRelative = true;
 					break;
 				}
 

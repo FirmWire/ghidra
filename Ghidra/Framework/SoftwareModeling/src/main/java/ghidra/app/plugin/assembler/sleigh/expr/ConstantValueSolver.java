@@ -18,13 +18,13 @@ package ghidra.app.plugin.assembler.sleigh.expr;
 import java.util.Map;
 import java.util.Set;
 
-import ghidra.app.plugin.assembler.sleigh.sem.AssemblyResolution;
-import ghidra.app.plugin.assembler.sleigh.sem.AssemblyResolvedConstructor;
+import ghidra.app.plugin.assembler.sleigh.sem.*;
 import ghidra.app.plugin.processors.sleigh.expression.ConstantValue;
 
 /**
  * "Solves" constant expressions
  * 
+ * <p>
  * Essentially, this either evaluates successfully when asked for a constant value, or checks that
  * the goal is equal to the constant. Otherwise, there is no solution.
  */
@@ -35,36 +35,39 @@ public class ConstantValueSolver extends AbstractExpressionSolver<ConstantValue>
 	}
 
 	@Override
-	public AssemblyResolution solve(ConstantValue cv, MaskedLong goal, Map<String, Long> vals,
-			Map<Integer, Object> res, AssemblyResolvedConstructor cur, Set<SolverHint> hints,
-			String description) {
-		MaskedLong value = getValue(cv, vals, res, cur);
-		return checkConstAgrees(value, goal, description);
+	public AssemblyResolution solve(AbstractAssemblyResolutionFactory<?, ?> factory,
+			ConstantValue cv, MaskedLong goal, Map<String, Long> vals, AssemblyResolvedPatterns cur,
+			Set<SolverHint> hints, String description) {
+		MaskedLong value = getValue(cv, vals, cur);
+		return checkConstAgrees(factory, value, goal, description);
 	}
 
 	@Override
-	public MaskedLong getValue(ConstantValue cv, Map<String, Long> vals, Map<Integer, Object> res,
-			AssemblyResolvedConstructor cur) {
+	public MaskedLong getValue(ConstantValue cv, Map<String, Long> vals,
+			AssemblyResolvedPatterns cur) {
 		return MaskedLong.fromLong(cv.getValue());
 	}
 
 	@Override
-	public int getInstructionLength(ConstantValue cv, Map<Integer, Object> res) {
+	public int getInstructionLength(ConstantValue cv) {
 		return 0;
 	}
 
 	@Override
-	public MaskedLong valueForResolution(ConstantValue cv, AssemblyResolvedConstructor rc) {
+	public MaskedLong valueForResolution(ConstantValue cv, Map<String, Long> vals,
+			AssemblyResolvedPatterns rc) {
 		return MaskedLong.fromLong(cv.getValue());
 	}
 
-	static AssemblyResolution checkConstAgrees(MaskedLong value, MaskedLong goal,
+	static AssemblyResolution checkConstAgrees(
+			AbstractAssemblyResolutionFactory<?, ?> factory, MaskedLong value, MaskedLong goal,
 			String description) {
 		if (!value.agrees(goal)) {
-			return AssemblyResolution.error(
-				"Constant value " + value + " does not agree with child requirements", description,
-				null);
+			return factory.newErrorBuilder()
+					.error("Constant value " + value + " does not agree with child requirements")
+					.description(description)
+					.build();
 		}
-		return AssemblyResolution.nop(description, null);
+		return factory.nop(description);
 	}
 }

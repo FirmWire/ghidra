@@ -1,6 +1,5 @@
 /* ###
  * IP: GHIDRA
- * REVIEWED: YES
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +15,22 @@
  */
 package ghidra.app.plugin.core.navigation;
 
-import ghidra.framework.plugintool.PluginTool;
-import ghidra.program.model.address.Address;
-import ghidra.program.model.listing.*;
-import ghidra.util.exception.CancelledException;
-import ghidra.util.task.TaskMonitor;
-
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 
 import javax.swing.Icon;
 import javax.swing.KeyStroke;
 
-import resources.ResourceManager;
+import generic.theme.GIcon;
+import ghidra.framework.plugintool.PluginTool;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.*;
+import ghidra.util.exception.CancelledException;
+import ghidra.util.task.TaskMonitor;
 
 public class NextPreviousUndefinedAction extends AbstractNextPreviousAction {
+
+	private static final Icon ICON = new GIcon("icon.plugin.navigation.undefined");
 
 	public NextPreviousUndefinedAction(PluginTool tool, String owner, String subGroup) {
 		super(tool, "Next Undefined", owner, subGroup);
@@ -38,7 +38,7 @@ public class NextPreviousUndefinedAction extends AbstractNextPreviousAction {
 
 	@Override
 	protected Icon getIcon() {
-		return ResourceManager.loadImage("images/U.gif");
+		return ICON;
 	}
 
 	@Override
@@ -52,21 +52,20 @@ public class NextPreviousUndefinedAction extends AbstractNextPreviousAction {
 		return "Undefined";
 	}
 
-	/**
-	 * Find the beginning of the next instruction range
-	 * @throws CancelledException 
-	 */
 	@Override
 	protected Address getNextAddress(TaskMonitor monitor, Program program, Address address)
 			throws CancelledException {
 
+		if (isInverted) {
+			return getNextNonUndefined(monitor, program, address);
+		}
+
 		if (isUndefinedAt(program, address)) {
-			// on an undefined, we have to find a defined before finding the next undefined
+			// on an undefined, find a defined before finding the next undefined
 			address = getAddressOfNextDefined(program, address);
 		}
 
-		// we know address is not an instruction at this point
-
+		// we know address is not an undefined at this point
 		return getAddressOfNextPreviousUndefined(monitor, program, address, true);
 	}
 
@@ -74,14 +73,49 @@ public class NextPreviousUndefinedAction extends AbstractNextPreviousAction {
 	protected Address getPreviousAddress(TaskMonitor monitor, Program program, Address address)
 			throws CancelledException {
 
+		if (isInverted) {
+			return getPreviousNonUndefined(monitor, program, address);
+		}
+
 		if (isUndefinedAt(program, address)) {
-			// on an instruction, we have to find a non-instruction before finding the previous instruction
+			// on an undefined, find a defined before finding the previous undefined
 			address = getAddressOfPreviousDefined(program, address);
 		}
 
-		// we know address is not at an instruction at this point
-
+		// we know address is not at an undefined at this point
 		return getAddressOfNextPreviousUndefined(monitor, program, address, false);
+	}
+
+	private Address getNextNonUndefined(TaskMonitor monitor, Program program, Address address)
+			throws CancelledException {
+
+		//
+		// Assumptions:
+		// -if on an undefined, find the next instruction or data
+		// -if not on an undefined, find the next undefined, then find the next instruction or 
+		//  undefined after that (this mimics the non-inverted case)
+		//
+		if (!isUndefinedAt(program, address)) {
+			address = getAddressOfNextPreviousUndefined(monitor, program, address, true);
+		}
+
+		return getAddressOfNextDefined(program, address);
+	}
+
+	private Address getPreviousNonUndefined(TaskMonitor monitor, Program program, Address address)
+			throws CancelledException {
+
+		//
+		// Assumptions:
+		// -if on an undefined, find the previous data or instruction
+		// -if not on an undefined, find the previous undefined, then find the previous data or 
+		//  instruction before that (this mimics the non-inverted case)
+		//
+		if (!isUndefinedAt(program, address)) {
+			address = getAddressOfNextPreviousUndefined(monitor, program, address, false);
+		}
+
+		return getAddressOfPreviousDefined(program, address);
 	}
 
 	private boolean isUndefinedAt(Program program, Address address) {
@@ -119,7 +153,7 @@ public class NextPreviousUndefinedAction extends AbstractNextPreviousAction {
 
 		CodeUnitIterator codeUnits = program.getListing().getCodeUnits(address, forward);
 		while (codeUnits.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			CodeUnit codeUnit = codeUnits.next();
 			if (codeUnit instanceof Data) {
 				if (!((Data) codeUnit).isDefined()) {

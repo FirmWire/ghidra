@@ -1,6 +1,5 @@
 /* ###
  * IP: GHIDRA
- * REVIEWED: YES
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +15,22 @@
  */
 package ghidra.app.plugin.core.navigation;
 
-import ghidra.framework.plugintool.PluginTool;
-import ghidra.program.model.address.Address;
-import ghidra.program.model.listing.*;
-import ghidra.util.exception.CancelledException;
-import ghidra.util.task.TaskMonitor;
-
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 
 import javax.swing.Icon;
 import javax.swing.KeyStroke;
 
-import resources.ResourceManager;
+import generic.theme.GIcon;
+import ghidra.framework.plugintool.PluginTool;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.*;
+import ghidra.util.exception.CancelledException;
+import ghidra.util.task.TaskMonitor;
 
 public class NextPreviousInstructionAction extends AbstractNextPreviousAction {
+
+	private static final Icon ICON = new GIcon("icon.plugin.navigation.instruction");
 
 	public NextPreviousInstructionAction(PluginTool tool, String owner, String subGroup) {
 		super(tool, "Next Instruction", owner, subGroup);
@@ -38,7 +38,7 @@ public class NextPreviousInstructionAction extends AbstractNextPreviousAction {
 
 	@Override
 	protected Icon getIcon() {
-		return ResourceManager.loadImage("images/I.gif");
+		return ICON;
 	}
 
 	@Override
@@ -52,21 +52,20 @@ public class NextPreviousInstructionAction extends AbstractNextPreviousAction {
 		return "Instruction";
 	}
 
-	/**
-	 * Find the beginning of the next instruction range
-	 * @throws CancelledException 
-	 */
 	@Override
 	protected Address getNextAddress(TaskMonitor monitor, Program program, Address address)
 			throws CancelledException {
 
+		if (isInverted) {
+			return getNextNonInstructionAddress(monitor, program, address);
+		}
+
 		if (isInstructionAt(program, address)) {
-			// on an instruction, we have to find a non-instruction before finding the next instruction
+			// on an instruction, find a non-instruction before finding the next instruction
 			address = getAddressOfNextPreviousNonInstruction(monitor, program, address, true);
 		}
 
 		// we know address is not an instruction at this point
-
 		return getAddressOfNextInstructionAfter(program, address);
 	}
 
@@ -74,14 +73,49 @@ public class NextPreviousInstructionAction extends AbstractNextPreviousAction {
 	protected Address getPreviousAddress(TaskMonitor monitor, Program program, Address address)
 			throws CancelledException {
 
+		if (isInverted) {
+			return getPreviousNonInstructionAddress(monitor, program, address);
+		}
+
 		if (isInstructionAt(program, address)) {
-			// on an instruction, we have to find a non-instruction before finding the previous instruction
+			// on an instruction, find a non-instruction before finding the previous instruction
 			address = getAddressOfNextPreviousNonInstruction(monitor, program, address, false);
 		}
 
 		// we know address is not at an instruction at this point
-
 		return getAddressOfPreviousInstructionBefore(program, address);
+	}
+
+	private Address getNextNonInstructionAddress(TaskMonitor monitor, Program program,
+			Address address) throws CancelledException {
+
+		//
+		// Assumptions:
+		// -if on an instruction, find the next data or undefined
+		// -if not on an instruction, find the next instruction, then find the next data or 
+		//  undefined after that (this mimics the non-inverted case)
+		//
+		if (!isInstructionAt(program, address)) {
+			address = getAddressOfNextInstructionAfter(program, address);
+		}
+
+		return getAddressOfNextPreviousNonInstruction(monitor, program, address, true);
+	}
+
+	private Address getPreviousNonInstructionAddress(TaskMonitor monitor, Program program,
+			Address address) throws CancelledException {
+
+		//
+		// Assumptions:
+		// -if on an instruction, find the previous data or undefined
+		// -if not on an instruction, find the previous instruction, then find the previous data or 
+		//  undefined before that (this mimics the non-inverted case)
+		//
+		if (!isInstructionAt(program, address)) {
+			address = getAddressOfPreviousInstructionBefore(program, address);
+		}
+
+		return getAddressOfNextPreviousNonInstruction(monitor, program, address, false);
 	}
 
 	private boolean isInstructionAt(Program program, Address address) {
@@ -116,9 +150,13 @@ public class NextPreviousInstructionAction extends AbstractNextPreviousAction {
 	private Address getAddressOfNextPreviousNonInstruction(TaskMonitor monitor, Program program,
 			Address address, boolean forward) throws CancelledException {
 
+		if (address == null) {
+			return null;
+		}
+
 		CodeUnitIterator codeUnits = program.getListing().getCodeUnits(address, forward);
 		while (codeUnits.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			CodeUnit codeUnit = codeUnits.next();
 			if (codeUnit instanceof Data) {
 				return codeUnit.getAddress();

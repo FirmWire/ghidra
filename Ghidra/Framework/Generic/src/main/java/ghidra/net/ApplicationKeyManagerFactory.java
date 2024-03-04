@@ -21,7 +21,7 @@ import java.net.Socket;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
+import java.util.*;
 
 import javax.net.ssl.*;
 import javax.security.auth.x500.X500Principal;
@@ -33,8 +33,6 @@ import ghidra.security.KeyStorePasswordProvider;
 import ghidra.util.Msg;
 import ghidra.util.SystemUtilities;
 import ghidra.util.exception.CancelledException;
-import ghidra.util.filechooser.ExtensionFileFilter;
-import ghidra.util.filechooser.GhidraFileFilter;
 
 /**
  * <code>ApplicationKeyManagerFactory</code> provides application keystore management
@@ -58,18 +56,13 @@ public class ApplicationKeyManagerFactory {
 	 */
 	public static final String KEYSTORE_PASSWORD_PROPERTY = "ghidra.password";
 
-	/**
-	 * PKCS Private Key/Certificate File Filter
-	 */
-	public static final GhidraFileFilter CERTIFICATE_FILE_FILTER =
-		new ExtensionFileFilter(ApplicationKeyStore.PKCS_FILE_EXTENSIONS, "PKCS Key File");
-
 	public static final String DEFAULT_PASSWORD = "changeme";
 
 	private static final int SELF_SIGNED_DURATION_DAYS = 2 * 365; // 2-years
 
 	private static KeyStorePasswordProvider customPasswordProvider;
 	private static X500Principal defaultIdentity;
+	private static List<String> subjectAlternativeNames;
 
 	private static ApplicationKeyManagerFactory instance;
 
@@ -127,17 +120,16 @@ public class ApplicationKeyManagerFactory {
 	 * This change will take immediate effect for the current executing application,
 	 * however, it may still be superseded by a system property setting when running
 	 * the application in the future. See {@link #getKeyStore()}.
-	 * @param path keystore file path
+	 * @param path keystore file path or null to clear current key store and preference.
 	 * @param savePreference if true will be saved as user preference
-	 * @throws IOException if file or certificate error occurs
+	 * @return true if successful else false if error occured (see log).
 	 */
-	public static synchronized void setKeyStore(String path, boolean savePreference)
-			throws IOException {
+	public static synchronized boolean setKeyStore(String path, boolean savePreference) {
 
 		if (System.getProperty(KEYSTORE_PATH_PROPERTY) != null) {
 			Msg.showError(ApplicationKeyManagerFactory.class, null, "Set KeyStore Failed",
-				"KeyStore was set via system property and can not be changed");
-			return;
+				"PKI KeyStore was set via system property and can not be changed");
+			return false;
 		}
 
 		path = prunePath(path);
@@ -149,9 +141,11 @@ public class ApplicationKeyManagerFactory {
 				Preferences.setProperty(KEYSTORE_PATH_PROPERTY, path);
 				Preferences.store();
 			}
+			return keyInitialized;
 		}
 		catch (CancelledException e) {
 			// ignore - keystore left unchanged
+			return false;
 		}
 	}
 
@@ -165,7 +159,7 @@ public class ApplicationKeyManagerFactory {
 
 	/**
 	 * If the system property <i>ghidra.keystore</i> takes precedence in establishing 
-	 * the ketsore.  If using a GUI and the system property has not been set, the 
+	 * the keystore.  If using a GUI and the system property has not been set, the 
 	 * user preference with the same name will be used.
 	 * @return active keystore path or null if currently not running with a keystore or
 	 * one has not been set.
@@ -189,14 +183,46 @@ public class ApplicationKeyManagerFactory {
 	/**
 	 * Set the default self-signed principal identity to be used during initialization
 	 * if no keystore defined.  Current application key manager will be invalidated.
-	 * @param identity if not null and a KeyStore path has not be set, this
-	 * identity will be used to generate a self-signed certificate and private key
 	 * (NOTE: this is intended for server use only when client will not be performing
 	 * CA validation).
+	 * @param identity if not null and a KeyStore path has not be set, this
+	 * identity will be used to generate a self-signed certificate and private key
 	 */
 	public synchronized static void setDefaultIdentity(X500Principal identity) {
 		defaultIdentity = identity;
 		getKeyManagerWrapper().invalidateKey();
+	}
+
+	/**
+	 * Add the optional self-signed subject alternative name to be used during initialization
+	 * if no keystore defined.  Current application key manager will be invalidated.
+	 * (NOTE: this is intended for server use only when client will not be performing
+	 * CA validation).
+	 * @param subjectAltName name to be added to the current list of alternative subject names.
+	 * A null value will clear all names currently set.  
+	 * name will be used to generate a self-signed certificate and private key
+	 */
+	public synchronized static void addSubjectAlternativeName(String subjectAltName) {
+		if (subjectAltName == null) {
+			subjectAlternativeNames = null;
+		}
+		else {
+			if (subjectAlternativeNames == null) {
+				subjectAlternativeNames = new ArrayList<>();
+			}
+			subjectAlternativeNames.add(subjectAltName);
+		}
+		getKeyManagerWrapper().invalidateKey();
+	}
+
+	/**
+	 * Get the current list of subject alternative names to be used for a self-signed certificate
+	 * if no keystore defined.
+	 * @return list of subject alternative names to be used for a self-signed certificate
+	 * if no keystore defined.
+	 */
+	public synchronized static List<String> getSubjectAlternativeName() {
+		return Collections.unmodifiableList(subjectAlternativeNames);
 	}
 
 	/**
@@ -509,7 +535,9 @@ public class ApplicationKeyManagerFactory {
 		 * has been set, a self-signed certificate will be generated.  If nothing has been set, the
 		 * wrappedKeyManager will remain null and false will be returned.  If an error occurs it
 		 * will be logged and key managers will remain uninitialized.
-		 * @return true if key manager initialized successfully or was previously initialized.
+		 * @return true if key manager initialized successfully or was previously initialized, else
+		 * false if keystore path has not been set and default identity for self-signed certificate
+		 * has not be established (see {@link ApplicationKeyManagerFactory#setDefaultIdentity(X500Principal)}).
 		 * @throws CancelledException user cancelled keystore password entry request
 		 */
 		private synchronized boolean init() throws CancelledException {
@@ -527,7 +555,9 @@ public class ApplicationKeyManagerFactory {
 		 * wrappedKeyManager will remain null and false will be returned.  If an error occurs it
 		 * will be logged and key managers will remain uninitialized.
 		 * @param newKeystorePath specifies the keystore to be opened or null for no keystore
-		 * @return true if key manager initialized successfully or was previously initialized
+		 * @return true if key manager initialized successfully or was previously initialized, else
+		 * false if new keystore path was not specified and default identity for self-signed certificate
+		 * has not be established (see {@link ApplicationKeyManagerFactory#setDefaultIdentity(X500Principal)}).
 		 * @throws CancelledException user cancelled keystore password entry request
 		 */
 		private synchronized boolean init(String newKeystorePath) throws CancelledException {
@@ -551,7 +581,7 @@ public class ApplicationKeyManagerFactory {
 					KeyStore selfSignedKeyStore =
 						ApplicationKeyManagerUtils.createKeyStore("defaultSigKey",
 							defaultIdentity.getName(), SELF_SIGNED_DURATION_DAYS, null, null, "JKS",
-							pwd);
+							subjectAlternativeNames, pwd);
 					keystoreData = new ProtectedKeyStoreData(selfSignedKeyStore, pwd);
 					isSelfSigned = true;
 				}
@@ -576,25 +606,25 @@ public class ApplicationKeyManagerFactory {
 				isSelfSigned = false;
 
 				if (keyManagers.length == 0) {
-					Msg.showError(this, null, "Keystore Failure",
-						"Failed to create key manager: failed to process keystore (no keys processed)");
+					Msg.showError(this, null, "PKI Keystore Failure",
+						"Failed to create PKI key manager: failed to process keystore (no keys processed)");
 				}
 				else if (keyManagers.length == 1) {
-					Msg.showError(this, null, "Keystore Failure",
-						"Failed to create key manager: failed to process keystore (expected X.509)");
+					Msg.showError(this, null, "PKI Keystore Failure",
+						"Failed to create PKI key manager: failed to process keystore (expected X.509)");
 				}
 				else {
 					// Unexpected condition
-					Msg.showError(this, null, "Keystore Failure",
-						"Failed to create key manager: unsupported keystore produced multiple KeyManagers");
+					Msg.showError(this, null, "PKI Keystore Failure",
+						"Failed to create PKI key manager: unsupported keystore produced multiple KeyManagers");
 				}
 			}
 			catch (CancelledException e) {
 				throw e;
 			}
 			catch (Exception e) {
-				Msg.showError(this, null, "Keystore Failure",
-					"Failed to create key manager: " + e.getMessage(), e);
+				Msg.showError(this, null, "PKI Keystore Failure",
+					"Failed to create PKI key manager: " + e.getMessage(), e);
 			}
 			finally {
 				if (keystoreData != null) {

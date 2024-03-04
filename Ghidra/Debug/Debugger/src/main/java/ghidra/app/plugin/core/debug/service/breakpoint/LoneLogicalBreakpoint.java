@@ -18,9 +18,10 @@ package ghidra.app.plugin.core.debug.service.breakpoint;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-import ghidra.app.services.TraceRecorder;
 import ghidra.async.AsyncUtils;
+import ghidra.debug.api.target.Target;
 import ghidra.framework.model.DomainObject;
+import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Bookmark;
 import ghidra.program.model.listing.Program;
@@ -35,13 +36,13 @@ public class LoneLogicalBreakpoint implements LogicalBreakpointInternal {
 	private final long length;
 	private final Set<TraceBreakpointKind> kinds;
 
-	public LoneLogicalBreakpoint(TraceRecorder recorder, Address address, long length,
+	public LoneLogicalBreakpoint(PluginTool tool, Trace trace, Address address, long length,
 			Collection<TraceBreakpointKind> kinds) {
-		this.breaks = new TraceBreakpointSet(recorder, address);
+		this.breaks = new TraceBreakpointSet(tool, trace, address);
 		this.length = length;
 		this.kinds = Set.copyOf(kinds);
 
-		this.justThisTrace = Set.of(recorder.getTrace());
+		this.justThisTrace = Set.of(trace);
 	}
 
 	@Override
@@ -85,13 +86,33 @@ public class LoneLogicalBreakpoint implements LogicalBreakpointInternal {
 	}
 
 	@Override
-	public void setTraceAddress(TraceRecorder recorder, Address address) {
+	public String getEmuSleigh() {
+		return breaks.computeSleigh();
+	}
+
+	@Override
+	public void setEmuSleigh(String sleigh) {
+		breaks.setEmuSleigh(sleigh);
+	}
+
+	@Override
+	public void setTraceAddress(Trace trace, Address address) {
+		throw new AssertionError();
+	}
+
+	@Override
+	public void setTarget(Trace trace, Target target) {
+		breaks.setTarget(target);
+	}
+
+	@Override
+	public void removeTrace(Trace trace) {
 		throw new AssertionError();
 	}
 
 	@Override
 	public Set<TraceBreakpoint> getTraceBreakpoints() {
-		return new HashSet<>(breaks.getBreakpoints());
+		return breaks.getBreakpoints();
 	}
 
 	@Override
@@ -131,21 +152,29 @@ public class LoneLogicalBreakpoint implements LogicalBreakpointInternal {
 	}
 
 	@Override
-	public Enablement computeEnablementForProgram(Program program) {
-		return Enablement.NONE;
+	public State computeStateForProgram(Program program) {
+		return State.NONE;
 	}
 
 	@Override
-	public Enablement computeEnablementForTrace(Trace trace) {
+	public State computeStateForTrace(Trace trace) {
 		if (trace != breaks.getTrace()) {
-			return Enablement.NONE;
+			return State.NONE;
 		}
-		return ProgramEnablement.NONE.combineTrace(breaks.computeEnablement());
+		return ProgramMode.NONE.combineTrace(breaks.computeMode(), Perspective.TRACE);
 	}
 
 	@Override
-	public Enablement computeEnablement() {
-		return ProgramEnablement.NONE.combineTrace(breaks.computeEnablement());
+	public State computeStateForLocation(TraceBreakpoint loc) {
+		if (!breaks.getBreakpoints().contains(loc)) {
+			return State.NONE;
+		}
+		return ProgramMode.NONE.combineTrace(breaks.computeMode(loc), Perspective.TRACE);
+	}
+
+	@Override
+	public State computeState() {
+		return ProgramMode.NONE.combineTrace(breaks.computeMode(), Perspective.LOGICAL);
 	}
 
 	@Override
@@ -167,7 +196,7 @@ public class LoneLogicalBreakpoint implements LogicalBreakpointInternal {
 	public CompletableFuture<Void> enableForTrace(Trace trace) {
 		if (trace != breaks.getTrace()) {
 			// Ignore silently
-			return AsyncUtils.NIL;
+			return AsyncUtils.nil();
 		}
 		return enable();
 	}
@@ -176,7 +205,7 @@ public class LoneLogicalBreakpoint implements LogicalBreakpointInternal {
 	public CompletableFuture<Void> disableForTrace(Trace trace) {
 		if (trace != breaks.getTrace()) {
 			// Ignore silently
-			return AsyncUtils.NIL;
+			return AsyncUtils.nil();
 		}
 		return disable();
 	}
@@ -185,7 +214,7 @@ public class LoneLogicalBreakpoint implements LogicalBreakpointInternal {
 	public CompletableFuture<Void> deleteForTrace(Trace trace) {
 		if (trace != breaks.getTrace()) {
 			// Ignore silently
-			return AsyncUtils.NIL;
+			return AsyncUtils.nil();
 		}
 		return delete();
 	}
@@ -196,6 +225,14 @@ public class LoneLogicalBreakpoint implements LogicalBreakpointInternal {
 			return;
 		}
 		breaks.planEnable(actions, length, kinds);
+	}
+
+	@Override
+	public String generateStatusEnable(Trace trace) {
+		if (trace == null || trace == breaks.getTrace()) {
+			return null;
+		}
+		return "A breakpoint is not in this trace. Is there a target? Check your module map.";
 	}
 
 	@Override

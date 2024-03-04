@@ -38,7 +38,7 @@ public abstract class DBDomainObjectSupport extends DomainObjectAdapterDB {
 
 	protected DBDomainObjectSupport(DBHandle dbh, DBOpenMode openMode, TaskMonitor monitor,
 			String name, int timeInterval, int bufSize, Object consumer) {
-		super(dbh, name, timeInterval, bufSize, consumer);
+		super(dbh, name, timeInterval, consumer);
 		this.openMode = openMode;
 		this.monitor = monitor;
 	}
@@ -78,7 +78,7 @@ public abstract class DBDomainObjectSupport extends DomainObjectAdapterDB {
 
 	protected <T> T createManager(String managerName, ManagerSupplier<T> supplier)
 			throws CancelledException, IOException {
-		monitor.checkCanceled();
+		monitor.checkCancelled();
 		monitor.setMessage("Creating " + managerName);
 		try {
 			return supplier.create(openMode, monitor);

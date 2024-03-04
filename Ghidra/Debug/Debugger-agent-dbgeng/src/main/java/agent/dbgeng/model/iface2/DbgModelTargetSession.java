@@ -21,10 +21,16 @@ import java.util.concurrent.CompletableFuture;
 
 import agent.dbgeng.dbgeng.DebugClient.DebugOutputFlags;
 import agent.dbgeng.dbgeng.DebugSessionId;
+import agent.dbgeng.dbgeng.DebugSessionRecord;
 import agent.dbgeng.manager.DbgEventsListenerAdapter;
 import agent.dbgeng.manager.DbgSession;
 import agent.dbgeng.manager.impl.DbgManagerImpl;
-import agent.dbgeng.model.iface1.*;
+import agent.dbgeng.model.iface1.DbgModelSelectableObject;
+import agent.dbgeng.model.iface1.DbgModelTargetAccessConditioned;
+import agent.dbgeng.model.iface1.DbgModelTargetExecutionStateful;
+import agent.dbgeng.model.iface1.DbgModelTargetInterpreter;
+import agent.dbgeng.model.iface1.DbgModelTargetInterruptible;
+import agent.dbgeng.model.iface1.DbgModelTargetResumable;
 import ghidra.dbg.target.TargetAggregate;
 import ghidra.dbg.target.TargetConsole;
 import ghidra.dbg.target.TargetConsole.Channel;
@@ -44,12 +50,16 @@ public interface DbgModelTargetSession extends //
 	DbgModelTargetProcessContainer getProcesses();
 
 	public default DbgSession getSession() {
+		return getSession(true);
+	}
+
+	public default DbgSession getSession(boolean fire) {
 		DbgManagerImpl manager = getManager();
 		try {
 			String index = PathUtils.parseIndex(getName());
 			Integer sid = Integer.decode(index);
-			DebugSessionId id = new DebugSessionId(sid);
-			return manager.getSessionComputeIfAbsent(id);
+			DebugSessionId id = new DebugSessionRecord(sid);
+			return manager.getSessionComputeIfAbsent(id, fire);
 		}
 		catch (IllegalArgumentException e) {
 			return manager.getCurrentSession();
@@ -75,7 +85,7 @@ public interface DbgModelTargetSession extends //
 		if (!isValid()) {
 			return;
 		}
-		getListeners().fire.consoleOutput(getProxy(), chan, output);
+		broadcast().consoleOutput(getProxy(), chan, output);
 	}
 
 	@Override

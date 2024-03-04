@@ -15,11 +15,11 @@
  */
 package ghidra.app.util.bin.format.dwarf4;
 
-import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFTag.DW_TAG_formal_parameter;
-
-import java.util.*;
+import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFAttribute.*;
+import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFTag.*;
 
 import java.io.IOException;
+import java.util.*;
 
 import org.apache.commons.lang3.ArrayUtils;
 
@@ -29,7 +29,7 @@ import ghidra.app.util.bin.format.dwarf4.encoding.*;
 import ghidra.app.util.bin.format.dwarf4.expression.*;
 import ghidra.app.util.bin.format.dwarf4.next.DWARFProgram;
 import ghidra.util.Msg;
-import ghidra.util.NumberUtil;
+import ghidra.util.NumericUtilities;
 
 /**
  * DIEAggregate groups related {@link DebugInfoEntry} records together in a single interface
@@ -51,6 +51,8 @@ public class DIEAggregate {
 	 * Sanity check upper limit on how many DIE records can be in a aggregate.
 	 */
 	private static final int MAX_FRAGMENT_COUNT = 20;
+
+	public static final int[] REF_ATTRS = { DW_AT_abstract_origin, DW_AT_specification };
 
 	/**
 	 * A list of {@link DebugInfoEntry DIEs} that make up this DWARF program element, with
@@ -95,13 +97,13 @@ public class DIEAggregate {
 		// keep querying for abstract_origin DIEs as long as we haven't seen them yet,
 		// and add them to the fragment list.
 		DebugInfoEntry tmp;
-		while ((tmp = result.getRefDIE(DWARFAttribute.DW_AT_abstract_origin)) != null &&
+		while ((tmp = result.getRefDIE(DW_AT_abstract_origin)) != null &&
 			!result.hasOffset(tmp.getOffset()) && result.getFragmentCount() < MAX_FRAGMENT_COUNT) {
 			result.addFragment(tmp);
 		}
 
 		// look for 1 spec DIE and add it.
-		tmp = result.getRefDIE(DWARFAttribute.DW_AT_specification);
+		tmp = result.getRefDIE(DW_AT_specification);
 		if (tmp != null) {
 			result.addFragment(tmp);
 		}
@@ -228,7 +230,7 @@ public class DIEAggregate {
 	}
 
 	public DWARFProgram getProgram() {
-		return getHeadFragment().getCompilationUnit().getProgram();
+		return getHeadFragment().getProgram();
 	}
 
 	/**
@@ -251,13 +253,13 @@ public class DIEAggregate {
 	public DIEAggregate getDeclParent() {
 		DebugInfoEntry declDIE = getLastFragment();
 		DebugInfoEntry declParent = declDIE.getParent();
-		return getCompilationUnit().getProgram().getAggregate(declParent);
+		return getProgram().getAggregate(declParent);
 	}
 
 	public DIEAggregate getParent() {
 		DebugInfoEntry die = getHeadFragment();
 		DebugInfoEntry parent = die.getParent();
-		return getCompilationUnit().getProgram().getAggregate(parent);
+		return getProgram().getAggregate(parent);
 	}
 
 	/**
@@ -273,13 +275,7 @@ public class DIEAggregate {
 	 * @return
 	 */
 	public int getDepth() {
-		DebugInfoEntry die = getHeadFragment();
-		int result = 0;
-		while (die != null) {
-			result++;
-			die = die.getParent();
-		}
-		return result - 1;
+		return getProgram().getParentDepth(getHeadFragment().getIndex());
 	}
 
 	private AttrInfo findAttribute(int attribute) {
@@ -297,6 +293,32 @@ public class DIEAggregate {
 					}
 					return new AttrInfo(attrVal, die, form);
 				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Return an attribute that is present in this {@link DIEAggregate}, or in any of its
+	 * direct children (of a specific type)
+	 *  
+	 * @param <T>
+	 * @param attribute the attribute to find
+	 * @param childTag the type of children to search
+	 * @param clazz type of the attribute to return
+	 * @return attribute value, or null if not found
+	 */
+	public <T extends DWARFAttributeValue> T findAttributeInChildren(int attribute, int childTag,
+			Class<T> clazz) {
+		T attributeValue = getAttribute(attribute, clazz);
+		if (attributeValue != null) {
+			return attributeValue;
+		}
+		for (DebugInfoEntry childDIE : getChildren(childTag)) {
+			DIEAggregate childDIEA = getProgram().getAggregate(childDIE);
+			attributeValue = childDIEA.getAttribute(attribute, clazz);
+			if (attributeValue != null) {
+				return attributeValue;
 			}
 		}
 		return null;
@@ -406,9 +428,9 @@ public class DIEAggregate {
 		DWARFNumericAttribute val = attrInfo.getValue(DWARFNumericAttribute.class);
 		long offset = (val != null) ? val.getUnsignedValue() : -1;
 
-		DebugInfoEntry result = getProgram().getEntryAtByteOffsetUnchecked(offset);
+		DebugInfoEntry result = getProgram().getDIEByOffset(offset);
 		if (result == null) {
-			Msg.warn(this, "Invalid reference value [" + Long.toHexString(offset) + "]");
+			Msg.warn(this, "Invalid reference value [%x]".formatted(offset));
 			Msg.warn(this, this.toString());
 		}
 		return result;
@@ -416,7 +438,7 @@ public class DIEAggregate {
 
 	public DIEAggregate getRef(int attribute) {
 		DebugInfoEntry die = getRefDIE(attribute);
-		return getCompilationUnit().getProgram().getAggregate(die);
+		return getProgram().getAggregate(die);
 	}
 
 	/**
@@ -430,6 +452,27 @@ public class DIEAggregate {
 
 	public DIEAggregate getTypeRef() {
 		return getRef(DWARFAttribute.DW_AT_type);
+	}
+
+	/**
+	 * Returns the name of the source file this item was declared in (DW_AT_decl_file)
+	 * 
+	 * @return name of file this item was declared in, or null if info not available
+	 */
+	public String getSourceFile() {
+		AttrInfo attrInfo = findAttribute(DWARFAttribute.DW_AT_decl_file);
+		if (attrInfo == null) {
+			return null;
+		}
+		DWARFNumericAttribute attr = attrInfo.getValue(DWARFNumericAttribute.class);
+		if (attr == null) {
+			return null;
+		}
+		int fileNum = (int) attr.getUnsignedValue();
+		DWARFCompileUnit dcu = attrInfo.die.getCompilationUnit().getCompileUnit();
+		return dcu.isValidFileIndex(fileNum)
+				? dcu.getFileByIndex(fileNum)
+				: null;
 	}
 
 	/**
@@ -454,7 +497,7 @@ public class DIEAggregate {
 	 * abstract portion
 	 */
 	public DIEAggregate getAbstractInstance() {
-		AttrInfo aoAttr = findAttribute(DWARFAttribute.DW_AT_abstract_origin);
+		AttrInfo aoAttr = findAttribute(DW_AT_abstract_origin);
 		if (aoAttr == null) {
 			return null;
 		}
@@ -487,14 +530,13 @@ public class DIEAggregate {
 		}
 
 		DWARFAttributeValue attr = attrInfo.attr;
-		if (attr instanceof DWARFNumericAttribute) {
-			return assertValidInt(((DWARFNumericAttribute) attr).getValue());
+		if (attr instanceof DWARFNumericAttribute dnum) {
+			return assertValidInt(dnum.getValue());
 		}
-		else if (attr instanceof DWARFBlobAttribute) {
-			byte[] exprBytes = ((DWARFBlobAttribute) attr).getBytes();
+		else if (attr instanceof DWARFBlobAttribute dblob) {
+			byte[] exprBytes = dblob.getBytes();
 			DWARFExpressionEvaluator evaluator = DWARFExpressionEvaluator.create(getHeadFragment());
-			ghidra.app.util.bin.format.dwarf4.expression.DWARFExpression expr =
-				evaluator.readExpr(exprBytes);
+			DWARFExpression expr = evaluator.readExpr(exprBytes);
 
 			evaluator.evaluate(expr, 0);
 			return assertValidInt(evaluator.pop());
@@ -523,11 +565,11 @@ public class DIEAggregate {
 		}
 
 		DWARFAttributeValue attr = attrInfo.attr;
-		if (attr instanceof DWARFNumericAttribute) {
-			return ((DWARFNumericAttribute) attr).getUnsignedValue();
+		if (attr instanceof DWARFNumericAttribute dnum) {
+			return dnum.getUnsignedValue();
 		}
-		else if (attr instanceof DWARFBlobAttribute) {
-			byte[] exprBytes = ((DWARFBlobAttribute) attr).getBytes();
+		else if (attr instanceof DWARFBlobAttribute dblob) {
+			byte[] exprBytes = dblob.getBytes();
 			DWARFExpressionEvaluator evaluator = DWARFExpressionEvaluator.create(getHeadFragment());
 			DWARFExpression expr = evaluator.readExpr(exprBytes);
 
@@ -540,16 +582,16 @@ public class DIEAggregate {
 		}
 	}
 
-	private int assertValidInt(long l) throws IOException {
+	private int assertValidInt(long l) throws DWARFException {
 		if (l < Integer.MIN_VALUE || l > Integer.MAX_VALUE) {
-			throw new IOException("Value out of allowed range: " + l);
+			throw new DWARFException("Value out of allowed range: " + l);
 		}
 		return (int) l;
 	}
 
-	private int assertValidUInt(long l) throws IOException {
+	private int assertValidUInt(long l) throws DWARFException {
 		if (l < 0 || l > Integer.MAX_VALUE) {
-			throw new IOException("Value out of allowed range: " + l);
+			throw new DWARFException("Value out of allowed range: " + l);
 		}
 		return (int) l;
 	}
@@ -561,11 +603,11 @@ public class DIEAggregate {
 	 * @param attribute
 	 * @param defaultValue
 	 * @return
-	 * @throws IOException
+	 * @throws DWARFException
 	 * @throws DWARFExpressionException
 	 */
 	public int parseDataMemberOffset(int attribute, int defaultValue)
-			throws IOException, DWARFExpressionException {
+			throws DWARFException, DWARFExpressionException {
 
 		AttrInfo attrInfo = findAttribute(attribute);
 		if (attrInfo == null) {
@@ -573,14 +615,13 @@ public class DIEAggregate {
 		}
 
 		DWARFAttributeValue attr = attrInfo.attr;
-		if (attr instanceof DWARFNumericAttribute) {
-			return assertValidUInt(((DWARFNumericAttribute) attr).getUnsignedValue());
+		if (attr instanceof DWARFNumericAttribute dnum) {
+			return assertValidUInt(dnum.getUnsignedValue());
 		}
-		else if (attr instanceof DWARFBlobAttribute) {
-			byte[] exprBytes = ((DWARFBlobAttribute) attr).getBytes();
+		else if (attr instanceof DWARFBlobAttribute dblob) {
+			byte[] exprBytes = dblob.getBytes();
 			DWARFExpressionEvaluator evaluator = DWARFExpressionEvaluator.create(getHeadFragment());
-			ghidra.app.util.bin.format.dwarf4.expression.DWARFExpression expr =
-				evaluator.readExpr(exprBytes);
+			DWARFExpression expr = evaluator.readExpr(exprBytes);
 
 			// DW_AT_data_member_location expects the address of the containing object
 			// to be on the stack before evaluation starts.  We don't have that so we
@@ -589,7 +630,7 @@ public class DIEAggregate {
 			return assertValidUInt(evaluator.pop());
 		}
 		else {
-			throw new IOException(
+			throw new DWARFException(
 				"DWARF attribute form not valid for data member offset: " + attrInfo.form);
 		}
 	}
@@ -602,20 +643,22 @@ public class DIEAggregate {
 	 * Blob attributes are treated as a single location record for the current CU, using the
 	 * blob bytes as the DWARF expression of the location record.
 	 * <p>
-	 * @param attribute
-	 * @return
+	 * @param attribute the attribute to evaluate
+	 * @param range the address range the location covers (may be discarded if the attribute
+	 * value is a location list with its own range values)
+	 * @return list of locations, empty if missing, never null
 	 * @throws IOException
 	 */
-	public List<DWARFLocation> getAsLocation(int attribute) throws IOException {
+	public List<DWARFLocation> getAsLocation(int attribute, DWARFRange range) throws IOException {
 		AttrInfo attrInfo = findAttribute(attribute);
 		if (attrInfo == null) {
-			return Collections.EMPTY_LIST;
+			return List.of();
 		}
-		else if (attrInfo.attr instanceof DWARFNumericAttribute) {
-			return readDebugLocList(((DWARFNumericAttribute) attrInfo.attr).getUnsignedValue());
+		else if (attrInfo.attr instanceof DWARFNumericAttribute dnum) {
+			return readDebugLocList(dnum.getUnsignedValue());
 		}
-		else if (attrInfo.attr instanceof DWARFBlobAttribute) {
-			return _exprBytesAsLocation((DWARFBlobAttribute) attrInfo.attr);
+		else if (attrInfo.attr instanceof DWARFBlobAttribute dblob) {
+			return _exprBytesAsLocation(dblob, range);
 		}
 		else {
 			throw new UnsupportedOperationException(
@@ -643,16 +686,20 @@ public class DIEAggregate {
 
 	/**
 	 * Return a list of DWARF locations read from the debug_loc section.
+	 * <p>
+	 * The deserialization done here is very similar to {@link #parseDebugRange(int)}, but in this
+	 * case also contains a blob payload per location.
+	 * 
 	 * @param offset offset into the debug_loc section
 	 * @return list of DWARF locations (address range and location expression)
 	 * @throws IOException if an I/O error occurs
 	 */
 	private List<DWARFLocation> readDebugLocList(long offset) throws IOException {
-		BinaryReader debug_loc = getCompilationUnit().getProgram().getDebugLocation();
+		BinaryReader debug_loc = getProgram().getDebugLocation();
 
-		List<DWARFLocation> ranges = new ArrayList<>();
+		List<DWARFLocation> results = new ArrayList<>();
 		if (debug_loc == null) {
-			return ranges;
+			return results;
 		}
 
 		debug_loc.setPointerIndex(offset);
@@ -666,22 +713,23 @@ public class DIEAggregate {
 
 		// Loop through the debug_loc entry
 		while (debug_loc.getPointerIndex() < debug_loc.length()) {
-			Number beginning = DWARFUtil.readAddress(debug_loc, pointerSize);
-			Number ending = DWARFUtil.readAddress(debug_loc, pointerSize);
+			long beginning = DWARFUtil.readAddressAsLong(debug_loc, pointerSize);
+			long ending = DWARFUtil.readAddressAsLong(debug_loc, pointerSize);
 
 			// List end
-			if (beginning.longValue() == 0 && ending.longValue() == 0) {
+			if (beginning == 0 && ending == 0) {
 				break;
 			}
 
 			// Check to see if this is a base address entry
-			if (NumberUtil.equalsMaxUnsignedValue(beginning)) {
-				baseAddressOffset = ending.longValue();
+			if (beginning == -1 ||
+				(pointerSize == 4 && beginning == NumericUtilities.MAX_UNSIGNED_INT32_AS_LONG)) {
+				baseAddressOffset = ending;
 				continue;
 			}
 
 			// Size is 2 bytes
-			int size = debug_loc.readNextShort() & NumberUtil.UNSIGNED_SHORT_MASK;
+			int size = debug_loc.readNextUnsignedShort();
 
 			// Read the location description
 			byte[] location = debug_loc.readNextByteArray(size);
@@ -690,37 +738,23 @@ public class DIEAggregate {
 			// greater-than the compunit's lowpc.  This indicates the 'offset' isn't
 			// an offset, but already an absolute value.  This occurs in some
 			// gcc dwarf compilation flag combinations.
-			boolean isBadOffset = (beginning.longValue() > cuBase);
+			boolean isBadOffset = (beginning > cuBase);
 
-			long absStart = beginning.longValue();
-			long absEnd = ending.longValue();
+			long absStart = beginning;
+			long absEnd = ending;
 			if (!isBadOffset) {
 				absStart += baseAddressOffset;
 				absEnd += baseAddressOffset;
 			}
 
 			// TODO: verify end addr calc with DWARFstd.pdf, inclusive vs exclusive
-			ranges.add(new DWARFLocation(new DWARFRange(absStart, absEnd + 1), location));
+			results.add(new DWARFLocation(new DWARFRange(absStart, absEnd + 1), location));
 		}
-		return ranges;
+		return results;
 	}
 
-	private List<DWARFLocation> _exprBytesAsLocation(DWARFBlobAttribute attr) {
-		List<DWARFLocation> list = new ArrayList<>(1);
-
-		Number highPc = getCompilationUnit().getCompileUnit().getHighPC();
-		Number lowPc = getCompilationUnit().getCompileUnit().getLowPC();
-		if (highPc == null) {
-			// a DW_AT_high_pc is not required
-			// in this case presumably we don't have to choose from a location list based on range
-			// Make a 1-byte range
-			highPc = lowPc;
-		}
-		// If there is no low either, assume we don't need a range, and make a (0,0) range
-		DWARFRange range = (lowPc == null) ? new DWARFRange(0, 0)
-				: new DWARFRange(lowPc.longValue(), highPc.longValue());
-		list.add(new DWARFLocation(range, attr.getBytes()));
-		return list;
+	private List<DWARFLocation> _exprBytesAsLocation(DWARFBlobAttribute attr, DWARFRange range) {
+		return List.of(new DWARFLocation(range, attr.getBytes()));
 	}
 
 	/**
@@ -829,13 +863,31 @@ public class DIEAggregate {
 	 * Parses a range list from the debug_ranges section.
 	 * See DWARF4 Section 2.17.3 (Non-Contiguous Address Ranges).
 	 * <p>
+	 * The returned list of ranges is sorted.
+	 * 
+	 * @param attribute attribute ie. {@link DWARFAttribute#DW_AT_ranges}
+	 * @return list of ranges, in order
+	 * @throws IOException if an I/O error occurs
+	 */
+	public List<DWARFRange> parseDebugRange(int attribute) throws IOException {
+		List<DWARFRange> result = readRange(attribute);
+		Collections.sort(result);
+		return result;
+	}
+
+	/**
+	 * Parses a range list from the debug_ranges section.
+	 * See DWARF4 Section 2.17.3 (Non-Contiguous Address Ranges).
+	 * <p>
+	 * The returned list is not sorted.
+	 * 
 	 * @param attribute attribute ie. {@link DWARFAttribute#DW_AT_ranges}
 	 * @return list of ranges
 	 * @throws IOException if an I/O error occurs
 	 */
-	public List<DWARFRange> parseDebugRange(int attribute) throws IOException {
+	public List<DWARFRange> readRange(int attribute) throws IOException {
 		byte pointerSize = getCompilationUnit().getPointerSize();
-		BinaryReader reader = getCompilationUnit().getProgram().getDebugRanges();
+		BinaryReader reader = getProgram().getDebugRanges();
 
 		long offset = getUnsignedLong(attribute, -1);
 		if (offset == -1) {
@@ -844,32 +896,31 @@ public class DIEAggregate {
 		reader.setPointerIndex(offset);
 		List<DWARFRange> ranges = new ArrayList<>();
 
-		long baseAddress = getCompilationUnit().getCompileUnit() != null &&
-			getCompilationUnit().getCompileUnit().getLowPC() != null
-					? getCompilationUnit().getCompileUnit().getLowPC().longValue()
-					: 0L;
+		DWARFCompileUnit dcu = getCompilationUnit().getCompileUnit();
+		long baseAddress = dcu != null && dcu.getLowPC() != null
+				? dcu.getLowPC().longValue()
+				: 0L;
 
-		while (reader.getPointerIndex() < reader.length()) {
+		while (reader.hasNext()) {
 			// Read the beginning and ending addresses
-			Number beginning = DWARFUtil.readAddress(reader, pointerSize);
-			Number ending = DWARFUtil.readAddress(reader, pointerSize);	// dwarf end addrs are exclusive
+			long beginning = DWARFUtil.readAddressAsLong(reader, pointerSize);
+			long ending = DWARFUtil.readAddressAsLong(reader, pointerSize);	// dwarf end addrs are exclusive
 
 			// End of the list
-			if (beginning.longValue() == 0 && ending.longValue() == 0) {
+			if (beginning == 0 && ending == 0) {
 				break;
 			}
 
 			// Check to see if this is a base address entry
-			if (NumberUtil.equalsMaxUnsignedValue(beginning)) {
-				baseAddress = ending.longValue();
+			if (beginning == -1 ||
+				(pointerSize == 4 && beginning == NumericUtilities.MAX_UNSIGNED_INT32_AS_LONG)) {
+				baseAddress = ending;
 				continue;
 			}
 
 			// Add the range to the list
-			ranges.add(new DWARFRange(baseAddress + beginning.longValue(),
-				baseAddress + ending.longValue()));
+			ranges.add(new DWARFRange(baseAddress + beginning, baseAddress + ending));
 		}
-		Collections.sort(ranges);
 		return ranges;
 	}
 
@@ -896,9 +947,7 @@ public class DIEAggregate {
 	 */
 	public long getHighPC() throws IOException {
 		AttrInfo high = findAttribute(DWARFAttribute.DW_AT_high_pc);
-		if (high != null && high.attr instanceof DWARFNumericAttribute) {
-			DWARFNumericAttribute highVal = (DWARFNumericAttribute) high.attr;
-
+		if (high != null && high.attr instanceof DWARFNumericAttribute highVal) {
 			// if the DWARF attr was a DW_FORM_addr, it doesn't need fixing up
 			if (high.form == DWARFForm.DW_FORM_addr) {
 				return highVal.getUnsignedValue() + getProgram().getProgramBaseAddressFixup() - 1;
@@ -926,7 +975,7 @@ public class DIEAggregate {
 	 * This indicates an empty range, in which case the caller may want to take
 	 * special steps to avoid issues with Ghidra ranges.
 	 * <p>
-	 * Only seen in extremely old gcc versions.  Typically the low & high
+	 * Only seen in extremely old gcc versions.  Typically the low and high
 	 * pc values are omitted if the CU is empty.
 	 * 
 	 * @return boolean true if the LowPC and HighPC values are present and equal
@@ -935,11 +984,11 @@ public class DIEAggregate {
 		AttrInfo low = findAttribute(DWARFAttribute.DW_AT_low_pc);
 		AttrInfo high = findAttribute(DWARFAttribute.DW_AT_high_pc);
 		if (low != null && high != null && low.form == high.form &&
-			low.attr instanceof DWARFNumericAttribute &&
-			high.attr instanceof DWARFNumericAttribute) {
-			DWARFNumericAttribute lowVal = (DWARFNumericAttribute) low.attr;
-			DWARFNumericAttribute highVal = (DWARFNumericAttribute) high.attr;
+			low.attr instanceof DWARFNumericAttribute lowVal &&
+			high.attr instanceof DWARFNumericAttribute highVal) {
+
 			return lowVal.getValue() == highVal.getValue();
+
 		}
 		return false;
 	}
@@ -978,8 +1027,9 @@ public class DIEAggregate {
 				}
 			}
 			if ( !params.isEmpty() ) {
-				Msg.warn(this, "Extra params in concrete DIE instance: " + params);
-				Msg.warn(this, this.toString());
+				//Msg.warn(this, "Extra params in concrete DIE instance: " + params);
+				//Msg.warn(this, this.toString());
+				newParams.addAll(params);
 			}
 			params = newParams;
 		}

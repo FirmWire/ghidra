@@ -24,10 +24,13 @@ import ghidra.app.plugin.processors.sleigh.expression.EndInstructionValue;
 /**
  * "Solves" expressions of {@code inst_next}
  * 
+ * <p>
  * Works like the constant solver, but takes the value of {@code inst_next}, which is given by the
  * assembly address and the resulting instruction length.
  * 
- * NOTE: This solver requires backfill.
+ * <p>
+ * <b>NOTE:</b> This solver requires backfill, since the value of {@code inst_next} is not known
+ * until possible prefixes have been considered.
  */
 public class EndInstructionValueSolver extends AbstractExpressionSolver<EndInstructionValue> {
 
@@ -36,33 +39,46 @@ public class EndInstructionValueSolver extends AbstractExpressionSolver<EndInstr
 	}
 
 	@Override
-	public AssemblyResolution solve(EndInstructionValue iv, MaskedLong goal, Map<String, Long> vals,
-			Map<Integer, Object> res, AssemblyResolvedConstructor cur, Set<SolverHint> hints,
-			String description) {
-		throw new AssertionError(
-			"INTERNAL: Should never be asked to solve for " + AssemblyTreeResolver.INST_NEXT);
+	public AssemblyResolution solve(AbstractAssemblyResolutionFactory<?, ?> factory,
+			EndInstructionValue exp, MaskedLong goal, Map<String, Long> vals,
+			AssemblyResolvedPatterns cur, Set<SolverHint> hints, String description)
+			throws NeedsBackfillException {
+		throw new AssertionError("INTERNAL: Should never be asked to solve for " +
+			AbstractAssemblyTreeResolver.INST_NEXT);
+		/**
+		 * I suppose we could instead throw NeedsBackfillException(INST_NEXT) here, too, but this
+		 * serves as a sanity check on the SLEIGH spec. I can't think of a good reason to try to
+		 * solve INST_NEXT == const.
+		 */
 	}
 
 	@Override
 	public MaskedLong getValue(EndInstructionValue iv, Map<String, Long> vals,
-			Map<Integer, Object> res, AssemblyResolvedConstructor cur)
-			throws NeedsBackfillException {
-		Long instNext = vals.get(AssemblyTreeResolver.INST_NEXT);
+			AssemblyResolvedPatterns cur) throws NeedsBackfillException {
+		Long instNext = vals.get(AbstractAssemblyTreeResolver.INST_NEXT);
 		if (instNext == null) {
-			throw new NeedsBackfillException(AssemblyTreeResolver.INST_NEXT);
+			throw new NeedsBackfillException(AbstractAssemblyTreeResolver.INST_NEXT);
 		}
-		return MaskedLong.fromLong(vals.get(AssemblyTreeResolver.INST_NEXT));
+		return MaskedLong.fromLong(instNext);
 	}
 
 	@Override
-	public int getInstructionLength(EndInstructionValue iv, Map<Integer, Object> res) {
+	public int getInstructionLength(EndInstructionValue iv) {
 		return 0;
 	}
 
 	@Override
-	public MaskedLong valueForResolution(EndInstructionValue exp, AssemblyResolvedConstructor rc) {
-		// Would need to pass in symbol values, and perhaps consider child resolutions.
-		throw new UnsupportedOperationException(
-			"The solver should never ask for this value given a resolved constructor.");
+	public MaskedLong valueForResolution(EndInstructionValue exp, Map<String, Long> vals,
+			AssemblyResolvedPatterns rc) {
+		Long instNext = vals.get(AbstractAssemblyTreeResolver.INST_NEXT);
+		if (instNext == null) {
+			/**
+			 * This method is used in forward state construction, so just leave unknown. This may
+			 * cause unresolvable trees to get generated, but we can't know that until we try to
+			 * resolve them.
+			 */
+			return MaskedLong.UNKS;
+		}
+		return MaskedLong.fromLong(instNext);
 	}
 }

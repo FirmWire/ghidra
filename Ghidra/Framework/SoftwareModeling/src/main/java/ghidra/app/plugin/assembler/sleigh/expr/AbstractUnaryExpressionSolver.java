@@ -18,12 +18,11 @@ package ghidra.app.plugin.assembler.sleigh.expr;
 import java.util.Map;
 import java.util.Set;
 
-import ghidra.app.plugin.assembler.sleigh.sem.AssemblyResolution;
-import ghidra.app.plugin.assembler.sleigh.sem.AssemblyResolvedConstructor;
+import ghidra.app.plugin.assembler.sleigh.sem.*;
 import ghidra.app.plugin.processors.sleigh.expression.UnaryExpression;
 
 /**
- * A solver that handles expressions of the form [OP]A
+ * A solver that handles expressions of the form {@code [OP]A}
  * 
  * @param <T> the type of expression solved (the operator)
  */
@@ -35,18 +34,18 @@ public abstract class AbstractUnaryExpressionSolver<T extends UnaryExpression>
 	}
 
 	@Override
-	public AssemblyResolution solve(T exp, MaskedLong goal, Map<String, Long> vals,
-			Map<Integer, Object> res, AssemblyResolvedConstructor cur, Set<SolverHint> hints,
-			String description) throws NeedsBackfillException {
-		MaskedLong uval = solver.getValue(exp.getUnary(), vals, res, cur);
+	public AssemblyResolution solve(AbstractAssemblyResolutionFactory<?, ?> factory, T exp,
+			MaskedLong goal, Map<String, Long> vals, AssemblyResolvedPatterns cur,
+			Set<SolverHint> hints, String description) throws NeedsBackfillException {
+		MaskedLong uval = solver.getValue(exp.getUnary(), vals, cur);
 		try {
 			if (uval != null && uval.isFullyDefined()) {
 				MaskedLong cval = compute(uval);
 				if (cval != null) {
-					return ConstantValueSolver.checkConstAgrees(cval, goal, description);
+					return ConstantValueSolver.checkConstAgrees(factory, cval, goal, description);
 				}
 			}
-			return solver.solve(exp.getUnary(), computeInverse(goal), vals, res, cur, hints,
+			return solver.solve(factory, exp.getUnary(), computeInverse(goal), vals, cur, hints,
 				description);
 		}
 		/*
@@ -60,9 +59,9 @@ public abstract class AbstractUnaryExpressionSolver<T extends UnaryExpression>
 	}
 
 	@Override
-	public MaskedLong getValue(T exp, Map<String, Long> vals, Map<Integer, Object> res,
-			AssemblyResolvedConstructor cur) throws NeedsBackfillException {
-		MaskedLong val = solver.getValue(exp.getUnary(), vals, res, cur);
+	public MaskedLong getValue(T exp, Map<String, Long> vals, AssemblyResolvedPatterns cur)
+			throws NeedsBackfillException {
+		MaskedLong val = solver.getValue(exp.getUnary(), vals, cur);
 		if (val != null) {
 			return compute(val);
 		}
@@ -72,7 +71,9 @@ public abstract class AbstractUnaryExpressionSolver<T extends UnaryExpression>
 	/**
 	 * Compute the input value given that the result is known
 	 * 
-	 * NOTE: Assumes an involution by default
+	 * <p>
+	 * <b>NOTE:</b> Assumes an involution by default
+	 * 
 	 * @param goal the result
 	 * @return the input value solution
 	 */
@@ -89,13 +90,14 @@ public abstract class AbstractUnaryExpressionSolver<T extends UnaryExpression>
 	public abstract MaskedLong compute(MaskedLong val);
 
 	@Override
-	public int getInstructionLength(T exp, Map<Integer, Object> res) {
-		return solver.getInstructionLength(exp.getUnary(), res);
+	public int getInstructionLength(T exp) {
+		return solver.getInstructionLength(exp.getUnary());
 	}
 
 	@Override
-	public MaskedLong valueForResolution(T exp, AssemblyResolvedConstructor rc) {
-		MaskedLong val = solver.valueForResolution(exp.getUnary(), rc);
+	public MaskedLong valueForResolution(T exp, Map<String, Long> vals,
+			AssemblyResolvedPatterns rc) {
+		MaskedLong val = solver.valueForResolution(exp.getUnary(), vals, rc);
 		return compute(val);
 	}
 }

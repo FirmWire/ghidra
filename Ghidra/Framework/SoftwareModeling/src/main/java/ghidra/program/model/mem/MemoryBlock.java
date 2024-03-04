@@ -21,8 +21,8 @@ import java.math.BigInteger;
 import java.util.List;
 
 import ghidra.framework.store.LockException;
-import ghidra.program.model.address.Address;
-import ghidra.program.model.listing.Program;
+import ghidra.program.model.address.*;
+import ghidra.program.model.symbol.OffsetReference;
 import ghidra.util.NamingUtilities;
 
 /**
@@ -31,8 +31,18 @@ import ghidra.util.NamingUtilities;
 public interface MemoryBlock extends Serializable, Comparable<MemoryBlock> {
 
 	/**
-	 * A special EXTERNAL block may be created by certain program loaders (e.g., Elf) to act as a
-	 * stand-in for unknown external symbol locations.
+	 * A special purpose EXTERNAL block may be created by certain program loaders 
+	 * (e.g., Elf) to act as a stand-in for unknown external symbol locations when 
+	 * relocation support is required using a valid memory address.  While the
+	 * EXTERNAL block is created out of neccessity for relocation processing it
+	 * introduces a number of limitations when used to carry data symbols
+	 * where pointer math and offset-references may occur.  
+	 * <p>
+	 * The method {@link Memory#isExternalBlockAddress(Address)}
+	 * may be used to determine if a specific address is contained within an EXTERNAL memory block.
+	 * <p>
+	 * NOTE: Close proximity to the end of an address space should be avoided
+	 * to allow for {@link OffsetReference} use.
 	 */
 	public static final String EXTERNAL_BLOCK_NAME = "EXTERNAL";
 
@@ -76,6 +86,12 @@ public interface MemoryBlock extends Serializable, Comparable<MemoryBlock> {
 	public Address getEnd();
 
 	/**
+	 * Get the address range that corresponds to this block.
+	 * @return block address range
+	 */
+	public AddressRange getAddressRange();
+
+	/**
 	 * Get the number of bytes in this block.
 	 * 
 	 * @return number of bytes in the block
@@ -102,8 +118,7 @@ public interface MemoryBlock extends Serializable, Comparable<MemoryBlock> {
 	 * @throws IllegalArgumentException if invalid name specified
 	 * @throws LockException renaming an Overlay block without exclusive access
 	 */
-	public void setName(String name)
-			throws IllegalArgumentException, LockException;
+	public void setName(String name) throws IllegalArgumentException, LockException;
 
 	/**
 	 * Get the comment associated with this block.
@@ -220,10 +235,12 @@ public interface MemoryBlock extends Serializable, Comparable<MemoryBlock> {
 	 * @param off the offset into the byte array.
 	 * @param len the number of bytes to get.
 	 * @return the number of bytes actually populated.
+	 * @throws IndexOutOfBoundsException if invalid offset is specified
 	 * @throws MemoryAccessException if any of the requested bytes are uninitialized.
 	 * @throws IllegalArgumentException if the Address is not in this block.
 	 */
-	public int getBytes(Address addr, byte[] b, int off, int len) throws MemoryAccessException;
+	public int getBytes(Address addr, byte[] b, int off, int len)
+			throws IndexOutOfBoundsException, MemoryAccessException;
 
 	/**
 	 * Puts the given byte at the given address in this block.
@@ -255,25 +272,52 @@ public interface MemoryBlock extends Serializable, Comparable<MemoryBlock> {
 	 * @param off the offset into the byte array.
 	 * @param len the number of bytes to write.
 	 * @return the number of bytes actually written.
+	 * @throws IndexOutOfBoundsException if invalid offset is specified
 	 * @throws MemoryAccessException if the block is uninitialized
 	 * @throws IllegalArgumentException if the Address is not in this block.
 	 */
-	public int putBytes(Address addr, byte[] b, int off, int len) throws MemoryAccessException;
+	public int putBytes(Address addr, byte[] b, int off, int len)
+			throws IndexOutOfBoundsException, MemoryAccessException;
 
 	/**
 	 * Get the type for this block: DEFAULT, BIT_MAPPED, or BYTE_MAPPED
+	 * (see {@link MemoryBlockType}).
+	 * @return memory block type
 	 */
 	public MemoryBlockType getType();
 
 	/**
 	 * Return whether this block has been initialized.
+	 * <p>
+	 * WARNING: A mapped memory block may have a mix of intialized, uninitialized, and undefined 
+	 * regions.  The value returned by this method for a mapped memory block is always false 
+	 * even if some regions are initialized.
+	 * @return true if block is fully initialized and not a memory-mapped-block, else false
 	 */
 	public boolean isInitialized();
 
 	/**
 	 * Returns true if this is either a bit-mapped or byte-mapped block
+	 * 
+	 * @return true if this is either a bit-mapped or byte-mapped block
 	 */
 	public boolean isMapped();
+
+	/**
+	 * Returns true if this is a reserved EXTERNAL memory block based upon its name
+	 * (see {@link MemoryBlock#EXTERNAL_BLOCK_NAME}).  Checks for individual addresses may be done
+	 * using {@link Memory#isExternalBlockAddress(Address)}.
+	 * <p>
+	 * Note that EXTERNAL blocks always resides within a memory space and never within the artifial
+	 * {@link AddressSpace#EXTERNAL_SPACE} which is not a memory space.  This can be a source of confusion.
+	 * An EXTERNAL memory block exists to facilitate relocation processing for some external
+	 * symbols which require a real memory address. 
+	 * 
+	 * @return true if this is a reserved EXTERNAL memory block
+	 */
+	public default boolean isExternalBlock() {
+		return EXTERNAL_BLOCK_NAME.equals(getName());
+	}
 
 	/**
 	 * Returns true if this is an overlay block (i.e., contained within overlay space).
@@ -300,19 +344,4 @@ public interface MemoryBlock extends Serializable, Comparable<MemoryBlock> {
 	 */
 	public List<MemoryBlockSourceInfo> getSourceInfos();
 
-	/**
-	 * Determine if the specified address is contained within the reserved EXTERNAL block.
-	 * 
-	 * @param address address of interest
-	 * @param program
-	 * @return true if address is contained within the reserved EXTERNAL block, else false.
-	 */
-	public static boolean isExternalBlockAddress(Address address, Program program) {
-		Memory memory = program.getMemory();
-		if (!address.isMemoryAddress()) {
-			return false;
-		}
-		MemoryBlock block = memory.getBlock(address);
-		return block != null && MemoryBlock.EXTERNAL_BLOCK_NAME.equals(block.getName());
-	}
 }

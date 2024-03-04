@@ -15,12 +15,15 @@
  */
 package ghidra.app.cmd.data;
 
+import ghidra.app.cmd.data.rtti.RttiUtil;
 import ghidra.app.util.datatype.microsoft.DataApplyOptions;
 import ghidra.app.util.datatype.microsoft.DataValidationOptions;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.*;
+import ghidra.program.model.symbol.Namespace;
 import ghidra.program.model.util.CodeUnitInsertionException;
+import ghidra.util.Msg;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.InvalidInputException;
 
@@ -90,8 +93,8 @@ public class CreateTypeDescriptorBackgroundCmd
 	 * be applied as a sized character array immediately following the structure whose size does not include
 	 * the char array bytes.
 	 * @return false if the data type was not created because it already exists, true otherwise
-	 * @throws CodeUnitInsertionException
-	 * @throws CancelledException
+	 * @throws CodeUnitInsertionException if creating data throws exception
+	 * @throws CancelledException if cancelled
 	 */
 	@Override
 	protected boolean createData() throws CodeUnitInsertionException, CancelledException {
@@ -109,7 +112,7 @@ public class CreateTypeDescriptorBackgroundCmd
 		// Create 'name' char[0] data at the address immediately following structure
 		Program program = model.getProgram();
 		Data nameData = DataUtilities.createData(program, arrayAddr, charArray,
-			charArray.getLength(), false, getClearDataMode());
+			charArray.getLength(), getClearDataMode());
 
 		nameData.setComment(CodeUnit.EOL_COMMENT, "TypeDescriptor.name");
 
@@ -126,7 +129,7 @@ public class CreateTypeDescriptorBackgroundCmd
 	@Override
 	protected boolean createMarkup() throws CancelledException, InvalidInputException {
 
-		monitor.checkCanceled();
+		monitor.checkCancelled();
 
 		Program program = model.getProgram();
 		String demangledName = model.getDemangledTypeDescriptor();
@@ -139,10 +142,29 @@ public class CreateTypeDescriptorBackgroundCmd
 		EHDataTypeUtilities.createPlateCommentIfNeeded(program, prefix, RTTI_0_NAME, null,
 			getDataAddress(), applyOptions);
 
-		monitor.checkCanceled();
+		monitor.checkCancelled();
 
 		// Label
-		EHDataTypeUtilities.createSymbolIfNeeded(program, prefix, RTTI_0_NAME, null,
+		Namespace classNamespace = model.getDescriptorAsNamespace();
+
+		if (classNamespace == null) {
+			Msg.error(RttiUtil.class, "Cannot get namespace from model " + model.getAddress());
+			return false;
+		}
+
+		// <br>Note: For now this assumes all classes and structs with RTTI data must
+		// actually be classes. In the future this might need additional checking before
+		// promoting some "struct" ref types to being a class, if we can better determine
+		// whether or not they are actually classes. 
+		String refType = model.getRefType(); // Can be null.
+		boolean makeClass = "class".equals(refType) || "struct".equals(refType);
+		if (makeClass) {
+			classNamespace = RttiUtil.promoteToClassNamespace(program, classNamespace);
+		}
+
+		// Make the symbol even if the namespace couldn't be promoted
+		// the method to promote spits out debug error if it cannot be promoted
+		EHDataTypeUtilities.createSymbolIfNeeded(program, classNamespace, RTTI_0_NAME,
 			getDataAddress(), applyOptions);
 
 		return true;

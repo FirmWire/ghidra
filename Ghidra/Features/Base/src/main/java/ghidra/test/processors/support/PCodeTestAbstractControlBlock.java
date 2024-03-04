@@ -279,9 +279,6 @@ public abstract class PCodeTestAbstractControlBlock {
 //		catch (CodeUnitInsertionException e) {
 //			// ignore
 //		}
-//		catch (DataTypeConflictException e) {
-//			// ignore
-//		}
 //	}
 
 	protected void applyU4Data(Address addr) {
@@ -289,9 +286,6 @@ public abstract class PCodeTestAbstractControlBlock {
 			program.getListing().createData(addr, DWordDataType.dataType);
 		}
 		catch (CodeUnitInsertionException e) {
-			// ignore
-		}
-		catch (DataTypeConflictException e) {
 			// ignore
 		}
 	}
@@ -310,7 +304,7 @@ public abstract class PCodeTestAbstractControlBlock {
 			throws InvalidControlBlockException, CodeUnitInsertionException {
 
 		if (applyStruct) {
-			DataUtilities.createData(program, infoStructAddr, infoProgramStruct, -1, false,
+			DataUtilities.createData(program, infoStructAddr, infoProgramStruct, -1,
 				ClearDataMode.CLEAR_ALL_CONFLICT_DATA);
 		}
 
@@ -345,7 +339,7 @@ public abstract class PCodeTestAbstractControlBlock {
 
 				if (applyStruct) {
 					DataUtilities.createData(program, functionInfoAddress, functionInfoStruct, -1,
-						false, ClearDataMode.CLEAR_ALL_CONFLICT_DATA);
+						ClearDataMode.CLEAR_ALL_CONFLICT_DATA);
 					forceCodePointer(functionInfoAddress.add(funcOffset));
 				}
 

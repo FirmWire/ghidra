@@ -51,7 +51,7 @@ import ghidra.util.exception.NotFoundException;
 @PluginInfo(
 	status = PluginStatus.RELEASED,
 	packageName = CorePluginPackage.NAME,
-	category = PluginCategoryNames.SUPPORT,
+	category = PluginCategoryNames.COMMON,
 	shortDescription = "Provides the block model service",
 	description = "This plugin provides registration and distribution of basic-block "
 			+ "and subroutine models via the block model service.",
@@ -83,7 +83,7 @@ public class BlockModelServicePlugin extends ProgramPlugin
 
 	public BlockModelServicePlugin(PluginTool tool) {
 
-		super(tool, false, false);
+		super(tool);
 
 		// Add standard simple block model
 		BlockModelInfo info = new BlockModelInfo(SimpleBlockModel.NAME, SimpleBlockModel.class);

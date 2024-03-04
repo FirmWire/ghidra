@@ -24,11 +24,20 @@ import ghidra.util.*;
 
 /**
  * Base implementation for dataTypes.
+ * 
+ * NOTE: Settings are immutable when a DataTypeManager has not been specified (i.e., null).
  */
 public abstract class DataTypeImpl extends AbstractDataType {
 
 	private final static SettingsDefinition[] EMPTY_DEFINITIONS = new SettingsDefinition[0];
+
+	// NOTE: Modification of default settings on Impl datatypes is generally blocked
+	// with the exception of TypeDef's and BuiltInDataType which have had a suitable
+	// defaultSettings implementation established by its DataTypeManager.
 	protected Settings defaultSettings;
+
+	private Integer alignedLength;
+
 	private List<WeakReference<DataType>> parentList;
 	private UniversalID universalID;
 	private SourceArchive sourceArchive;
@@ -43,7 +52,7 @@ public abstract class DataTypeImpl extends AbstractDataType {
 			SourceArchive sourceArchive, long lastChangeTime, long lastChangeTimeInSourceArchive,
 			DataTypeManager dataMgr) {
 		super(path, name, dataMgr);
-		defaultSettings = new SettingsImpl();
+		defaultSettings = SettingsImpl.NO_SETTINGS;
 		parentList = new ArrayList<>();
 		this.universalID = universalID == null ? UniversalIdGenerator.nextID() : universalID;
 		this.sourceArchive = sourceArchive;
@@ -80,13 +89,45 @@ public abstract class DataTypeImpl extends AbstractDataType {
 	}
 
 	@Override
-	public void setDefaultSettings(Settings settings) {
-		defaultSettings = settings;
+	public String getPathName() {
+		return getDataTypePath().getPath();
+	}
+
+	/**
+	 * Return the aligned-length for a fixed length datatype.  This is intended to produce a
+	 * result consistent with the C/C++ {@code sizeof(type)} operation.  Use of this method
+	 * with {@link TypeDef} is not allowed.
+	 * Whereas {@link #getLength()} corresponds to the raw type size which may be moved into
+	 * a smaller register/varnode.  Example: this frequently occurs with encoded floating-point
+	 * data such as a 10-byte/80-bit encoding which is stored in memory as 12 or 16-bytes in order
+	 * to maintain memory alignment constraints.
+	 * @param dataType datatype
+	 * @return aligned-length or -1 if not a fixed-length datatype
+	 */
+	private static int computeAlignedLength(DataType dataType) {
+		if ((dataType instanceof TypeDef) || (dataType instanceof Composite) ||
+			(dataType instanceof Array)) {
+			// Typedefs must defer to base datatype for aligned-length determination
+			throw new UnsupportedOperationException();
+		}
+		int len = dataType.getLength();
+		if (len <= 0 || (dataType instanceof Pointer)) {
+			return len;
+		}
+		int align = dataType.getDataOrganization().getSizeAlignment(len);
+		int mod = len % align;
+		if (mod != 0) {
+			len += (align - mod);
+		}
+		return len;
 	}
 
 	@Override
-	public String getPathName() {
-		return getDataTypePath().getPath();
+	public int getAlignedLength() {
+		if (alignedLength == null) {
+			alignedLength = computeAlignedLength(this);
+		}
+		return alignedLength;
 	}
 
 	@Override

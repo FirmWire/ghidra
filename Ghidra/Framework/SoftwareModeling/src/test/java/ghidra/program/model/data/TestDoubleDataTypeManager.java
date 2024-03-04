@@ -17,6 +17,10 @@ package ghidra.program.model.data;
 
 import java.util.*;
 
+import db.Transaction;
+import ghidra.program.database.map.AddressMap;
+import ghidra.program.model.lang.ProgramArchitecture;
+import ghidra.program.model.lang.PrototypeModel;
 import ghidra.util.*;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
@@ -36,6 +40,26 @@ public class TestDoubleDataTypeManager implements DataTypeManager {
 	@Override
 	public UniversalID getUniversalID() {
 		return id;
+	}
+
+	@Override
+	public AddressMap getAddressMap() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public ProgramArchitecture getProgramArchitecture() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public String getProgramArchitectureSummary() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public DataOrganization getDataOrganization() {
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
@@ -81,6 +105,11 @@ public class TestDoubleDataTypeManager implements DataTypeManager {
 
 	@Override
 	public Iterator<Composite> getAllComposites() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public Iterator<FunctionDefinition> getAllFunctionDefinitions() {
 		throw new UnsupportedOperationException();
 	}
 
@@ -142,11 +171,6 @@ public class TestDoubleDataTypeManager implements DataTypeManager {
 	}
 
 	@Override
-	public void dataTypeChanged(DataType dataType, boolean isAutoChange) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
 	public void addDataTypeManagerListener(DataTypeManagerChangeListener l) {
 		throw new UnsupportedOperationException();
 	}
@@ -193,6 +217,11 @@ public class TestDoubleDataTypeManager implements DataTypeManager {
 
 	@Override
 	public void setName(String name) throws InvalidNameException {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public Transaction openTransaction(String description) throws IllegalStateException {
 		throw new UnsupportedOperationException();
 	}
 
@@ -322,11 +351,6 @@ public class TestDoubleDataTypeManager implements DataTypeManager {
 	}
 
 	@Override
-	public DataOrganization getDataOrganization() {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
 	public List<SourceArchive> getSourceArchives() {
 		throw new UnsupportedOperationException();
 	}
@@ -343,6 +367,36 @@ public class TestDoubleDataTypeManager implements DataTypeManager {
 
 	@Override
 	public Set<DataType> getDataTypesContaining(DataType dataType) {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public boolean allowsDefaultBuiltInSettings() {
+		return false;
+	}
+
+	@Override
+	public boolean allowsDefaultComponentSettings() {
+		return false;
+	}
+
+	@Override
+	public Collection<String> getKnownCallingConventionNames() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public Collection<String> getDefinedCallingConventionNames() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public PrototypeModel getDefaultCallingConvention() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public PrototypeModel getCallingConvention(String name) {
 		throw new UnsupportedOperationException();
 	}
 }

@@ -16,13 +16,13 @@
 package ghidra.program.model.data;
 
 import java.math.BigInteger;
+import java.util.*;
 
 import ghidra.docking.settings.*;
 import ghidra.program.model.mem.MemBuffer;
 import ghidra.program.model.scalar.Scalar;
 import ghidra.util.DataConverter;
 import ghidra.util.exception.AssertException;
-import utilities.util.ArrayUtilities;
 
 /**
  * <code>BitFieldDataType</code> provides a means of defining a minimally sized bit-field
@@ -251,7 +251,11 @@ public class BitFieldDataType extends AbstractDataType {
 	 */
 	@Override
 	public final SettingsDefinition[] getSettingsDefinitions() {
-		return baseDataType.getSettingsDefinitions();
+		// exclude any ENDIAN setting that the base data type might support
+		List<SettingsDefinition> baseDTSettings =
+			new ArrayList<>(Arrays.asList(baseDataType.getSettingsDefinitions()));
+		baseDTSettings.remove(EndianSettingsDefinition.DEF);
+		return baseDTSettings.toArray(SettingsDefinition[]::new);
 	}
 
 	@Override
@@ -332,6 +336,11 @@ public class BitFieldDataType extends AbstractDataType {
 	}
 
 	@Override
+	public int getAlignedLength() {
+		return getLength();
+	}
+
+	@Override
 	public String getDescription() {
 		StringBuffer sbuf = new StringBuffer();
 		sbuf.append(Integer.toString(effectiveBitSize));
@@ -369,16 +378,6 @@ public class BitFieldDataType extends AbstractDataType {
 			return BigInteger.ZERO;
 		}
 		try {
-
-			byte[] bytes = new byte[storageSize];
-			if (buf.getBytes(bytes, 0) != storageSize) {
-				return null;
-			}
-
-			if (!EndianSettingsDefinition.ENDIAN.isBigEndian(settings, buf)) {
-				bytes = ArrayUtilities.reverse(bytes);
-			}
-
 			BigInteger big = buf.getBigInteger(0, storageSize, false);
 			BigInteger pow = BigInteger.valueOf(2).pow(effectiveBitSize);
 			BigInteger mask = pow.subtract(BigInteger.ONE);
@@ -430,11 +429,6 @@ public class BitFieldDataType extends AbstractDataType {
 		}
 
 		return intDT.getRepresentation(big, settings, effectiveBitSize);
-	}
-
-	@Override
-	public void setDefaultSettings(Settings settings) {
-		this.defaultSettings = settings;
 	}
 
 	@Override

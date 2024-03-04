@@ -17,7 +17,7 @@ package ghidra.app.util.bin.format.macho.commands;
 
 import java.io.IOException;
 
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
+import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.format.macho.MachConstants;
 import ghidra.app.util.bin.format.macho.MachHeader;
 import ghidra.app.util.importer.MessageLog;
@@ -29,29 +29,14 @@ import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.task.TaskMonitor;
 
 /**
- * Represents a rpath_command structure.
- * 
- * @see <a href="https://opensource.apple.com/source/xnu/xnu-4570.71.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html">mach-o/loader.h</a> 
+ * Represents a rpath_command structure
  */
 public class RunPathCommand extends LoadCommand {
 	private LoadCommandString path;
 
-	static RunPathCommand createRunPathCommand(FactoryBundledWithBinaryReader reader)
-			throws IOException {
-		RunPathCommand command = (RunPathCommand) reader.getFactory().create(RunPathCommand.class);
-		command.initRunPathCommand(reader);
-		return command;
-	}
-
-	/**
-	 * DO NOT USE THIS CONSTRUCTOR, USE create*(GenericFactory ...) FACTORY METHODS INSTEAD.
-	 */
-	public RunPathCommand() {
-	}
-
-	private void initRunPathCommand(FactoryBundledWithBinaryReader reader) throws IOException {
-		initLoadCommand(reader);
-		path = LoadCommandString.createLoadCommandString(reader, this);
+	RunPathCommand(BinaryReader reader) throws IOException {
+		super(reader);
+		path = new LoadCommandString(reader, this);
 	}
 
 	public LoadCommandString getPath() {
@@ -64,17 +49,13 @@ public class RunPathCommand extends LoadCommand {
 	}
 
 	@Override
-	public void markup(MachHeader header, FlatProgramAPI api, Address baseAddress, boolean isBinary,
+	public void markupRawBinary(MachHeader header, FlatProgramAPI api, Address baseAddress,
 			ProgramModule parentModule, TaskMonitor monitor, MessageLog log) {
-		updateMonitor(monitor);
 		try {
-			if (isBinary) {
-				createFragment(api, baseAddress, parentModule);
-				Address address = baseAddress.getNewAddress(getStartIndex());
-				api.createData(address, toDataType());
-				int length = getCommandSize() - path.getOffset();
-				api.createAsciiString(address.add(path.getOffset()), length);
-			}
+			super.markupRawBinary(header, api, baseAddress, parentModule, monitor, log);
+			Address address = baseAddress.getNewAddress(getStartIndex());
+			int length = getCommandSize() - path.getOffset();
+			api.createAsciiString(address.add(path.getOffset()), length);
 		}
 		catch (Exception e) {
 			log.appendMsg("Unable to create " + getCommandName());

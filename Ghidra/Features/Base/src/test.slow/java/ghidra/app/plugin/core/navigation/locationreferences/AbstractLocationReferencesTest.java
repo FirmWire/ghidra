@@ -44,6 +44,7 @@ import ghidra.program.util.AddressFieldLocation;
 import ghidra.program.util.FieldNameFieldLocation;
 import ghidra.test.AbstractProgramBasedTest;
 import ghidra.test.ClassicSampleX86ProgramBuilder;
+import ghidra.util.Msg;
 import ghidra.util.datastruct.Accumulator;
 import ghidra.util.datastruct.ListAccumulator;
 import ghidra.util.exception.CancelledException;
@@ -51,7 +52,7 @@ import ghidra.util.table.GhidraTable;
 import ghidra.util.task.TaskMonitor;
 
 /**
- * A base class for use by tests that exercise various types of 
+ * A base class for use by tests that exercise various types of
  * {@link LocationDescriptor}.
  */
 public abstract class AbstractLocationReferencesTest extends AbstractProgramBasedTest {
@@ -98,7 +99,7 @@ public abstract class AbstractLocationReferencesTest extends AbstractProgramBase
 
 		//
 		// Arrays/Structures
-		//		
+		//
 		DataType type = new IntegerDataType();
 		DataType pointer = new PointerDataType(type);
 		ArrayDataType array = new ArrayDataType(pointer, 4, pointer.getLength());
@@ -150,7 +151,7 @@ public abstract class AbstractLocationReferencesTest extends AbstractProgramBase
 	private void doGoToDataNameFieldAt(Address a, int[] path) {
 		openData(a);
 
-		// note: the path here is 
+		// note: the path here is
 		FieldNameFieldLocation location = new FieldNameFieldLocation(program, a, path, "name", 0);
 		ProgramLocationPluginEvent event =
 			new ProgramLocationPluginEvent("Test", location, program);
@@ -318,7 +319,10 @@ public abstract class AbstractLocationReferencesTest extends AbstractProgramBase
 
 	protected void assertResultCount(int expected) {
 		List<Address> referenceAddresses = getResultAddresses();
-		assertEquals(expected, referenceAddresses.size());
+		if (referenceAddresses.size() != expected) {
+			Msg.debug(this, "Result addresses found: " + referenceAddresses);
+			fail("Incorrect number of results; see console");
+		}
 	}
 
 	protected void assertResultCount(String msg, int expected) {
@@ -370,7 +374,7 @@ public abstract class AbstractLocationReferencesTest extends AbstractProgramBase
 		int tx = program.startTransaction("Test");
 		try {
 			Data data =
-				DataUtilities.createData(program, a, dt, 1, false, ClearDataMode.CHECK_FOR_SPACE);
+				DataUtilities.createData(program, a, dt, 1, ClearDataMode.CHECK_FOR_SPACE);
 			assertNotNull("Unable to apply data type at address: " + a, data);
 			return data;
 		}

@@ -18,7 +18,6 @@
  */
 package ghidra.app.plugin.core.datapreview;
 
-import ghidra.docking.settings.SettingsImpl;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeInstance;
@@ -42,13 +41,14 @@ class DataTypePreview implements Preview {
 	public String getPreview(Memory memory, Address addr) {
 		try {
 			MemBuffer mb = new DumbMemBufferImpl(memory, addr);
-			DataTypeInstance dti = DataTypeInstance.getDataTypeInstance(dt, mb, MAX_PREVIEW_LENGTH);
+			DataTypeInstance dti =
+				DataTypeInstance.getDataTypeInstance(dt, mb, MAX_PREVIEW_LENGTH, false);
 			if (dti == null) {
 				return "";
 			}
 
 			int length = Math.min(dti.getLength(), MAX_PREVIEW_LENGTH);
-			return dt.getRepresentation(mb, new SettingsImpl(), length);
+			return dt.getRepresentation(mb, dt.getDefaultSettings(), length);
 		}
 		catch (Exception e) {
 

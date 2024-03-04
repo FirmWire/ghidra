@@ -15,6 +15,8 @@
  */
 package help.screenshot;
 
+import java.awt.Component;
+import java.awt.Window;
 import java.io.*;
 import java.util.*;
 
@@ -23,6 +25,7 @@ import javax.swing.*;
 import org.junit.Test;
 
 import docking.ComponentProvider;
+import docking.action.DockingActionIf;
 import docking.widgets.tree.GTree;
 import docking.widgets.tree.GTreeNode;
 import generic.jar.ResourceFile;
@@ -30,8 +33,9 @@ import generic.util.Path;
 import ghidra.app.plugin.core.console.ConsoleComponentProvider;
 import ghidra.app.plugin.core.osgi.BundleStatusComponentProvider;
 import ghidra.app.plugin.core.script.*;
-import ghidra.app.script.GhidraScriptUtil;
+import ghidra.app.script.*;
 import ghidra.app.services.ConsoleService;
+import ghidra.python.PythonScriptProvider;
 import ghidra.util.HelpLocation;
 
 public class GhidraScriptMgrPluginScreenShots extends GhidraScreenShotGenerator {
@@ -227,14 +231,39 @@ public class GhidraScriptMgrPluginScreenShots extends GhidraScreenShotGenerator 
 	@Test
 	public void testPick() {
 
-		List<String> items = new ArrayList<>();
-		items.add("Java");
-		items.add("Python");
-		final PickProviderDialog pickDialog = new PickProviderDialog(items, "Java");
+		List<GhidraScriptProvider> items = new ArrayList<>();
+		JavaScriptProvider javaScriptProvider = new JavaScriptProvider();
+		items.add(javaScriptProvider);
+		items.add(new PythonScriptProvider());
+		final PickProviderDialog pickDialog = new PickProviderDialog(items, javaScriptProvider);
 		runSwing(() -> tool.showDialog(pickDialog), false);
 
 		PickProviderDialog dialog = waitForDialogComponent(PickProviderDialog.class);
 		captureDialog(dialog);
+	}
+
+	@Test
+	public void testScriptQuickLaunchDialog() {
+
+		DockingActionIf action = getAction(tool, "Script Quick Launch");
+		performAction(action, false);
+		ScriptSelectionDialog dialog = waitForDialogComponent(ScriptSelectionDialog.class);
+
+		JTextField textField = findComponent(dialog.getComponent(), JTextField.class);
+		triggerText(textField, "Hello*Pop");
+
+		// note: textField is an instance of DropDownSelectionTextField
+		waitFor(() -> (Window) getInstanceField("matchingWindow", textField));
+
+		JComponent component = dialog.getComponent();
+		Window dataTypeDialog = windowForComponent(component);
+		Window[] popUpWindows = dataTypeDialog.getOwnedWindows();
+
+		List<Component> dataTypeWindows = new ArrayList<>(Arrays.asList(popUpWindows));
+		dataTypeWindows.add(dataTypeDialog);
+
+		captureComponents(dataTypeWindows);
+		closeAllWindows();
 	}
 
 //==================================================================================================

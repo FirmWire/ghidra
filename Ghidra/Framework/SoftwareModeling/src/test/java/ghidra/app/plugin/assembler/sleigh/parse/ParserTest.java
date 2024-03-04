@@ -15,7 +15,8 @@
  */
 package ghidra.app.plugin.assembler.sleigh.parse;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.PrintStream;
 import java.util.*;
@@ -25,19 +26,22 @@ import org.apache.commons.lang3.StringUtils;
 import org.junit.Test;
 
 import ghidra.app.plugin.assembler.sleigh.grammars.*;
+import ghidra.app.plugin.assembler.sleigh.sem.DefaultAssemblyResolutionFactory;
 import ghidra.app.plugin.assembler.sleigh.symbol.*;
 import ghidra.app.plugin.assembler.sleigh.tree.*;
-import ghidra.app.plugin.assembler.sleigh.util.SleighUtil;
+import ghidra.app.plugin.assembler.sleigh.util.AsmUtil;
 import ghidra.util.NullOutputStream;
 
 public class ParserTest {
+	private static final DefaultAssemblyResolutionFactory FACTORY =
+		new DefaultAssemblyResolutionFactory();
 
 	private boolean tracing = false;
 	private PrintStream out = tracing ? System.out : new PrintStream(new NullOutputStream());
 
 	@Test
 	public void testFirstFollow() throws Exception {
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 		AssemblyNonTerminal E = new AssemblyNonTerminal("E");
 		AssemblyNonTerminal T = new AssemblyNonTerminal("T");
 		AssemblyNonTerminal F = new AssemblyNonTerminal("F");
@@ -102,7 +106,7 @@ public class ParserTest {
 
 	@Test
 	public void testLRStates() throws Exception {
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 		AssemblyNonTerminal Sp = new AssemblyNonTerminal("S'");
 		AssemblyNonTerminal S = new AssemblyNonTerminal("S");
 		AssemblyNonTerminal X = new AssemblyNonTerminal("X");
@@ -119,10 +123,10 @@ public class ParserTest {
 
 		// I don't care the state numbers, but I do want to make sure every state is present
 		Comparator<Set<AssemblyParseStateItem>> comp = (Set<AssemblyParseStateItem> a,
-				Set<AssemblyParseStateItem> b) -> SleighUtil.compareInOrder(a, b);
+				Set<AssemblyParseStateItem> b) -> AsmUtil.compareInOrder(a, b);
 		TreeSet<Set<AssemblyParseStateItem>> states = new TreeSet<>(comp);
 		for (AssemblyParseState pstate : parser.states) {
-			TreeSet<AssemblyParseStateItem> state = new TreeSet<>(pstate);
+			TreeSet<AssemblyParseStateItem> state = new TreeSet<>(pstate.getKernel());
 			states.add(state);
 		}
 
@@ -148,7 +152,7 @@ public class ParserTest {
 	public void testLALRWithEpsilon37() throws Exception {
 		// This comes from page 37 of http://digital.cs.usu.edu/~allan/Compilers/Notes/LRParsing.pdf
 
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 		AssemblyNonTerminal Ep = new AssemblyNonTerminal("E'");
 		AssemblyNonTerminal E = new AssemblyNonTerminal("E");
 		AssemblyNonTerminal T = new AssemblyNonTerminal("T");
@@ -226,7 +230,7 @@ public class ParserTest {
 	public void testLALRWithEpsilon33999() throws Exception {
 		// This comes from http://cs.stackexchange.com/questions/33999/lalr1-parsers-and-the-epsilon-transition
 
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 		AssemblyNonTerminal S = new AssemblyNonTerminal("S");
 		AssemblyNonTerminal A = new AssemblyNonTerminal("A");
 		AssemblyNonTerminal B = new AssemblyNonTerminal("B");
@@ -283,7 +287,7 @@ public class ParserTest {
 	public void testLALRFromTutorial() throws Exception {
 		// http://web.cs.dal.ca/~sjackson/lalr1.html
 
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 		AssemblyNonTerminal S = new AssemblyNonTerminal("S");
 		AssemblyNonTerminal N = new AssemblyNonTerminal("N");
 		AssemblyNonTerminal E = new AssemblyNonTerminal("E");
@@ -378,7 +382,7 @@ public class ParserTest {
 
 	@Test
 	public void testListsFromARM() throws Exception {
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 
 		AssemblyNonTerminal S = new AssemblyNonTerminal("S");
 
@@ -480,7 +484,7 @@ public class ParserTest {
 
 	@Test
 	public void testEndsOptionalWhitespaceEpsilon() {
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 		AssemblyNonTerminal S = new AssemblyNonTerminal("S");
 		AssemblyNonTerminal E = new AssemblyNonTerminal("E");
 
@@ -505,7 +509,7 @@ public class ParserTest {
 
 	@Test
 	public void testExpectsPastWhitespace() {
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 		AssemblyNonTerminal S = new AssemblyNonTerminal("S");
 		addProduction(S, g, "a", " ", "b");
 
@@ -525,7 +529,7 @@ public class ParserTest {
 
 	@Test
 	public void testExpectsPastMissingWhitespace() {
-		AssemblyGrammar g = new AssemblyGrammar();
+		AssemblyGrammar g = new AssemblyGrammar(FACTORY);
 		AssemblyNonTerminal S = new AssemblyNonTerminal("S");
 		addProduction(S, g, "a", " ", "b");
 
@@ -558,14 +562,14 @@ public class ParserTest {
 		AssemblySentential<AssemblyNonTerminal> rhs = new AssemblySentential<>();
 		for (Object o : objs) {
 			if (o instanceof AssemblySymbol) {
-				rhs.add((AssemblySymbol) o);
+				rhs.addSymbol((AssemblySymbol) o);
 			}
 			else if (o instanceof String) {
 				if (" ".equals(o)) {
 					rhs.addWS();
 				}
 				else {
-					rhs.add(new AssemblyStringTerminal((String) o));
+					rhs.addSymbol(new AssemblyStringTerminal((String) o, null));
 				}
 			}
 			else {

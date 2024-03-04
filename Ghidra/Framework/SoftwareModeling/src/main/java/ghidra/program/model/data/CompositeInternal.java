@@ -157,7 +157,7 @@ public interface CompositeInternal extends Composite {
 	}
 
 	/**
-	 * Dump composite and its components for use in {@link #toString()} representation.
+	 * Dump composite and its components for use in {@link Object#toString()} representation.
 	 * @param composite composite instance to be dumped
 	 * @return formatted dump as string
 	 */
@@ -168,24 +168,23 @@ public interface CompositeInternal extends Composite {
 		stringBuffer.append(getTypeName(composite) + " " + composite.getDisplayName() + " {\n");
 		dumpComponents(composite, stringBuffer, "   ");
 		stringBuffer.append("}\n");
-		stringBuffer.append("Size = " + composite.getLength() + "   Actual Alignment = " +
-			composite.getAlignment() + "\n");
+		int length = composite.isZeroLength() ? 0 : composite.getLength();
+		stringBuffer.append("Length: " + length + " Alignment: " + composite.getAlignment() + "\n");
 		return stringBuffer.toString();
 	}
 
 	/**
-	 * Dump all components for use in {@link #toString()} representation.
+	 * Dump all components for use in {@link Object#toString()} representation.
 	 * 
 	 * @param buffer string buffer
 	 * @param pad    padding to be used with each component output line
 	 */
 	private static void dumpComponents(Composite composite, StringBuilder buffer, String pad) {
 		// limit output of filler components for non-packed structures
+
 		DataTypeComponent[] components = composite.getDefinedComponents();
 		for (DataTypeComponent dtc : components) {
 			DataType dataType = dtc.getDataType();
-//			buffer.append(pad + dtc.getOrdinal());
-//			buffer.append(") ");
 			buffer.append(pad + dtc.getOffset());
 			buffer.append(pad + dataType.getName());
 			if (dataType instanceof BitFieldDataType) {
@@ -195,7 +194,11 @@ public interface CompositeInternal extends Composite {
 				buffer.append(")");
 			}
 			buffer.append(pad + dtc.getLength());
-			buffer.append(pad + dtc.getFieldName());
+			String name = dtc.getFieldName();
+			if (name == null) {
+				name = "";
+			}
+			buffer.append(pad + name);
 			String comment = dtc.getComment();
 			if (comment == null) {
 				comment = "";

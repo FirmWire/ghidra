@@ -21,7 +21,7 @@ import java.math.BigInteger;
 import docking.widgets.fieldpanel.field.*;
 import docking.widgets.fieldpanel.support.FieldLocation;
 import docking.widgets.fieldpanel.support.RowColLocation;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
 import ghidra.app.util.viewer.format.FieldFormatModel;
 import ghidra.app.util.viewer.format.FormatManager;
 import ghidra.app.util.viewer.proxy.ProxyObj;
@@ -43,7 +43,7 @@ public class ArrayValuesFieldFactory extends FieldFactory {
 
 	@Override
 	public FieldFactory newInstance(FieldFormatModel formatModel,
-			HighlightProvider highlightProvider, ToolOptions toolOptions,
+			ListingHighlightProvider highlightProvider, ToolOptions toolOptions,
 			ToolOptions fieldOptions) {
 		return new ArrayValuesFieldFactory(formatModel, highlightProvider, toolOptions,
 			fieldOptions);
@@ -56,7 +56,7 @@ public class ArrayValuesFieldFactory extends FieldFactory {
 	 * @param displayOptions the Options for display properties.
 	 * @param fieldOptions the Options for field specific properties.
 	 */
-	private ArrayValuesFieldFactory(FieldFormatModel model, HighlightProvider hlProvider,
+	private ArrayValuesFieldFactory(FieldFormatModel model, ListingHighlightProvider hlProvider,
 			Options displayOptions, Options fieldOptions) {
 		super(FIELD_NAME, model, hlProvider, displayOptions, fieldOptions);
 		setupOptions(fieldOptions);
@@ -95,12 +95,16 @@ public class ArrayValuesFieldFactory extends FieldFactory {
 		int numComponents = parent.getNumComponents();
 		int index = data.getComponentIndex();
 		int remaining = numComponents - index;
-		int valuesThisLine = Math.min(remaining, valuesPerLine);
-		FieldElement[] aStrings = new FieldElement[valuesThisLine];
-		for (int i = 0; i < valuesThisLine; i++) {
+		int itemCount = Math.min(remaining, valuesPerLine);
+		boolean isLastLine = remaining <= itemCount;
+
+		FieldElement[] aStrings = new FieldElement[itemCount];
+		for (int i = 0; i < itemCount; i++) {
 			Data child = parent.getComponent(index++);
-			String value = getDisplayValue(child, i != valuesThisLine - 1);
-			AttributedString as = new AttributedString(value, color, getMetrics());
+			boolean isLastItem = isLastLine && (i == itemCount - 1);
+			String value = getDisplayValue(child, !isLastItem);
+			AttributedString as =
+				new AttributedString(value, ListingColors.ARRAY_VALUES, getMetrics());
 			aStrings[i] = new TextFieldElement(as, i, 0);
 		}
 		return ListingTextField.createPackedTextField(this, proxy, aStrings, startX + varWidth,

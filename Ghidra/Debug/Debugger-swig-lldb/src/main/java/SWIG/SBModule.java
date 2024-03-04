@@ -63,6 +63,10 @@ public class SBModule {
     lldbJNI.SBModule_Clear(swigCPtr, this);
   }
 
+  public boolean IsFileBacked() {
+    return lldbJNI.SBModule_IsFileBacked(swigCPtr, this);
+  }
+
   public SBFileSpec GetFileSpec() {
     return new SBFileSpec(lldbJNI.SBModule_GetFileSpec(swigCPtr, this), true);
   }
@@ -223,8 +227,8 @@ public class SBModule {
     lldbJNI.SBModule_GarbageCollectAllocatedModules();
   }
 
-  public String __str__() {
-    return lldbJNI.SBModule___str__(swigCPtr, this);
+  public String __repr__() {
+    return lldbJNI.SBModule___repr__(swigCPtr, this);
   }
 
 }

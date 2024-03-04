@@ -15,14 +15,15 @@
  */
 package ghidra.app.plugin.assembler.sleigh;
 
+import static ghidra.pcode.utils.SlaFormat.*;
 import static org.junit.Assert.*;
 
-import java.util.ArrayList;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Test;
-import org.xml.sax.SAXException;
 
 import ghidra.GhidraApplicationLayout;
 import ghidra.app.plugin.assembler.sleigh.expr.*;
@@ -32,18 +33,17 @@ import ghidra.app.plugin.languages.sleigh.SleighLanguages;
 import ghidra.app.plugin.processors.sleigh.*;
 import ghidra.app.plugin.processors.sleigh.expression.PatternExpression;
 import ghidra.app.plugin.processors.sleigh.pattern.DisjointPattern;
-import ghidra.app.plugin.processors.sleigh.symbol.*;
+import ghidra.app.plugin.processors.sleigh.symbol.SubtableSymbol;
 import ghidra.app.plugin.processors.sleigh.template.ConstructTpl;
 import ghidra.app.plugin.processors.sleigh.template.HandleTpl;
 import ghidra.framework.Application;
 import ghidra.framework.ApplicationConfiguration;
 import ghidra.program.model.lang.LanguageID;
-import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.pcode.*;
 import ghidra.util.Msg;
-import ghidra.xml.XmlPullParser;
-import ghidra.xml.XmlPullParserFactory;
 
 public class SolverTest {
+	static final DefaultAssemblyResolutionFactory FACTORY = new DefaultAssemblyResolutionFactory();
 
 	private static final MaskedLong nil = MaskedLong.ZERO;
 	private static final MaskedLong unk = MaskedLong.UNKS;
@@ -165,23 +165,55 @@ public class SolverTest {
 	}
 
 	@Test
-	public void testCatOrSolver() throws SAXException, NeedsBackfillException {
-		XmlPullParser parser = XmlPullParserFactory.create("" + //
-			//
-			"<or_exp>\n" + //
-			"  <lshift_exp>\n" + //
-			"    <tokenfield bigendian='false' signbit='false' bitstart='0' bitend='3' bytestart='0' byteend='0' shift='0'/>\n" + //
-			"    <intb val='4'/>\n" + //
-			"  </lshift_exp>\n" + //
-			"  <tokenfield bigendian='false' signbit='false' bitstart='8' bitend='11' bytestart='1' byteend='1' shift='0'/>\n" + //
-			"</or_exp>\n" + //
-			"", "Test", null, true);
-		PatternExpression exp = PatternExpression.restoreExpression(parser, null);
+	public void testCatOrSolver() throws NeedsBackfillException, DecoderException, IOException {
+		PatchPackedEncode encode = new PatchPackedEncode();
+		encode.clear();
+		encode.openElement(ELEM_OR_EXP);
+		encode.openElement(ELEM_LSHIFT_EXP);
+		encode.openElement(ELEM_TOKENFIELD);
+		encode.writeBool(ATTRIB_BIGENDIAN, false);
+		encode.writeBool(ATTRIB_SIGNBIT, false);
+		encode.writeSignedInteger(ATTRIB_STARTBIT, 0);
+		encode.writeSignedInteger(ATTRIB_ENDBIT, 3);
+		encode.writeSignedInteger(ATTRIB_STARTBYTE, 0);
+		encode.writeSignedInteger(ATTRIB_ENDBYTE, 0);
+		encode.writeSignedInteger(ATTRIB_SHIFT, 0);
+		encode.closeElement(ELEM_TOKENFIELD);
+		encode.openElement(ELEM_INTB);
+		encode.writeSignedInteger(ATTRIB_VAL, 4);
+		encode.closeElement(ELEM_INTB);
+		encode.closeElement(ELEM_LSHIFT_EXP);
+		encode.openElement(ELEM_TOKENFIELD);
+		encode.writeBool(ATTRIB_BIGENDIAN, false);
+		encode.writeBool(ATTRIB_SIGNBIT, false);
+		encode.writeSignedInteger(ATTRIB_STARTBIT, 0);
+		encode.writeSignedInteger(ATTRIB_ENDBIT, 11);
+		encode.writeSignedInteger(ATTRIB_STARTBYTE, 1);
+		encode.writeSignedInteger(ATTRIB_ENDBYTE, 1);
+		encode.writeSignedInteger(ATTRIB_SHIFT, 0);
+		encode.closeElement(ELEM_TOKENFIELD);
+		encode.closeElement(ELEM_OR_EXP);
+		ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+		encode.writeTo(outStream);
+		byte[] bytes = outStream.toByteArray();
+		PackedDecode decoder = new PackedDecode();
+		decoder.open(1024, "Test");
+		decoder.ingestBytes(bytes, 0, bytes.length);
+		decoder.endIngest();
+//				<or_exp>
+//				  <lshift_exp>
+//				    <tokenfield bigendian='false' signbit='false' bitstart='0' bitend='3'
+//				                bytestart='0' byteend='0' shift='0'/>
+//				    <intb val='4'/>
+//				  </lshift_exp>
+//				  <tokenfield bigendian='false' signbit='false' bitstart='8' bitend='11'
+//				              bytestart='1' byteend='1' shift='0'/>
+//				</or_exp>
+		PatternExpression exp = PatternExpression.decodeExpression(decoder, null);
 		RecursiveDescentSolver solver = RecursiveDescentSolver.getSolver();
-		AssemblyResolution res =
-			solver.solve(exp, MaskedLong.fromLong(0x78), Collections.emptyMap(),
-				Collections.emptyMap(), AssemblyResolution.nop("NOP", null), "Test");
-		AssemblyResolution e = AssemblyResolvedConstructor.fromString("ins:X7:X8", "Test", null);
+		AssemblyResolution res = solver.solve(FACTORY, exp, MaskedLong.fromLong(0x78),
+			Collections.emptyMap(), FACTORY.nop("NOP"), "Test");
+		AssemblyResolution e = FACTORY.fromString("ins:X7:X8", "Test", null);
 		assertEquals(e, res);
 	}
 
@@ -191,7 +223,7 @@ public class SolverTest {
 			Application.initializeApplication(new GhidraApplicationLayout(),
 				new ApplicationConfiguration());
 		}
-		SleighLanguageProvider provider = new SleighLanguageProvider();
+		SleighLanguageProvider provider = SleighLanguageProvider.getSleighLanguageProvider();
 		SleighLanguage lang = (SleighLanguage) provider.getLanguage(new LanguageID(langId));
 		AtomicReference<Constructor> consref = new AtomicReference<>();
 		SleighLanguages.traverseConstructors(lang, new ConstructorEntryVisitor() {
@@ -215,7 +247,7 @@ public class SolverTest {
 			Application.initializeApplication(new GhidraApplicationLayout(),
 				new ApplicationConfiguration());
 		}
-		SleighLanguageProvider provider = new SleighLanguageProvider();
+		SleighLanguageProvider provider = SleighLanguageProvider.getSleighLanguageProvider();
 		SleighLanguage lang = (SleighLanguage) provider.getLanguage(new LanguageID(langId));
 		AtomicReference<Constructor> consref = new AtomicReference<>();
 		SleighLanguages.traverseConstructors(lang, new ConstructorEntryVisitor() {
@@ -257,103 +289,6 @@ public class SolverTest {
 		ConstructTpl ctpl = ct.getTempl();
 		HandleTpl htpl = ctpl.getResult();
 		assertEquals(16, htpl.getSize());
-	}
-
-	public void testExperimentGetOperandExportSize1() throws Exception {
-		if (!Application.isInitialized()) {
-			Application.initializeApplication(new GhidraApplicationLayout(),
-				new ApplicationConfiguration());
-		}
-		SleighLanguageProvider provider = new SleighLanguageProvider();
-		SleighLanguage lang =
-			(SleighLanguage) provider.getLanguage(new LanguageID("AARCH64:BE:64:v8A"));
-		AtomicReference<Constructor> consref = new AtomicReference<>();
-		SleighLanguages.traverseConstructors(lang, new ConstructorEntryVisitor() {
-			@Override
-			public int visit(SubtableSymbol subtable, DisjointPattern pattern, Constructor cons) {
-				if ("Imm_logical_imm32_operand".equals(subtable.getName())) {
-					if ("ins:SS:C[00xx]:[x0xx]X:XX:XX".equals(pattern.toString())) {
-						consref.set(cons);
-						return FINISHED;
-					}
-				}
-				return CONTINUE;
-			}
-		});
-		Constructor ct = consref.get();
-		ConstructState st = new ConstructState(null) {
-			@Override
-			public Constructor getConstructor() {
-				return ct;
-			}
-		};
-		int num = ct.getNumOperands();
-		for (int i = 0; i < num; i++) {
-			ConstructState sub = new ConstructState(st);
-			st.addSubState(sub);
-		}
-		SleighParserContext ctx = new SleighParserContext(null, null, null, null);
-
-		ParserWalker walker = new ParserWalker(ctx);
-
-		walker.subTreeState(st);
-		while (walker.isState()) {
-			assert ct == walker.getConstructor();
-			int oper = walker.getOperand();
-			int numoper = ct.getNumOperands();
-			while (oper < numoper) {
-				OperandSymbol sym = ct.getOperand(oper);
-				walker.pushOperand(oper);
-				TripleSymbol triple = sym.getDefiningSymbol();
-				if (triple != null) {
-					if (triple instanceof SubtableSymbol) {
-						break;
-					}
-					FixedHandle handle = walker.getParentHandle();
-					triple.getFixedHandle(handle, walker);
-				}
-				else { // Must be an expression
-						//PatternExpression patexp = sym.getDefiningExpression();
-						//long res = patexp.getValue(walker);
-					FixedHandle hand = walker.getParentHandle();
-					hand.space = lang.getAddressFactory().getConstantSpace();
-					hand.offset_space = null;
-					hand.offset_offset = 0x1010101010101010L;
-					hand.size = 0;
-				}
-				walker.popOperand();
-				oper++;
-			}
-			if (oper >= numoper) {
-				ConstructTpl templ = ct.getTempl();
-				if (templ != null) {
-					HandleTpl res = templ.getResult();
-					if (res != null) {
-						res.fix(walker.getParentHandle(), walker);
-					}
-					else {
-						walker.getParentHandle().setInvalid();
-					}
-				}
-				walker.popOperand();
-			}
-		}
-
-		walker.subTreeState(st);
-
-		walker.subTreeState(st);
-		ArrayList<Object> list = new ArrayList<>();
-		ct.printList(walker, list);
-		for (Object obj : list) {
-			if (obj instanceof Character) {
-				System.out.print(obj);
-			}
-			else if (obj instanceof FixedHandle) {
-				FixedHandle handle = (FixedHandle) obj;
-				System.out.println(
-					new Scalar(8 * handle.size, handle.offset_offset) + "(" + handle.size + ")");
-			}
-		}
 	}
 
 	@Test
@@ -421,5 +356,91 @@ public class SolverTest {
 
 		assertTrue(MaskedLong.fromLong(-0x800000000000000L).isInRange(0xffffffffffffffffL, true));
 		// NOTE: -0x8000000000000001L will wrap around and appear positive
+	}
+
+	@Test
+	public void testAssemblyPatternBlockMaskOut() {
+		AssemblyPatternBlock base = AssemblyPatternBlock.fromString("8C:45:00:00");
+		AssemblyPatternBlock extraMask = AssemblyPatternBlock.fromString("XX:X5:XX:XX");
+		AssemblyPatternBlock expectedAnswer = AssemblyPatternBlock.fromString("8C:4X:00:00");
+		AssemblyPatternBlock computed = base.maskOut(extraMask);
+		assertEquals(expectedAnswer, computed);
+
+		base = AssemblyPatternBlock.fromString("8C:45:00:00");
+		extraMask = AssemblyPatternBlock.fromString("XX:X5:XX:XX");
+		expectedAnswer = AssemblyPatternBlock.fromString("8C:4X:00:00");
+		computed = base.maskOut(extraMask);
+		assertEquals(expectedAnswer, computed);
+
+		base = AssemblyPatternBlock.fromString("8C:45:67:89");
+		byte[] z = new byte[2];
+		z[0] = 0x44;
+		z[1] = 0x77;
+		extraMask = AssemblyPatternBlock.fromBytes(2, z);
+		expectedAnswer = AssemblyPatternBlock.fromString("8C:45:XX:XX");
+		computed = base.maskOut(extraMask);
+		assertEquals(expectedAnswer, computed);
+
+		extraMask = AssemblyPatternBlock.fromBytes(1, z);
+		expectedAnswer = AssemblyPatternBlock.fromString("8C:XX:XX:89");
+		computed = base.maskOut(extraMask);
+		assertEquals(expectedAnswer, computed);
+
+		base = AssemblyPatternBlock.fromString("01:02:03:04:05:06:07:08");
+		extraMask = AssemblyPatternBlock.fromBytes(1, z);
+		expectedAnswer = AssemblyPatternBlock.fromString("01:XX:XX:04:05:06:07:08");
+		computed = base.maskOut(extraMask);
+		assertEquals(expectedAnswer, computed);
+
+		byte[] z3 = new byte[3];
+		z3[0] = 0x44;
+		z3[1] = 0x77;
+		z3[2] = 0x78;
+		base = AssemblyPatternBlock.fromBytes(4, z3);
+		extraMask = AssemblyPatternBlock.fromBytes(1, z);
+		expectedAnswer = AssemblyPatternBlock.fromBytes(4, z3);
+		computed = base.maskOut(extraMask);
+		assertEquals(expectedAnswer, computed);
+
+		extraMask = AssemblyPatternBlock.fromBytes(4, z);
+		byte[] z4 = new byte[1];
+		z4[0] = 0x78;
+		expectedAnswer = AssemblyPatternBlock.fromBytes(6, z4);
+		computed = base.maskOut(extraMask);
+		assertEquals(expectedAnswer, computed);
+	}
+
+	@Test
+	public void testAssemblyPatternBlockTrim() {
+		AssemblyPatternBlock base = AssemblyPatternBlock.fromString("XC:45:00:0X");
+		AssemblyPatternBlock expectedAnswer = AssemblyPatternBlock.fromString("c4:50:00");
+		var computed = base.trim();
+		assertEquals(expectedAnswer, computed);
+
+		base = base.shift(5);
+		computed = base.trim();
+		assertEquals(expectedAnswer, computed);
+
+		base = AssemblyPatternBlock.fromString("XX:XX:00:XX:10:XX");
+		expectedAnswer = AssemblyPatternBlock.fromString("00:XX:10");
+		computed = base.trim();
+		assertEquals(expectedAnswer, computed);
+
+		base = base.shift(2);
+		expectedAnswer = AssemblyPatternBlock.fromString("00:XX:10");
+		computed = base.trim();
+		assertEquals(expectedAnswer, computed);
+
+		base = AssemblyPatternBlock.fromString("[x1xx]X");
+		expectedAnswer = AssemblyPatternBlock.fromString("X[xxx1]");
+		computed = base.trim();
+		assertEquals(expectedAnswer, computed);
+
+		// The "f" here has the "sign bit" set... we wan't to make sure it's treated as
+		// unsigned
+		base = AssemblyPatternBlock.fromString("F[x1xx]").shift(3);
+		expectedAnswer = AssemblyPatternBlock.fromString("[xx11][11x1]");
+		computed = base.trim();
+		assertEquals(expectedAnswer, computed);
 	}
 }

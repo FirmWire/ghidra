@@ -18,15 +18,17 @@ package ghidra.app.plugin.core.debug.gui.thread;
 import org.junit.Before;
 import org.junit.Test;
 
-import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerGUITest;
-import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerGUITest.TestDebuggerTargetTraceMapper;
+import db.Transaction;
+import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerTest;
+import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerTest.TestDebuggerTargetTraceMapper;
 import ghidra.app.plugin.core.debug.service.model.DebuggerModelServiceProxyPlugin;
 import ghidra.app.plugin.core.debug.service.tracemgr.DebuggerTraceManagerServicePlugin;
 import ghidra.app.services.*;
 import ghidra.dbg.model.*;
+import ghidra.debug.api.action.ActionSource;
+import ghidra.debug.api.model.TraceRecorder;
 import ghidra.trace.model.Trace;
 import ghidra.trace.model.thread.TraceThread;
-import ghidra.util.database.UndoableTransaction;
 import help.screenshot.GhidraScreenShotGenerator;
 
 public class DebuggerThreadsPluginScreenShots extends GhidraScreenShotGenerator {
@@ -70,9 +72,9 @@ public class DebuggerThreadsPluginScreenShots extends GhidraScreenShotGenerator 
 		recorder.forceSnapshot();
 		TestTargetThread handler2Thread = process.addThread(4);
 		waitForValue(() -> recorder.getTraceThread(handler2Thread));
-		AbstractGhidraHeadedDebuggerGUITest.waitForDomainObject(trace);
+		AbstractGhidraHeadedDebuggerTest.waitForDomainObject(trace);
 
-		try (UndoableTransaction tid = UndoableTransaction.start(trace, "Comments", true)) {
+		try (Transaction tx = trace.openTransaction("Comments")) {
 			recorder.getTraceThread(mainThread).setComment("GUI main loop");
 			recorder.getTraceThread(serverThread).setComment("Server");
 			recorder.getTraceThread(handler1Thread).setComment("Handler 1");

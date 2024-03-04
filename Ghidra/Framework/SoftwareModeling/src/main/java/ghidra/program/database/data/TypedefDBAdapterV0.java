@@ -28,15 +28,19 @@ import ghidra.util.exception.VersionException;
  * Version 0 implementation for accessing the Typedef database table. 
  */
 class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
+
 	static final int VERSION = 0;
+
 	private static final int V0_TYPEDEF_DT_ID_COL = 0;
 	private static final int V0_TYPEDEF_NAME_COL = 1;
 	private static final int V0_TYPEDEF_CAT_COL = 2;
+
 //  DO NOT REMOVE WHAT'S BELOW - this documents the schema used in version 0.
 //	static final Schema V0_SCHEMA = new Schema(VERSION, "Typedef ID",
 //								new Class[] {LongField.class, StringField.class,
 //											 LongField.class},
 //								new String[] {"Data Type ID", "Name", "Category ID"});
+
 	private Table table;
 
 	/**
@@ -51,14 +55,8 @@ class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
 		if (table == null) {
 			throw new VersionException("Missing Table: " + TYPEDEF_TABLE_NAME);
 		}
-		int version = table.getSchema().getVersion();
-		if (version != VERSION) {
-			String msg = "Expected version " + VERSION + " for table " + TYPEDEF_TABLE_NAME +
-				" but got " + table.getSchema().getVersion();
-			if (version < VERSION) {
-				throw new VersionException(msg, VersionException.OLDER_VERSION, true);
-			}
-			throw new VersionException(msg, VersionException.NEWER_VERSION, false);
+		if (table.getSchema().getVersion() != VERSION) {
+			throw new VersionException(false);
 		}
 	}
 
@@ -68,10 +66,9 @@ class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
 	}
 
 	@Override
-	public DBRecord createRecord(long dataTypeID, String name, long categoryID, long sourceArchiveID,
-			long sourceDataTypeID, long lastChangeTime) throws IOException {
-		throw new UnsupportedOperationException("Not allowed to update prior version #" + VERSION +
-			" of " + TYPEDEF_TABLE_NAME + " table.");
+	public DBRecord createRecord(long dataTypeID, String name, short flags, long categoryID,
+			long sourceArchiveID, long sourceDataTypeID, long lastChangeTime) throws IOException {
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
@@ -91,7 +88,7 @@ class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
 
 	@Override
 	public boolean removeRecord(long dataID) throws IOException {
-		return table.deleteRecord(dataID);
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
@@ -111,6 +108,7 @@ class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
 		}
 		DBRecord rec = TypedefDBAdapter.SCHEMA.createRecord(oldRec.getKey());
 		rec.setLongValue(TYPEDEF_DT_ID_COL, oldRec.getLongValue(V0_TYPEDEF_DT_ID_COL));
+		// default TYPEDEF_FLAGS_COL to 0
 		rec.setString(TYPEDEF_NAME_COL, oldRec.getString(V0_TYPEDEF_NAME_COL));
 		rec.setLongValue(TYPEDEF_CAT_COL, oldRec.getLongValue(V0_TYPEDEF_CAT_COL));
 		rec.setLongValue(TYPEDEF_SOURCE_ARCHIVE_ID_COL, DataTypeManager.LOCAL_ARCHIVE_KEY);
@@ -125,4 +123,8 @@ class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
 		return null;
 	}
 
+	@Override
+	public int getRecordCount() {
+		return table.getRecordCount();
+	}
 }

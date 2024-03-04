@@ -144,7 +144,7 @@ public class DataTypeSyncInfo {
 	}
 
 	public String getRefDtPath() {
-		return refDt.getPathName();
+		return refDt.getCategoryPath().getPath();
 	}
 
 	public long getLastChangeTime(boolean useSource) {
@@ -190,11 +190,13 @@ public class DataTypeSyncInfo {
 		if (sourceDt == null) {
 			return true;
 		}
-		if (!DataTypeSynchronizer.namesAreEquivalent(sourceDt, refDt)) {
-			return true;
-		}
-		if (!StringUtils.equals(refDt.getDescription(), sourceDt.getDescription())) {
-			return true;
+		if (!DataTypeSynchronizer.isPointerOrArray(refDt)) {
+			if (!DataTypeSynchronizer.namesAreEquivalent(sourceDt, refDt)) {
+				return true;
+			}
+			if (!StringUtils.equals(refDt.getDescription(), sourceDt.getDescription())) {
+				return true;
+			}
 		}
 		DataType dt = sourceDt.clone(refDt.getDataTypeManager());
 		return !dt.isEquivalent(refDt);

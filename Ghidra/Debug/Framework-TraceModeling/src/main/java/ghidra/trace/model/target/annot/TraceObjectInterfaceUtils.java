@@ -18,10 +18,8 @@ package ghidra.trace.model.target.annot;
 import java.util.Collection;
 import java.util.List;
 
-import com.google.common.collect.Range;
-
 import ghidra.dbg.target.TargetObject;
-import ghidra.program.model.address.*;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.target.*;
 import ghidra.trace.model.target.TraceObject.ConflictResolution;
 import ghidra.util.LockHold;
@@ -54,9 +52,9 @@ public enum TraceObjectInterfaceUtils {
 	}
 
 	public static void setLifespan(Class<? extends TraceObjectInterface> traceIf,
-			TraceObject object, Range<Long> lifespan) throws DuplicateNameException {
+			TraceObject object, Lifespan lifespan) throws DuplicateNameException {
 		try (LockHold hold = object.getTrace().lockWrite()) {
-			for (TraceObjectValue val : object.getParents()) {
+			for (TraceObjectValue val : object.getParents(Lifespan.ALL)) {
 				if (val.isCanonical() && !val.isDeleted()) {
 					val.setLifespan(lifespan, ConflictResolution.DENY);
 				}
@@ -66,8 +64,8 @@ public enum TraceObjectInterfaceUtils {
 			throw new DuplicateNameException(
 				"Duplicate " + getShortName(traceIf) + ": " + e.getMessage());
 		}
-		object.setLifespan(lifespan);
-		long lower = object.getMinSnap();
+		object.insert(lifespan, ConflictResolution.TRUNCATE);
+		long lower = lifespan.lmin();
 		for (String key : getFixedKeys(traceIf)) {
 			TraceObjectValue val = object.getValue(lower, key);
 			if (val != null) {

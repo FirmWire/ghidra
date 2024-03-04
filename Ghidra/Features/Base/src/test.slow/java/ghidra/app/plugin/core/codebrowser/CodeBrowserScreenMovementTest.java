@@ -34,6 +34,7 @@ import docking.widgets.fieldpanel.support.FieldLocation;
 import docking.widgets.fieldpanel.support.FieldSelection;
 import ghidra.app.cmd.data.CreateDataCmd;
 import ghidra.app.cmd.data.CreateStructureCmd;
+import ghidra.app.events.OpenProgramPluginEvent;
 import ghidra.app.events.ProgramSelectionPluginEvent;
 import ghidra.app.services.ProgramManager;
 import ghidra.app.util.viewer.field.*;
@@ -382,6 +383,9 @@ public class CodeBrowserScreenMovementTest extends AbstractProgramBasedTest {
 
 		env.connectTools(tool, tool2);
 
+		// open same program in second tool - cannot rely on tool connection for this
+		tool2.firePluginEvent(new OpenProgramPluginEvent("Test", program));
+
 		codeBrowser.goToField(addr("0x1006420"), "Address", 0, 0);
 		assertEquals("01006420", cb2.getCurrentFieldText());
 
@@ -681,10 +685,7 @@ public class CodeBrowserScreenMovementTest extends AbstractProgramBasedTest {
 	}
 
 	private void setFieldSelection(FieldPanel fp, FieldSelection sel) {
-		fp.setSelection(sel);
-		Class<?>[] argClasses = new Class<?>[] { EventTrigger.class };
-		Object[] args = new Object[] { EventTrigger.GUI_ACTION };
-		invokeInstanceMethod("notifySelectionChanged", fp, argClasses, args);
+		fp.setSelection(sel, EventTrigger.GUI_ACTION);
 	}
 
 	private void setUpCodeBrowserTool(PluginTool tool) throws Exception {
@@ -798,8 +799,7 @@ public class CodeBrowserScreenMovementTest extends AbstractProgramBasedTest {
 	private void resetFormatOptions(CodeBrowserPlugin plugin) {
 		Options fieldOptions = plugin.getFormatManager().getFieldOptions();
 		List<String> names = fieldOptions.getOptionNames();
-		for (int i = 0; i < names.size(); i++) {
-			String name = names.get(i);
+		for (String name : names) {
 			if (!name.startsWith("Format Code")) {
 				continue;
 			}

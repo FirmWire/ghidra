@@ -15,14 +15,16 @@
  */
 package ghidra.app.plugin.core.debug.gui.breakpoint;
 
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import ghidra.app.services.TraceRecorder;
-import ghidra.dbg.target.TargetBreakpointLocation;
+import db.Transaction;
+import ghidra.debug.api.breakpoint.LogicalBreakpoint;
+import ghidra.debug.api.breakpoint.LogicalBreakpoint.State;
+import ghidra.pcode.exec.SleighUtils;
 import ghidra.program.model.address.Address;
 import ghidra.trace.model.breakpoint.TraceBreakpoint;
 import ghidra.trace.model.thread.TraceThread;
-import ghidra.util.database.UndoableTransaction;
 
 public class BreakpointLocationRow {
 	private final DebuggerBreakpointsProvider provider;
@@ -38,31 +40,40 @@ public class BreakpointLocationRow {
 	}
 
 	public boolean isEnabled() {
-		TraceRecorder recorder = provider.modelService.getRecorder(loc.getTrace());
-		return recorder != null && loc.isEnabled(recorder.getSnap());
+		long snap = provider.traceManager.getCurrentFor(loc.getTrace()).getSnap();
+		return loc.isEnabled(snap);
+	}
+
+	public State getState() {
+		LogicalBreakpoint lb = provider.breakpointService.getBreakpoint(loc);
+		if (lb == null) {
+			return State.NONE; // Should only happen in transition
+		}
+		return lb.computeStateForLocation(loc);
 	}
 
 	public void setEnabled(boolean enabled) {
-		// TODO: Make this toggle the individual location, if possible, not the whole spec.
-		TraceRecorder recorder = provider.modelService.getRecorder(loc.getTrace());
-		TargetBreakpointLocation bpt = recorder.getTargetBreakpoint(loc);
 		if (enabled) {
-			bpt.getSpecification().enable().exceptionally(ex -> {
+			provider.breakpointService.enableLocs(Set.of(loc)).exceptionally(ex -> {
 				provider.breakpointError("Toggle breakpoint", "Could not enable breakpoint", ex);
 				return null;
 			});
 		}
 		else {
-			bpt.getSpecification().disable().exceptionally(ex -> {
+			provider.breakpointService.disableLocs(Set.of(loc)).exceptionally(ex -> {
 				provider.breakpointError("Toggle breakpoint", "Could not disable breakpoint", ex);
 				return null;
 			});
 		}
 	}
 
+	public void setState(State state) {
+		assert state.isNormal();
+		setEnabled(state.isEnabled());
+	}
+
 	public void setName(String name) {
-		try (UndoableTransaction tid =
-			UndoableTransaction.start(loc.getTrace(), "Set breakpoint name", true)) {
+		try (Transaction tid = loc.getTrace().openTransaction("Set breakpoint name")) {
 			loc.setName(name);
 		}
 	}
@@ -88,10 +99,13 @@ public class BreakpointLocationRow {
 	}
 
 	public void setComment(String comment) {
-		try (UndoableTransaction tid =
-			UndoableTransaction.start(loc.getTrace(), "Set breakpoint comment", true)) {
+		try (Transaction tid = loc.getTrace().openTransaction("Set breakpoint comment")) {
 			loc.setComment(comment);
 		}
+	}
+
+	public boolean hasSleigh() {
+		return !SleighUtils.UNCONDITIONAL_BREAK.equals(loc.getEmuSleigh());
 	}
 
 	public TraceBreakpoint getTraceBreakpoint() {

@@ -115,6 +115,10 @@
 			        sortgroup="i" 
 			        target="help/topics/DebuggerListingPlugin/DebuggerListingPlugin.html" />
 
+			<tocdef id="DebuggerDisassemblerPlugin" text="Disassembly and Assembly"
+			        sortgroup="i1"
+			        target="help/topics/DebuggerDisassemblerPlugin/DebuggerDisassemblerPlugin.html" />
+
 			<tocdef id="DebuggerStackPlugin" text="Stack" 
 			        sortgroup="j" 
 			        target="help/topics/DebuggerStackPlugin/DebuggerStackPlugin.html" />
@@ -149,6 +153,14 @@
 			        sortgroup="n"
 			        target="help/topics/DebuggerWatchesPlugin/DebuggerWatchesPlugin.html" />
 
+			<tocdef id="VariableValueHoverPlugin" text="Variable Hovers"
+			        sortgroup="n1"
+			        target="help/topics/VariableValueHoverPlugin/VariableValueHoverPlugin.html" />
+
+			<tocdef id="DebuggerControlPlugin" text="Control and Machine State"
+			        sortgroup="n2"
+			        target="help/topics/DebuggerControlPlugin/DebuggerControlPlugin.html" />
+
 			<tocdef id="DebuggerMemviewPlugin" text="Memview Plot"
 			        sortgroup="o"
 			        target="help/topics/DebuggerMemviewPlugin/DebuggerMemviewPlugin.html" />
@@ -161,9 +173,9 @@
 			        sortgroup="p1"
 			        target="help/topics/DebuggerTraceViewDiffPlugin/DebuggerTraceViewDiffPlugin.html" />
 			
-			<tocdef id="DebuggerBots" text="Bots: Workflow Automation" 
-			        sortgroup="q" 
-			        target="help/topics/DebuggerBots/DebuggerBots.html" />
+			<tocdef id="DebuggerPlatformPlugin" text="Platform Selection"
+			        sortgroup="p2"
+			        target="help/topics/DebuggerPlatformPlugin/DebuggerPlatformPlugin.html" />
 		</tocdef>
 	</tocref>
 </tocroot>

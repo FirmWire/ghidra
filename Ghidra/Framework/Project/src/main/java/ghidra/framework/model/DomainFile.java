@@ -16,12 +16,15 @@
 package ghidra.framework.model;
 
 import java.io.*;
+import java.net.URL;
 import java.util.List;
 import java.util.Map;
 
 import javax.swing.Icon;
 
-import ghidra.framework.data.CheckinHandler;
+import generic.theme.GIcon;
+import ghidra.framework.client.NotConnectedException;
+import ghidra.framework.data.*;
 import ghidra.framework.store.*;
 import ghidra.util.InvalidNameException;
 import ghidra.util.exception.*;
@@ -34,6 +37,8 @@ import ghidra.util.task.TaskMonitor;
  * project file.
  */
 public interface DomainFile extends Comparable<DomainFile> {
+
+	public static final Icon UNSUPPORTED_FILE_ICON = new GIcon("icon.domain.file.uknown");
 
 	/**
 	* Use with getDomainObject to request the default version.  The default version is
@@ -48,7 +53,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	public final static String READ_ONLY_PROPERTY = "READ_ONLY";
 
 	/**
-	 * Get the name of  the StoredObj that is associated with the data.
+	 * Get the name of this project file
 	 * @return the name
 	 */
 	public String getName();
@@ -73,15 +78,34 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @throws DuplicateFileException if a file named newName 
 	 * already exists in this files domain folder.
 	 * @throws FileInUseException if this file is in-use / checked-out.
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 */
 	public DomainFile setName(String newName) throws InvalidNameException, IOException;
 
 	/**
-	 * Returns the path name to the domain object.
+	 * Returns the full path name to this file
 	 * @return the path name
 	 */
 	public String getPathname();
+
+	/**
+	 * Get a remote Ghidra URL for this domain file if available within an associated shared
+	 * project repository.  A null value will be returned if shared file does not exist and
+	 * may also be returned if shared repository is not connected or a connection error occurs.
+	 * @param ref reference within a file, may be null.  NOTE: such reference interpretation
+	 * is specific to a domain object and tooling with limited support.
+	 * @return remote Ghidra URL for this file or null
+	 */
+	public URL getSharedProjectURL(String ref);
+
+	/**
+	 * Get a local Ghidra URL for this domain file if available within the associated non-transient
+	 * local project.  A null value will be returned if project is transient.
+	 * @param ref reference within a file, may be null.  NOTE: such reference interpretation
+	 * is specific to a domain object and tooling with limited support.
+	 * @return local Ghidra URL for this file or null if transient or not applicable
+	 */
+	public URL getLocalProjectURL(String ref);
 
 	/**
 	 * Returns the local storage location for the project that this DomainFile belongs to.
@@ -90,14 +114,15 @@ public interface DomainFile extends Comparable<DomainFile> {
 	public ProjectLocator getProjectLocator();
 
 	/**
-	 * Returns content-type string
-	 * @return the content type
+	 * Returns content-type string for this file
+	 * @return the file content type or a reserved content type {@link ContentHandler#MISSING_CONTENT}
+	 * or {@link ContentHandler#UNKNOWN_CONTENT}.
 	 */
 	public String getContentType();
 
 	/**
 	 * Returns the underlying Class for the domain object in this domain file.
-	 * @return the class
+	 * @return the class or null if does not correspond to a domain object.
 	 */
 	public Class<? extends DomainObject> getDomainObjectClass();
 
@@ -109,8 +134,11 @@ public interface DomainFile extends Comparable<DomainFile> {
 
 	/**
 	 * Returns changes made to versioned file by others since checkout was performed.
+	 * NOTE: This method is unable to cope with version issues which may require an
+	 * upgrade.
 	 * @return change set or null
-	 * @throws VersionException latest version was created with a newer version of software
+	 * @throws VersionException latest version was created with a different version of software
+	 * which prevents rapid determination of change set.
 	 * @throws IOException if a folder item access error occurs or change set was 
 	 * produced by newer version of software and can not be read
 	 */
@@ -137,7 +165,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * that the domain object cannot be upgraded to the current format.  If okToUpgrade is false,
 	 * then the VersionException only means the object is not in the current format - it 
 	 * may or may not be possible to upgrade. 
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 * @throws CancelledException if monitor cancelled operation
 	 */
 	public DomainObject getDomainObject(Object consumer, boolean okToUpgrade, boolean okToRecover,
@@ -165,7 +193,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @throws VersionException if the domain object could not be read due
 	 * to a version format change.
 	 * @throws FileNotFoundException if the stored file/version was not found.
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 * @throws CancelledException if monitor cancelled operation
 	 */
 	public DomainObject getReadOnlyDomainObject(Object consumer, int version, TaskMonitor monitor)
@@ -173,6 +201,9 @@ public interface DomainFile extends Comparable<DomainFile> {
 
 	/**
 	 * Returns a new DomainObject that cannot be changed or saved to its original file.
+	 * NOTE: The use of this method should generally be avoided since it can't
+	 * handle version changes that may have occured and require a data upgrade
+	 * (e.g., DB schema change).
 	 * @param consumer consumer of the domain object which is responsible for
 	 * releasing it after use.
 	 * @param version the domain object version requested.  DEFAULT_VERSION should be 
@@ -183,7 +214,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @throws VersionException if the domain object could not be read due
 	 * to a version format change.
 	 * @throws FileNotFoundException if the stored file/version was not found.
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 * @throws CancelledException if monitor cancelled operation
 	 */
 	public DomainObject getImmutableDomainObject(Object consumer, int version, TaskMonitor monitor)
@@ -194,7 +225,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @param monitor monitor for the task that is doing the save on the file
 	 * @throws FileInUseException if the file is open for update by someone else, or
 	 * a transient-read is in progress.
-	 * @throws IOException thrown if an IO error occurs.
+	 * @throws IOException if an IO error occurs.
 	 * @throws CancelledException if monitor cancelled operation
 	 */
 	public void save(TaskMonitor monitor) throws IOException, CancelledException;
@@ -290,7 +321,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * for private files (i.e., not versioned).
 	 * @param state if true file will be read-only and may not be updated, if false the 
 	 * file may be updated.
-	 * @throws IOException thrown if an IO error occurs.
+	 * @throws IOException if an IO error occurs.
 	 */
 	public void setReadOnly(boolean state) throws IOException;
 
@@ -300,12 +331,6 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @return true if read-only
 	 */
 	public boolean isReadOnly();
-
-	/**
-	 * Returns true if the versioned filesystem can be used to store this files content type.
-	 * @return true if supports version control
-	 */
-	public boolean isVersionControlSupported();
 
 	/**
 	 * Return true if this is a versioned database, else false
@@ -351,7 +376,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @param keepCheckedOut if true, the file will be initially checked-out
 	 * @param monitor progress monitor
 	 * @throws FileInUseException if this file is in-use.
-	 * @throws IOException thrown if an IO or access error occurs.  Also thrown if file is not 
+	 * @throws IOException if an IO or access error occurs.  Also if file is not 
 	 * private.
 	 * @throws CancelledException if the monitor cancelled the operation
 	 */
@@ -366,7 +391,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @return true if checkout successful, false if an exclusive checkout was not possible
 	 * due to other users having checkouts of this file.  A request for a non-exclusive checkout 
 	 * will never return false.
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 * @throws CancelledException if task monitor cancelled operation.
 	 */
 	public boolean checkout(boolean exclusive, TaskMonitor monitor)
@@ -403,10 +428,25 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * Undo "checked-out" file.  The original repository file is restored.
 	 * @param keep if true, the private database will be renamed with a .keep
 	 * extension.
+	 * @throws NotConnectedException if shared project and not connected to repository
+	 * @throws FileInUseException if this file is in-use.
+	 * @throws IOException if file is not checked-out or an IO / access error occurs.
+	 */
+	public void undoCheckout(boolean keep) throws IOException;
+
+	/**
+	 * Undo "checked-out" file.  The original repository file is restored.
+	 * @param keep if true, the private database will be renamed with a .keep
+	 * extension.
+	 * @param force if not connected to the repository the local checkout file will be removed.
+	 *    Warning: forcing undo checkout will leave a stale checkout in place for the associated 
+	 *    repository if not connected.
+	 * @throws NotConnectedException if shared project and not connected to repository and
+	 *    force is false
 	 * @throws FileInUseException if this file is in-use / checked-out.
 	 * @throws IOException thrown if file is not checked-out or an IO / access error occurs.
 	 */
-	public void undoCheckout(boolean keep) throws IOException;
+	public void undoCheckout(boolean keep, boolean force) throws IOException;
 
 	/**
 	 * Forcefully terminate a checkout for the associated versioned file.
@@ -435,7 +475,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * Delete the entire database for this file, including any version files.
 	 * @throws FileInUseException if this file is in-use / checked-out.
 	 * @throws UserAccessException if the user does not have permission to delete the file.
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 */
 	public void delete() throws IOException;
 
@@ -460,7 +500,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @throws DuplicateFileException if a file with the same name 
 	 * already exists in newParent folder.
 	 * @throws FileInUseException if this file is in-use / checked-out.
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 */
 	public DomainFile moveTo(DomainFolder newParent) throws IOException;
 
@@ -470,7 +510,7 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @param monitor task monitor
 	 * @return newly created domain file
 	 * @throws FileInUseException if this file is in-use / checked-out.
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 * @throws CancelledException if task monitor cancelled operation.
 	 */
 	public DomainFile copyTo(DomainFolder newParent, TaskMonitor monitor)
@@ -482,15 +522,38 @@ public interface DomainFile extends Comparable<DomainFile> {
 	 * @param destFolder destination parent folder
 	 * @param monitor task monitor
 	 * @return the copied file
-	 * @throws IOException thrown if an IO or access error occurs.
+	 * @throws IOException if an IO or access error occurs.
 	 * @throws CancelledException if task monitor cancelled operation.
 	 */
 	public DomainFile copyVersionTo(int version, DomainFolder destFolder, TaskMonitor monitor)
 			throws IOException, CancelledException;
 
 	/**
+	 * Copy this file into the newParent folder as a link file.  Restrictions:
+	 * <ul>
+	 * <li>Specified newParent must reside within a different project since internal linking is
+	 * not currently supported. </li>
+	 * <li>Content type must support linking (see {@link #isLinkingSupported()}).</li>
+	 * </ul>
+	 * If this file is associated with a temporary transient project (i.e., not a locally 
+	 * managed project) the generated link will refer to the remote file with a remote
+	 * Ghidra URL, otherwise a local project storage path will be used.
+	 * @param newParent new parent folder
+	 * @return newly created domain file or null if content type does not support link use.
+	 * @throws IOException if an IO or access error occurs.
+	 */
+	public DomainFile copyToAsLink(DomainFolder newParent) throws IOException;
+
+	/**
+	 * Determine if this file's content type supports linking.
+	 * @return true if linking is supported, else false.
+	 */
+	public boolean isLinkingSupported();
+
+	/**
 	 * Get the list of consumers (Objects) for this domain file.
-	 * @return empty array list if there are no consumers
+	 * @return true if linking is supported allowing a link-file to be created which 
+	 * references this file, else false.
 	 */
 	public List<?> getConsumers();
 
@@ -534,10 +597,32 @@ public interface DomainFile extends Comparable<DomainFile> {
 	/**
 	 * Returns the length of this domain file.  This size is the minimum disk space
 	 * used for storing this file, but does not account for additional storage space
-	 * used to tracks changes, etc. 
+	 * used to track changes, etc. 
 	 * @return file length
-	 * @throws IOException thrown if IO or access error occurs
+	 * @throws IOException if IO or access error occurs
 	 */
 	public long length() throws IOException;
+
+	/**
+	 * Determine if this file is a link file which corresponds to either a file or folder link.  
+	 * The {@link DomainObject} referenced by a link-file may be opened using 
+	 * {@link #getReadOnlyDomainObject(Object, int, TaskMonitor)}.  The 
+	 * {@link #getDomainObject(Object, boolean, boolean, TaskMonitor)} method may also be used
+	 * to obtain a read-only instance.  {@link #getImmutableDomainObject(Object, int, TaskMonitor)}
+	 * use is not supported.
+	 * If the link-file content type equals {@value FolderLinkContentHandler#FOLDER_LINK_CONTENT_TYPE}
+	 * the method {@link #followLink()} can be used to get the linked domain folder. 
+	 * The associated link URL may be obtained with {@link LinkHandler#getURL(DomainFile)}.
+	 * The content type (see {@link #getContentType()} of a link file will differ from that of the
+	 * linked object (e.g., "LinkedProgram" vs "Program").
+	 * @return true if link file else false for a normal domain file
+	 */
+	public boolean isLinkFile();
+
+	/**
+	 * If this is a folder-link file get the corresponding linked folder.
+	 * @return a linked domain folder or null if not a folder-link.
+	 */
+	public DomainFolder followLink();
 
 }

@@ -19,9 +19,8 @@ import java.util.Set;
 
 import org.junit.*;
 
-import com.google.common.collect.Range;
-
-import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerGUITest.TestDebuggerTargetTraceMapper;
+import db.Transaction;
+import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerTest.TestDebuggerTargetTraceMapper;
 import ghidra.app.plugin.core.debug.gui.listing.DebuggerListingPlugin;
 import ghidra.app.plugin.core.debug.gui.listing.DebuggerListingProvider;
 import ghidra.app.plugin.core.debug.service.model.DebuggerModelServicePlugin;
@@ -30,6 +29,8 @@ import ghidra.app.plugin.core.debug.service.tracemgr.DebuggerTraceManagerService
 import ghidra.app.plugin.core.progmgr.ProgramManagerPlugin;
 import ghidra.app.services.*;
 import ghidra.dbg.model.TestDebuggerModelBuilder;
+import ghidra.debug.api.action.ActionSource;
+import ghidra.debug.api.model.TraceRecorder;
 import ghidra.framework.model.DomainFolder;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.mem.Memory;
@@ -39,9 +40,9 @@ import ghidra.trace.database.ToyDBTraceBuilder;
 import ghidra.trace.database.memory.DBTraceMemoryManager;
 import ghidra.trace.database.module.DBTraceModuleManager;
 import ghidra.trace.model.DefaultTraceLocation;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.memory.TraceMemoryFlag;
 import ghidra.trace.model.modules.TraceModule;
-import ghidra.util.database.UndoableTransaction;
 import ghidra.util.task.TaskMonitor;
 import help.screenshot.GhidraScreenShotGenerator;
 
@@ -88,7 +89,7 @@ public class DebuggerCopyActionsPluginScreenShots extends GhidraScreenShotGenera
 	@Test
 	public void testCaptureDebuggerCopyIntoProgramDialog() throws Throwable {
 		long snap;
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			snap = tb.trace.getTimeManager().createSnapshot("First").getKey();
 			DBTraceMemoryManager mem = tb.trace.getMemoryManager();
 			mem.createRegion(".text", snap, tb.range(0x55550000, 0x5555ffff),
@@ -111,7 +112,7 @@ public class DebuggerCopyActionsPluginScreenShots extends GhidraScreenShotGenera
 		program = createDefaultProgram("echo", "Toy:BE:64:default", this);
 		AddressSpace stSpace = program.getAddressFactory().getDefaultAddressSpace();
 
-		try (UndoableTransaction tid = UndoableTransaction.start(program, "Add memory", true)) {
+		try (Transaction tx = program.openTransaction("Add memory")) {
 			program.setImageBase(tb.addr(stSpace, 0x00400000), true);
 			Memory memory = program.getMemory();
 			memory.createInitializedBlock(".text", tb.addr(stSpace, 0x00400000), 0x10000, (byte) 0,
@@ -124,12 +125,12 @@ public class DebuggerCopyActionsPluginScreenShots extends GhidraScreenShotGenera
 		root.createFile(tb.trace.getName(), tb.trace, TaskMonitor.DUMMY);
 		root.createFile(program.getName(), program, TaskMonitor.DUMMY);
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			mappingService.addMapping(
-				new DefaultTraceLocation(tb.trace, null, Range.atLeast(snap), tb.addr(0x55550000)),
+				new DefaultTraceLocation(tb.trace, null, Lifespan.nowOn(snap), tb.addr(0x55550000)),
 				new ProgramLocation(program, tb.addr(stSpace, 0x00400000)), 0x10000, true);
 			mappingService.addMapping(
-				new DefaultTraceLocation(tb.trace, null, Range.atLeast(snap), tb.addr(0x55560000)),
+				new DefaultTraceLocation(tb.trace, null, Lifespan.nowOn(snap), tb.addr(0x55560000)),
 				new ProgramLocation(program, tb.addr(stSpace, 0x00600000)), 0x10000, true);
 		}
 

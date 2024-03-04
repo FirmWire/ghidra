@@ -15,6 +15,7 @@
  */
 package docking.action;
 
+import java.awt.event.KeyEvent;
 import java.util.Arrays;
 
 import javax.swing.Icon;
@@ -96,6 +97,10 @@ public class MenuData {
 		return menuPath;
 	}
 
+	/**
+	 * Returns the menu path as a string. This method includes accelerator characters in the path
+	 * @return the menu path as a string
+	 */
 	public String getMenuPathAsString() {
 		if (menuPath == null || menuPath.length == 0) {
 			return null;
@@ -105,6 +110,28 @@ public class MenuData {
 			buildy.append(menuPath[i]);
 			if (i != (menuPath.length - 1)) {
 				buildy.append("->");
+			}
+		}
+		return buildy.toString();
+	}
+
+	/**
+	 * Returns the menu path as a string. This method filters accelerator chars('&') from the path.
+	 * @return the menu path as a string without '&' chars
+	 */
+	public String getMenuPathDisplayString() {
+		if (menuPath == null || menuPath.length == 0) {
+			return null;
+		}
+		StringBuilder buildy = new StringBuilder();
+		for (int i = 0; i < menuPath.length; i++) {
+			if (i != (menuPath.length - 1)) {
+				buildy.append(processMenuItemName(menuPath[i]));
+				buildy.append("->");
+			}
+			else {
+				// the last entry has already had processMenuItemName called on it
+				buildy.append(menuPath[i]);
 			}
 		}
 		return buildy.toString();
@@ -228,6 +255,21 @@ public class MenuData {
 		firePropertyChanged(oldData);
 	}
 
+	public void clearMnemonic() {
+		setMnemonic((char) KeyEvent.VK_UNDEFINED /* == 0 */);
+	}
+
+	/**
+	 * Sets the menu item name and the mnemonic, using the first '&amp;' found in the text
+	 * as a marker ("S&amp;ave As").
+	 * <p>
+	 * NOTE: do NOT use this method with strings that contain user-supplied text.  Instead, use
+	 * {@link #setMenuItemNamePlain(String)}, and then manually {@link #setMnemonic(Character) set}
+	 * the mnemonic.
+	 * 
+	 * @param newMenuItemName the new name for this menu item, with an optional '&amp;' to flag one
+	 * of the characters of the name as the new mnemonic of this item 
+	 */
 	public void setMenuItemName(String newMenuItemName) {
 		String processedMenuItemName = processMenuItemName(newMenuItemName);
 		if (processedMenuItemName.equals(menuPath[menuPath.length - 1])) {
@@ -237,6 +279,21 @@ public class MenuData {
 		menuPath = menuPath.clone();
 		menuPath[menuPath.length - 1] = processedMenuItemName;
 		mnemonic = getMnemonic(newMenuItemName);
+		firePropertyChanged(oldData);
+	}
+
+	/**
+	 * Sets the menu item name, without parsing the name for mnemonics ("&amp;File").
+	 * <p>
+	 * Use this method instead of {@link #setMenuItemName(String)} when the name may have '&amp;'
+	 * characters that need to be preserved, which is typically any user supplied strings.
+	 * 
+	 * @param newMenuItemName the new name for this menu item
+	 */
+	public void setMenuItemNamePlain(String newMenuItemName) {
+		MenuData oldData = cloneData();
+		menuPath = menuPath.clone();
+		menuPath[menuPath.length - 1] = newMenuItemName;
 		firePropertyChanged(oldData);
 	}
 

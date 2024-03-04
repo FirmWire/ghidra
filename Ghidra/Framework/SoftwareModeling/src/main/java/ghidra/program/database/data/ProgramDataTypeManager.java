@@ -16,32 +16,28 @@
 package ghidra.program.database.data;
 
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.Map;
+import java.util.Set;
 
-import db.DBConstants;
-import db.DBHandle;
+import db.*;
 import db.util.ErrorHandler;
 import ghidra.framework.model.DomainFile;
 import ghidra.framework.options.Options;
 import ghidra.program.database.ManagerDB;
 import ghidra.program.database.ProgramDB;
-import ghidra.program.database.function.FunctionManagerDB;
 import ghidra.program.database.map.AddressMap;
-import ghidra.program.database.symbol.SymbolManager;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.Program;
-import ghidra.program.util.ChangeManager;
+import ghidra.program.util.ProgramEvent;
 import ghidra.util.*;
-import ghidra.util.exception.CancelledException;
-import ghidra.util.exception.VersionException;
+import ghidra.util.exception.*;
 import ghidra.util.task.TaskMonitor;
 
 /**
  * Class for managing data types in a program
  */
-public class ProgramDataTypeManager extends DataTypeManagerDB
-		implements ManagerDB, ProgramBasedDataTypeManager {
+public class ProgramDataTypeManager extends ProgramBasedDataTypeManagerDB implements ManagerDB {
 
 	private static final String OLD_DT_ARCHIVE_FILENAMES = "DataTypeArchiveFilenames"; // eliminated with Ghidra 4.3
 
@@ -52,26 +48,59 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 	 * Constructor
 	 * @param handle open database  handle
 	 * @param addrMap the address map
-	 * @param openMode the program open mode
+	 * @param openMode the program open mode (see {@link DBConstants})
 	 * @param errHandler the database io error handler
 	 * @param lock the program synchronization lock
 	 * @param monitor the progress monitor
 	 * @throws CancelledException if the user cancels an upgrade
 	 * @throws VersionException if the database does not match the expected version.
-	 * @throws IOException if a database io error occurs.
+	 * @throws IOException if a database IO error occurs.
 	 */
 	public ProgramDataTypeManager(DBHandle handle, AddressMap addrMap, int openMode,
 			ErrorHandler errHandler, Lock lock, TaskMonitor monitor)
 			throws CancelledException, VersionException, IOException {
-		super(handle, addrMap, openMode, errHandler, lock, monitor);
+		super(handle, addrMap, openMode, null, errHandler, lock, monitor);
 		upgrade = (openMode == DBConstants.UPGRADE);
+	}
+
+	/**
+	 * Save the current data organization to facilitate future change detection and 
+	 * upgrades.  This method must be invoked by {@link ProgramDB} during the final
+	 * stage of program creation (i.e., openMode == CREATE).
+	 * @throws IOException if failure occured while saving data organization.
+	 */
+	@Override
+	public void saveDataOrganization() throws IOException {
+		super.saveDataOrganization();
+	}
+
+	@Override
+	protected void dataSettingChanged(Address dataAddr) {
+		program.setChanged(ProgramEvent.DATA_TYPE_SETTING_CHANGED, dataAddr, dataAddr, null, null);
+	}
+
+	@Override
+	public boolean allowsDefaultBuiltInSettings() {
+		return true;
 	}
 
 	@Override
 	public void setProgram(ProgramDB p) {
 		this.program = p;
-		dataOrganization = p.getCompilerSpec().getDataOrganization();
-		removeOldFileNameList();
+		try {
+			setProgramArchitecture(p, p.getSymbolTable().getVariableStorageManager(), false,
+				TaskMonitor.DUMMY);
+
+			// NOTE: Due to late manner in which program architecture is established, any
+			// response to a data organization change must be handled during a language
+			// upgrade and setLanguage
+		}
+		catch (CancelledException e) {
+			throw new AssertException(e); // unexpected - no IO performed
+		}
+		catch (IOException e) {
+			errHandler.dbError(e);
+		}
 		if (upgrade) {
 			removeOldFileNameList();
 		}
@@ -93,19 +122,25 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 	public void programReady(int openMode, int currentRevision, TaskMonitor monitor)
 			throws IOException, CancelledException {
 		if (openMode == DBConstants.UPGRADE) {
-			doSourceArchiveUpdates(program.getCompilerSpec(), monitor);
+			doSourceArchiveUpdates(monitor);
 			migrateOldFlexArrayComponentsIfRequired(monitor);
 		}
+	}
+
+	/**
+	 * Update program-architecture information following a language upgrade/change
+	 * @param monitor task monitor
+	 * @throws IOException if IO error occurs
+	 * @throws CancelledException if task monitor cancelled
+	 */
+	public void languageChanged(TaskMonitor monitor) throws IOException, CancelledException {
+		setProgramArchitecture(program, program.getSymbolTable().getVariableStorageManager(), true,
+			monitor);
 	}
 
 	@Override
 	public String getName() {
 		return program.getName();
-	}
-
-	@Override
-	public Pointer getPointer(DataType dt) {
-		return PointerDataType.getPointer(dt, this);
 	}
 
 	@Override
@@ -122,83 +157,82 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 	@Override
 	public void sourceArchiveChanged(UniversalID sourceArchiveID) {
 		super.sourceArchiveChanged(sourceArchiveID);
-		program.sourceArchiveChanged(sourceArchiveID, ChangeManager.DOCR_SOURCE_ARCHIVE_CHANGED);
+		program.sourceArchiveChanged(sourceArchiveID, ProgramEvent.SOURCE_ARCHIVE_CHANGED);
 	}
 
 	@Override
 	protected void sourceArchiveAdded(UniversalID sourceArchiveID) {
 		super.sourceArchiveAdded(sourceArchiveID);
-		program.sourceArchiveAdded(sourceArchiveID, ChangeManager.DOCR_SOURCE_ARCHIVE_ADDED);
+		program.sourceArchiveAdded(sourceArchiveID, ProgramEvent.SOURCE_ARCHIVE_ADDED);
 	}
 
 	@Override
 	public void dataTypeChanged(DataType dt, boolean isAutoChange) {
 		super.dataTypeChanged(dt, isAutoChange);
 		if (!isCreatingDataType()) {
-			program.dataTypeChanged(getID(dt), ChangeManager.DOCR_DATA_TYPE_CHANGED,
-				isAutoChange, null, dt);
+			program.dataTypeChanged(getID(dt), ProgramEvent.DATA_TYPE_CHANGED, isAutoChange, null,
+				dt);
 		}
 	}
 
 	@Override
 	protected void dataTypeAdded(DataType newDt, DataType originalDataType) {
 		super.dataTypeAdded(newDt, originalDataType);
-		program.dataTypeAdded(getID(newDt), ChangeManager.DOCR_DATA_TYPE_ADDED, null, newDt);
+		program.dataTypeAdded(getID(newDt), ProgramEvent.DATA_TYPE_ADDED, null, newDt);
 	}
 
 	@Override
 	protected void dataTypeReplaced(long existingDtID, DataTypePath existingPath,
 			DataType replacementDt) {
 		super.dataTypeReplaced(existingDtID, existingPath, replacementDt);
-		program.dataTypeChanged(existingDtID, ChangeManager.DOCR_DATA_TYPE_REPLACED, true,
-			existingPath,
+		program.dataTypeChanged(existingDtID, ProgramEvent.DATA_TYPE_REPLACED, true, existingPath,
 			replacementDt);
 	}
 
 	@Override
 	protected void dataTypeDeleted(long deletedID, DataTypePath deletedDataTypePath) {
 		super.dataTypeDeleted(deletedID, deletedDataTypePath);
-		program.dataTypeChanged(deletedID, ChangeManager.DOCR_DATA_TYPE_REMOVED,
-			false, deletedDataTypePath, null);
+		program.dataTypeChanged(deletedID, ProgramEvent.DATA_TYPE_REMOVED, false,
+			deletedDataTypePath, null);
 	}
 
 	@Override
 	protected void dataTypeMoved(DataType dt, DataTypePath oldPath, DataTypePath newPath) {
 		super.dataTypeMoved(dt, oldPath, newPath);
 		Category category = getCategory(oldPath.getCategoryPath());
-		program.dataTypeChanged(getID(dt), ChangeManager.DOCR_DATA_TYPE_MOVED, false, category, dt);
+		program.dataTypeChanged(getID(dt), ProgramEvent.DATA_TYPE_MOVED, false, category, dt);
 	}
 
 	@Override
 	protected void dataTypeNameChanged(DataType dt, String oldName) {
 		super.dataTypeNameChanged(dt, oldName);
-		program.dataTypeChanged(getID(dt), ChangeManager.DOCR_DATA_TYPE_RENAMED, false, oldName, dt);
+		program.dataTypeChanged(getID(dt), ProgramEvent.DATA_TYPE_RENAMED, false, oldName, dt);
 	}
 
 	@Override
 	protected void categoryCreated(Category newCategory) {
 		super.categoryCreated(newCategory);
-		program.categoryAdded(newCategory.getID(), ChangeManager.DOCR_CATEGORY_ADDED,
+		program.categoryAdded(newCategory.getID(), ProgramEvent.DATA_TYPE_CATEGORY_ADDED,
 			newCategory.getParent(), newCategory);
 	}
 
 	@Override
 	protected void categoryRenamed(CategoryPath oldPath, Category category) {
 		super.categoryRenamed(oldPath, category);
-		program.categoryChanged(category.getID(), ChangeManager.DOCR_CATEGORY_RENAMED,
+		program.categoryChanged(category.getID(), ProgramEvent.DATA_TYPE_CATEGORY_RENAMED,
 			oldPath.getName(), category);
 	}
 
 	@Override
 	protected void categoryRemoved(Category parent, String name, long categoryID) {
 		super.categoryRemoved(parent, name, categoryID);
-		program.categoryChanged(categoryID, ChangeManager.DOCR_CATEGORY_REMOVED, parent, name);
+		program.categoryChanged(categoryID, ProgramEvent.DATA_TYPE_CATEGORY_REMOVED, parent, name);
 	}
 
 	@Override
 	protected void categoryMoved(CategoryPath oldPath, Category category) {
 		super.categoryMoved(oldPath, category);
-		program.categoryChanged(category.getID(), ChangeManager.DOCR_CATEGORY_MOVED,
+		program.categoryChanged(category.getID(), ProgramEvent.DATA_TYPE_CATEGORY_MOVED,
 			oldPath.getParent(), category);
 	}
 
@@ -208,32 +242,36 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 	}
 
 	@Override
-	protected void replaceDataTypeIDs(long oldDataTypeID, long newDataTypeID) {
-		if (oldDataTypeID == newDataTypeID) {
-			return;
-		}
-		program.getCodeManager().replaceDataTypes(oldDataTypeID, newDataTypeID);
-		((SymbolManager) program.getSymbolTable()).replaceDataTypes(oldDataTypeID, newDataTypeID);
-		((FunctionManagerDB) program.getFunctionManager()).replaceDataTypes(oldDataTypeID,
-			newDataTypeID);
+	protected void replaceDataTypesUsed(Map<Long, Long> dataTypeReplacementMap) {
+		program.getCodeManager().replaceDataTypes(dataTypeReplacementMap);
+		program.getSymbolTable().replaceDataTypes(dataTypeReplacementMap);
+		program.getFunctionManager().replaceDataTypes(dataTypeReplacementMap);
 	}
 
 	@Override
-	protected void deleteDataTypeIDs(LinkedList<Long> deletedIds, TaskMonitor monitor)
-			throws CancelledException {
-		long[] ids = new long[deletedIds.size()];
-		Iterator<Long> it = deletedIds.iterator();
-		int i = 0;
-		while (it.hasNext()) {
-			ids[i++] = it.next().longValue();
+	protected void deleteDataTypesUsed(Set<Long> deletedIds) {
+		// TODO: SymbolManager/FunctionManager do not appear to handle datatype removal update.
+		// Suspect it handles indirectly through detection of deleted datatype.  Old deleted ID
+		// use could be an issue.
+		try {
+			// TODO: Should use replacement type instead of clearing
+			program.getCodeManager().clearData(deletedIds, TaskMonitor.DUMMY);
 		}
-		program.getCodeManager().clearData(ids, monitor);
+		catch (CancelledException e) {
+			// won't happen
+		}
+		program.getSymbolTable().invalidateCache(false);
 		program.getFunctionManager().invalidateCache(false);
 	}
 
 	@Override
 	public boolean isUpdatable() {
 		return program.isChangeable();
+	}
+
+	@Override
+	public Transaction openTransaction(String description) throws IllegalStateException {
+		return program.openTransaction(description);
 	}
 
 	@Override
@@ -285,11 +323,4 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 		return ArchiveType.PROGRAM;
 	}
 
-	@Override
-	public DataOrganization getDataOrganization() {
-		if (dataOrganization == null) {
-			dataOrganization = program.getCompilerSpec().getDataOrganization();
-		}
-		return dataOrganization;
-	}
 }

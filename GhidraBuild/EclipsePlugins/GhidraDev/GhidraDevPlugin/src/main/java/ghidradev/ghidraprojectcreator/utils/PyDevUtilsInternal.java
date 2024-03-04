@@ -16,15 +16,13 @@
 package ghidradev.ghidraprojectcreator.utils;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import org.eclipse.core.runtime.*;
 import org.eclipse.jdt.core.IClasspathEntry;
 import org.eclipse.jdt.core.IJavaProject;
-import org.osgi.framework.Bundle;
-import org.osgi.framework.FrameworkUtil;
+import org.osgi.framework.*;
 import org.python.pydev.ast.interpreter_managers.InterpreterInfo;
 import org.python.pydev.ast.interpreter_managers.InterpreterManagersAPI;
 import org.python.pydev.core.*;
@@ -33,7 +31,6 @@ import org.python.pydev.plugin.nature.PythonNature;
 import com.python.pydev.debug.remote.client_api.PydevRemoteDebuggerServer;
 
 import ghidradev.EclipseMessageUtils;
-import utilities.util.ArrayUtilities;
 
 /**
  * Utility methods for interacting with PyDev.
@@ -46,19 +43,22 @@ import utilities.util.ArrayUtilities;
 class PyDevUtilsInternal {
 
 	/**
-	 * Checks to see if PyDev is installed.
+	 * Get the version of PyDev that is installed
 	 * 
-	 * @return True if PyDev is installed; otherwise, false.
+	 * @return The {@link Version} of the installed PyDev, or null if PyDev is not installed.
 	 * @throws NoClassDefFoundError if PyDev is not installed.
 	 */
-	public static boolean isPyDevInstalled() throws NoClassDefFoundError {
-		for (Bundle bundle : FrameworkUtil.getBundle(
-			PyDevUtilsInternal.class).getBundleContext().getBundles()) {
+	public static Version getPyDevVersion() throws NoClassDefFoundError {
+		for (Bundle bundle : FrameworkUtil.getBundle(PyDevUtilsInternal.class)
+				.getBundleContext()
+				.getBundles()) {
 			if (bundle.getSymbolicName().contains("pydev")) {
-				return true;
+				// remove qualifier to make version comparisons more straightforward
+				Version version = bundle.getVersion();
+				return new Version(version.getMajor(), version.getMinor(), version.getMicro());
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/**
@@ -107,8 +107,11 @@ class PyDevUtilsInternal {
 		else {
 			EclipseMessageUtils.error("Failed to add Jython Lib directory to python path");
 		}
-		iMan.setInfos(ArrayUtilities.copyAndAppend(iMan.getInterpreterInfos(), iInfo), null,
-			monitor);
+		IInterpreterInfo[] interpreterInfos = iMan.getInterpreterInfos();
+		IInterpreterInfo[] newInterpreterInfos =
+			Arrays.copyOf(interpreterInfos, interpreterInfos.length + 1);
+		newInterpreterInfos[interpreterInfos.length] = iInfo;
+		iMan.setInfos(newInterpreterInfos, null, monitor);
 	}
 
 	/**

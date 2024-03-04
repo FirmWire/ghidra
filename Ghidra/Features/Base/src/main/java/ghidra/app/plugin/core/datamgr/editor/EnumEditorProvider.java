@@ -19,7 +19,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.util.*;
 
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -27,13 +27,16 @@ import javax.swing.table.TableCellEditor;
 
 import org.apache.commons.lang3.StringUtils;
 
-import docking.ActionContext;
-import docking.ComponentProvider;
+import docking.*;
 import docking.action.*;
+import docking.action.builder.ToggleActionBuilder;
 import docking.widgets.OptionDialog;
+import generic.theme.GIcon;
+import generic.theme.GThemeDefaults.Colors.Messages;
 import ghidra.app.plugin.core.compositeeditor.EditorListener;
 import ghidra.app.plugin.core.compositeeditor.EditorProvider;
 import ghidra.app.plugin.core.datamgr.DataTypeManagerPlugin;
+import ghidra.app.services.DataTypeManagerService;
 import ghidra.framework.plugintool.ComponentProviderAdapter;
 import ghidra.program.model.data.*;
 import ghidra.program.model.data.Enum;
@@ -44,7 +47,6 @@ import ghidra.util.*;
 import ghidra.util.datastruct.WeakDataStructureFactory;
 import ghidra.util.datastruct.WeakSet;
 import ghidra.util.exception.DuplicateNameException;
-import resources.ResourceManager;
 import util.CollectionUtils;
 
 /**
@@ -53,11 +55,14 @@ import util.CollectionUtils;
 public class EnumEditorProvider extends ComponentProviderAdapter
 		implements ChangeListener, EditorProvider {
 
-	static final ImageIcon EDITOR_ICON = ResourceManager.loadImage("images/enum.png");
-	private final static ImageIcon APPLY_ICON = ResourceManager.loadImage("images/disk.png");
-	private final static ImageIcon ADD_ICON = ResourceManager.loadImage("images/Plus.png");
-	private final static ImageIcon DELETE_ICON =
-		ResourceManager.loadImage("images/edit-delete.png");
+	public static final String ACTION_NAME_ADD = "Add Enum Value";
+	public static final String ACTION_NAME_APPLY = "Apply Enum Changes";
+	public static final String ACTION_NAME_DELETE = "Delete Enum Value";
+
+	static final Icon EDITOR_ICON = new GIcon("icon.plugin.enum.editor.provider");
+	private final static Icon APPLY_ICON = new GIcon("icon.plugin.enum.editor.apply");
+	private final static Icon ADD_ICON = new GIcon("icon.plugin.enum.editor.add");
+	private final static Icon DELETE_ICON = new GIcon("icon.plugin.enum.editor.delete");
 	private final static String HELP_TOPIC = "DataTypeEditors";
 
 	private final static int CANCEL = 0;
@@ -79,9 +84,10 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 	private CategoryPath originalCategoryPath;
 	private Enum originalEnum;
 	private long originalEnumID = -1;
+	private ToggleDockingAction hexDisplayAction;
 
 	/**
-	 * Construct a new enum editor provider. 
+	 * Construct a new enum editor provider.
 	 * @param plugin owner of this provider
 	 * @param enumDT enum data type
 	 */
@@ -149,7 +155,7 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 
 	@Override
 	public ActionContext getActionContext(MouseEvent event) {
-		return new ActionContext(this, editorPanel.getTable());
+		return new DefaultActionContext(this, editorPanel.getTable());
 	}
 
 	@Override
@@ -251,7 +257,7 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 
 //==================================================================================================
 // Private Methods
-//==================================================================================================	
+//==================================================================================================
 
 	private void updateTitle(DataType dataType) {
 		setTitle(getName() + " - " + getProviderSubTitle(dataType));
@@ -275,7 +281,15 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 	}
 
 	private void createActions() {
-		addAction = new EnumPluginAction("Add Enum Value", e -> editorPanel.addEntry());
+		hexDisplayAction = new ToggleActionBuilder("Toggle Hex Mode", plugin.getName())
+				.menuPath("Show Enum Values in Hex")
+				.description("Toggles Enum value column to show values in hex or decimal")
+				.keyBinding("Shift-H")
+				.selected(true)
+				.onAction(c -> editorPanel.setHexDisplayMode(hexDisplayAction.isSelected()))
+				.buildAndInstallLocal(this);
+
+		addAction = new EnumPluginAction(ACTION_NAME_ADD, e -> editorPanel.addEntry());
 		addAction.setEnabled(true);
 		String editGroup = "Edit";
 		addAction.setPopupMenuData(new MenuData(new String[] { "Add" }, ADD_ICON, editGroup));
@@ -283,21 +297,30 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 		addAction.setDescription("Add a new enum entry");
 
 		deleteAction =
-			new EnumPluginAction("Delete Enum Value", e -> editorPanel.deleteSelectedEntries());
+			new EnumPluginAction(ACTION_NAME_DELETE, e -> editorPanel.deleteSelectedEntries());
 		deleteAction.setEnabled(false);
-		deleteAction.setPopupMenuData(
-			new MenuData(new String[] { "Delete" }, DELETE_ICON, editGroup));
+		deleteAction
+				.setPopupMenuData(new MenuData(new String[] { "Delete" }, DELETE_ICON, editGroup));
 		deleteAction.setToolBarData(new ToolBarData(DELETE_ICON, editGroup));
 		deleteAction.setDescription("Delete the selected enum entries");
 
-		applyAction = new EnumPluginAction("Apply Enum Changes", e -> applyChanges());
+		applyAction = new EnumPluginAction(ACTION_NAME_APPLY, e -> applyChanges());
 		applyAction.setEnabled(false);
-		applyAction.setToolBarData(new ToolBarData(APPLY_ICON, "ApplyChanges"));
+		String firstGroup = "ApplyChanges";
+		applyAction.setToolBarData(new ToolBarData(APPLY_ICON, firstGroup));
 		applyAction.setDescription("Apply changes to Enum");
+
+		EnumPluginAction showEnumAction =
+			new EnumPluginAction("Show In Data Type Manager", e -> showDataEnumInTree());
+		showEnumAction.setEnabled(true);
+		String thirdGroup = "FThirdGroup";
+		showEnumAction.setToolBarData(
+			new ToolBarData(new GIcon("icon.plugin.enum.editor.home"), thirdGroup));
 
 		tool.addLocalAction(this, applyAction);
 		tool.addLocalAction(this, addAction);
 		tool.addLocalAction(this, deleteAction);
+		tool.addLocalAction(this, showEnumAction);
 	}
 
 	private boolean applyChanges() {
@@ -336,6 +359,11 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 			endTransaction(txID);
 		}
 		return true;
+	}
+
+	private void showDataEnumInTree() {
+		DataTypeManagerService dtmService = tool.getService(DataTypeManagerService.class);
+		dtmService.setDataTypeSelected(originalEnum);
 	}
 
 	/**
@@ -384,9 +412,10 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 	}
 
 	private int showOptionDialog(Enum editedEnoom, Set<String> oldNameFields) {
-		StringBuilder msg = new StringBuilder(
-			"<html>If you save this Enum with the <font color=#ff0000>new value(s)</font>" +
-				" listed below,<br> it will invalidate equates created with the old value(s).<br>");
+		StringBuilder msg =
+			new StringBuilder("<html>If you save this Enum with the <font color=\"" +
+				Messages.ERROR.toHexString() + "\">new value(s)</font> listed below,<br>" +
+				" it will invalidate equates created with the old value(s).<br>");
 		msg.append("<ul>");
 		for (String field : oldNameFields) {
 			String newVal;
@@ -397,13 +426,16 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 				// Happens if a field is deleted or there is a name AND value change.
 				newVal = "Missing";
 			}
-			msg.append(String.format("<li>%s: 0x%s \u2192 <font color=#ff0000>%s</font></li>",
+			msg.append(String.format(
+				"<li>%s: 0x%s \u2192 <font color=\"" + Messages.ERROR.toHexString() +
+					"\">%s</font></li>",
 				HTMLUtilities.escapeHTML(field), Long.toHexString(originalEnum.getValue(field)),
 				newVal));
 		}
 		msg.append("</ul>");
 		msg.append(
-			"Invalidated equates can be automatically removed now or<br>managed later from the <i><b>Equates Table</i></b> window.");
+			"Invalidated equates can be automatically removed now or<br>managed later from the" +
+				" <i><b>Equates Table</i></b> window.");
 		msg.append("</html>");
 		int choice = OptionDialog.showOptionDialog(editorPanel, "Equate Conflicts", msg.toString(),
 			"Save and remove", "Save", OptionDialog.ERROR_MESSAGE);
@@ -425,7 +457,7 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 	}
 
 	private void applyName(Enum newEnuum) {
-		String editorName = editorPanel.getEnumName();
+		String editorName = editorPanel.getEnumName().trim();
 		if (originalEnumName.equals(editorName)) {
 			return; // nothing to do
 		}
@@ -467,9 +499,9 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 	/**
 	 * Prompts the user if the editor has unsaved changes. Saves the changes if
 	 * the user indicates to do so.
-	 * @return CANCEL (0) if the user canceled; 
-	 *   SAVE (1) if the user saved changes; 
-	 *   NO_SAVE (2) if the user did not save changes or no save was required; 
+	 * @return CANCEL (0) if the user canceled;
+	 *   SAVE (1) if the user saved changes;
+	 *   NO_SAVE (2) if the user did not save changes or no save was required;
 	 *   ERROR (3) if there was an error when the changes were applied.
 	 */
 	private int saveChangesForCloseEvent(boolean allowCancel) {
@@ -502,7 +534,7 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 
 //==================================================================================================
 // Inner Classes
-//==================================================================================================	
+//==================================================================================================
 
 	private class MyDataTypeManagerChangeListener extends DataTypeManagerChangeListenerAdapter {
 
@@ -547,7 +579,7 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 
 		@Override
 		public void categoryRemoved(DataTypeManager dtm, CategoryPath path) {
-			// should never get this callback, as we should first have gotten a 
+			// should never get this callback, as we should first have gotten a
 			// dataTypeRemoved(), which will dispose this editor
 		}
 
@@ -665,11 +697,11 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 
 			DataType dataType = dtm.getDataType(otherPath);
 			if (dataType == null) {
-				// 
-				// Unusual Code Alert!: 
+				//
+				// Unusual Code Alert!:
 				// Must have been deleted and we have not yet processed the event...return true
 				// here to signal that the types are the same so that clients will continue the
-				// updating process.  The types may not really be the same, but the fallout is 
+				// updating process.  The types may not really be the same, but the fallout is
 				// only that there will be more updating than is necessary.
 				//
 				return true;
@@ -680,10 +712,11 @@ public class EnumEditorProvider extends ComponentProviderAdapter
 	}
 
 	private class EnumPluginAction extends DockingAction {
-		private final ActionListener listener;
+		private ActionListener listener;
 
 		EnumPluginAction(String name, ActionListener listener) {
-			super(name, plugin.getName());
+			super(DataTypeEditorManager.EDIT_ACTION_PREFIX + name, plugin.getName(),
+				KeyBindingType.SHARED);
 			this.listener = listener;
 			setHelpLocation(new HelpLocation(HELP_TOPIC, name));
 		}

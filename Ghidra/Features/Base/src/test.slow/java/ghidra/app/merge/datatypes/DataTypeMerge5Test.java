@@ -22,13 +22,14 @@ import java.util.ArrayList;
 import org.junit.Assert;
 import org.junit.Test;
 
-import ghidra.program.database.ProgramDB;
-import ghidra.program.database.ProgramModifierListener;
+import ghidra.docking.settings.Settings;
+import ghidra.program.database.*;
+import ghidra.program.database.data.DataTypeUtilities;
 import ghidra.program.model.data.*;
 import ghidra.program.model.data.Enum;
 import ghidra.util.InvalidNameException;
 import ghidra.util.exception.DuplicateNameException;
-import ghidra.util.task.TaskMonitorAdapter;
+import ghidra.util.task.TaskMonitor;
 
 /**
  *
@@ -42,36 +43,20 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefUndefined() throws Exception {
 
 		mtf.initialize("notepad", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
-
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -94,14 +79,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(s);
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
-
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -141,36 +121,20 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs() throws Exception {
 
 		mtf.initialize("notepad", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
-
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -206,13 +170,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
 
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -262,36 +222,20 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs2() throws Exception {
 
 		mtf.initialize("notepad", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
-
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -330,14 +274,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(s);
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
-
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -392,43 +331,27 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs3() throws Exception {
 
 		mtf.initialize("notepad2", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
-
-					// edit FavoriteColors
-					Enum enumm =
-						(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
-					enumm.remove("Red");
-					enumm.remove("Black");
-					enumm.add("Crimson", 6);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				// edit FavoriteColors
+				Enum enumm =
+					(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
+				enumm.remove("Red");
+				enumm.remove("Black");
+				enumm.add("Crimson", 6);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -469,13 +392,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
 
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -535,41 +454,26 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs4() throws Exception {
 
 		mtf.initialize("notepad2", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 
-					// delete FavoriteColors
-					Enum enumm =
-						(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
-					dtm.remove(enumm, TaskMonitorAdapter.DUMMY_MONITOR);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				// delete FavoriteColors
+				Enum enumm =
+					(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
+				dtm.remove(enumm, TaskMonitor.DUMMY);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -609,14 +513,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(s);
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
-
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -676,41 +575,26 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs5() throws Exception {
 
 		mtf.initialize("notepad2", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
+				
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
-
-					// delete FavoriteColors
-					Enum enumm =
-						(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
-					dtm.remove(enumm, TaskMonitorAdapter.DUMMY_MONITOR);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				// delete FavoriteColors
+				Enum enumm =
+					(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
+				dtm.remove(enumm, TaskMonitor.DUMMY);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -750,14 +634,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(s);
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
-
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -805,43 +684,28 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs6() throws Exception {
 
 		mtf.initialize("notepad2", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
+				
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
-
-					// edit FavoriteColors
-					Enum enumm =
-						(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
-					enumm.remove("Red");
-					enumm.remove("Black");
-					enumm.add("Crimson", 6);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				// edit FavoriteColors
+				Enum enumm =
+					(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
+				enumm.remove("Red");
+				enumm.remove("Black");
+				enumm.add("Crimson", 6);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -881,14 +745,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(s);
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
-
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -950,43 +809,28 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs7() throws Exception {
 
 		mtf.initialize("notepad2", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 
-					// edit FavoriteColors
-					Enum enumm =
-						(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
-					enumm.remove("Red");
-					enumm.remove("Black");
-					enumm.add("Crimson", 6);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				// edit FavoriteColors
+				Enum enumm =
+					(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
+				enumm.remove("Red");
+				enumm.remove("Black");
+				enumm.add("Crimson", 6);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -1029,14 +873,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(s);
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
-
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -1105,43 +944,28 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs8() throws Exception {
 
 		mtf.initialize("notepad2", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+			
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 
-				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
 
-					// edit FavoriteColors
-					Enum enumm =
-						(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
-					enumm.remove("Red");
-					enumm.remove("Black");
-					enumm.add("Crimson", 6);
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				// edit FavoriteColors
+				Enum enumm =
+					(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
+				enumm.remove("Red");
+				enumm.remove("Black");
+				enumm.add("Crimson", 6);
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -1187,14 +1011,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(s);
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
-
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});
@@ -1267,14 +1086,10 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
     public void testTypeDefs9() throws Exception {
 
 		mtf.initialize("notepad2", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 
 				try {
 					// rename FooTypedef
@@ -1284,7 +1099,6 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					Category c =
 						dtm.getCategory(new CategoryPath("/Category1/Category2/Category5"));
 					c.moveDataType(td, DataTypeConflictHandler.DEFAULT_HANDLER);
-					commit = true;
 				}
 				catch (InvalidNameException e) {
 					Assert.fail("Got InvalidNameException!");
@@ -1295,61 +1109,46 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 				catch (DataTypeDependencyException e) {
 					Assert.fail("Got DataTypeDependencyException!");
 				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
 
-				try {
-					// Edit Foo
-					Structure foo = (Structure) dtm.getDataType(new CategoryPath("/MISC"), "Foo");
-					Enum enumm = new EnumDataType(new CategoryPath("/Category1"), "MyEnum", 1);
-					enumm.add("one", 1);
-					enumm.add("two", 2);
-					enumm.add("three", 3);
-					// create TypeDef on pointer to an Array of pointers
+				// Edit Foo
+				Structure foo = (Structure) dtm.getDataType(new CategoryPath("/MISC"), "Foo");
+				Enum enumm = new EnumDataType(new CategoryPath("/Category1"), "MyEnum", 1);
+				enumm.add("one", 1);
+				enumm.add("two", 2);
+				enumm.add("three", 3);
+				// create TypeDef on pointer to an Array of pointers
 
-					Pointer p = PointerDataType.getPointer(enumm, 4);// MyEnum *
-					p = PointerDataType.getPointer(p, 4);// MyEnum * *
-					p = PointerDataType.getPointer(p, 4);// MyEnum * * *
-					p = PointerDataType.getPointer(p, 4);// MyEnum * * * *
-					p = PointerDataType.getPointer(p, 4);// MyEnum * * * * *
+				Pointer p = PointerDataType.getPointer(enumm, 4);// MyEnum *
+				p = PointerDataType.getPointer(p, 4);// MyEnum * *
+				p = PointerDataType.getPointer(p, 4);// MyEnum * * *
+				p = PointerDataType.getPointer(p, 4);// MyEnum * * * *
+				p = PointerDataType.getPointer(p, 4);// MyEnum * * * * *
 
-					// create an array of MyEnum * * * * *
-					Array array = new ArrayDataType(p, 5, p.getLength());
-					p = PointerDataType.getPointer(array, 4);// MyEnum * * * * *[5] *
+				// create an array of MyEnum * * * * *
+				Array array = new ArrayDataType(p, 5, p.getLength());
+				p = PointerDataType.getPointer(array, 4);// MyEnum * * * * *[5] *
 
-					TypeDef td =
-						new TypedefDataType(new CategoryPath("/Category1"), "TD_MyEnumPointer", p);
-					p = PointerDataType.getPointer(td, 4);//TD_MyEnumPointer *
+				TypeDef td =
+					new TypedefDataType(new CategoryPath("/Category1"), "TD_MyEnumPointer", p);
+				p = PointerDataType.getPointer(td, 4);//TD_MyEnumPointer *
 
-					// create a TypeDef on p
-					td = new TypedefDataType(new CategoryPath("/Category1"), "TD_on_Pointer", p);
+				// create a TypeDef on p
+				td = new TypedefDataType(new CategoryPath("/Category1"), "TD_on_Pointer", p);
 
-					// create an Array of TD_on_Pointer
-					array = new ArrayDataType(td, 7, td.getLength());
-					foo.add(array);
+				// create an Array of TD_on_Pointer
+				array = new ArrayDataType(td, 7, td.getLength());
+				foo.add(array);
 
-					// create a pointer to an Array of IntStruct's
-					DataType intStruct = dtm.getDataType(
-						new CategoryPath("/Category1/Category2/Category3"), "IntStruct");
-					array = new ArrayDataType(intStruct, 5, intStruct.getLength());
-					foo.add(array);
-
-					commit = true;
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
-				}
+				// create a pointer to an Array of IntStruct's
+				DataType intStruct = dtm.getDataType(
+					new CategoryPath("/Category1/Category2/Category3"), "IntStruct");
+				array = new ArrayDataType(intStruct, 5, intStruct.getLength());
+				foo.add(array);
 			}
 		});
 		executeMerge(true);
@@ -1413,46 +1212,278 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 	}
 
 	@Test
-    public void testArrays() throws Exception {
+	public void testTypeDefs10() throws Exception {
 
-		mtf.initialize("notepad2", new ProgramModifierListener() {
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyLatest(ghidra.program.database.ProgramDB)
-			 */
+		// Exercise pointer-typedef setting changes
+
+		mtf.initialize("notepad2", new OriginalProgramModifierListener() {
+
+			@Override
+			public void modifyOriginal(ProgramDB program) throws Exception {
+				DataTypeManager dtm = program.getDataTypeManager();
+				
+				// must specify datatype manager when constructing to allow for settings to be made
+				Pointer p = dtm.getPointer(CharDataType.dataType);
+				TypeDef td =
+					new TypedefDataType(new CategoryPath("/MISC"), "PtrTypeDef", p, dtm);
+
+				// NOTE: these are not viable settings but are intended to exercise all of them
+				Settings settings = td.getDefaultSettings();
+				PointerTypeSettingsDefinition.DEF.setType(settings,
+					PointerType.IMAGE_BASE_RELATIVE);
+				AddressSpaceSettingsDefinition.DEF.setValue(settings, "ROM");
+				ComponentOffsetSettingsDefinition.DEF.setValue(settings, 0x10);
+				OffsetMaskSettingsDefinition.DEF.setValue(settings, 0x1234);
+				OffsetShiftSettingsDefinition.DEF.setValue(settings, 2);
+
+				dtm.resolve(td, DataTypeConflictHandler.DEFAULT_HANDLER);
+			}
+
 			@Override
 			public void modifyLatest(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
+				
+				TypeDef td = (TypeDef) dtm.getDataType(new CategoryPath("/MISC"), "PtrTypeDef");
 
+				Settings settings = td.getDefaultSettings();
+				PointerTypeSettingsDefinition.DEF.setType(settings,
+					PointerType.RELATIVE);
+				AddressSpaceSettingsDefinition.DEF.clear(settings);
+				OffsetMaskSettingsDefinition.DEF.clear(settings);
+				OffsetShiftSettingsDefinition.DEF.setValue(settings, 3);
+			}
+
+			@Override
+			public void modifyPrivate(ProgramDB program) {
+				DataTypeManager dtm = program.getDataTypeManager();
+
+				TypeDef td = (TypeDef) dtm.getDataType(new CategoryPath("/MISC"), "PtrTypeDef");
+
+				Settings settings = td.getDefaultSettings();
+				PointerTypeSettingsDefinition.DEF.clear(settings);
+				AddressSpaceSettingsDefinition.DEF.clear(settings);
+				OffsetMaskSettingsDefinition.DEF.setValue(settings, 0x5678);
+				OffsetShiftSettingsDefinition.DEF.setValue(settings, 4);
+			}
+		});
+		executeMerge();
+
+		chooseOption(DataTypeMergeManager.OPTION_MY);
+
+		waitForCompletion();
+
+		DataTypeManager dtm = resultProgram.getDataTypeManager();
+		TypeDef td = (TypeDef) dtm.getDataType(new CategoryPath("/MISC"), "PtrTypeDef");
+
+		Settings settings = td.getDefaultSettings();
+		assertFalse(
+			"Unexpected Pointer Type setting: " +
+				PointerTypeSettingsDefinition.DEF.getValueString(settings),
+			PointerTypeSettingsDefinition.DEF.hasValue(settings));
+		assertFalse(
+			"Unexpected Address Space setting: " +
+				AddressSpaceSettingsDefinition.DEF.getValueString(settings),
+			AddressSpaceSettingsDefinition.DEF.hasValue(settings));
+		assertEquals(0x10, ComponentOffsetSettingsDefinition.DEF.getValue(settings));
+		assertEquals(0x5678, OffsetMaskSettingsDefinition.DEF.getValue(settings));
+		assertEquals(4, OffsetShiftSettingsDefinition.DEF.getValue(settings));
+
+		checkConflictCount(0);
+	}
+
+	private static String formatAttributes(String attrs) {
+		StringBuilder buf = new StringBuilder(DataType.TYPEDEF_ATTRIBUTE_PREFIX);
+		buf.append(attrs);
+		buf.append(DataType.TYPEDEF_ATTRIBUTE_SUFFIX);
+		return buf.toString();
+	}
+
+	@Test
+	public void testTypeDefs11() throws Exception {
+
+		// Exercise pointer-typedef auto-naming with setting changes
+
+		mtf.initialize("notepad2", new OriginalProgramModifierListener() {
+
+			@Override
+			public void modifyOriginal(ProgramDB program) throws Exception {
+				DataTypeManager dtm = program.getDataTypeManager();
+
+				// must specify datatype manager when constructing to allow for settings to be made
+				Structure foo = (Structure) dtm.getDataType(new CategoryPath("/MISC"), "Foo");
+				PointerTypedef td =
+					new PointerTypedef(null, foo, -1, dtm, PointerType.IMAGE_BASE_RELATIVE);
+				DataType dt = dtm.resolve(td, DataTypeConflictHandler.DEFAULT_HANDLER);
+				assertEquals("Foo * " + formatAttributes("image-base-relative"), dt.getName());
+			}
+
+			@Override
+			public void modifyLatest(ProgramDB program) {
+				DataTypeManager dtm = program.getDataTypeManager();
+				
 				try {
-					Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
-					dtm.remove(s, TaskMonitorAdapter.DUMMY_MONITOR);
-					DataType dt =
-						dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
-					dtm.remove(dt, TaskMonitorAdapter.DUMMY_MONITOR);
+					TypeDef td = (TypeDef) dtm.getDataType(new CategoryPath("/MISC"),
+						"Foo * " + formatAttributes("image-base-relative"));
+					assertNotNull(td);
+					td.setName("Bob_Ptr_Td");
 
-					// edit FavoriteColors
-					Enum enumm =
-						(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
-					enumm.remove("Red");
-					enumm.remove("Black");
-					enumm.add("Crimson", 6);
-					commit = true;
+					Settings settings = td.getDefaultSettings();
+					PointerTypeSettingsDefinition.DEF.setType(settings,
+						PointerType.RELATIVE);
+
+					Structure st = (Structure) dtm.getDataType(new CategoryPath("/MISC"), "Foo");
+					st.setName("Bob");
 				}
-				finally {
-					program.endTransaction(transactionID, commit);
+				catch (InvalidNameException | DuplicateNameException e) {
+					failWithException("unexpected", e);
 				}
 			}
 
-			/* (non-Javadoc)
-			 * @see ghidra.framework.data.ProgramModifierListener#modifyPrivate(ghidra.program.database.ProgramDB)
-			 */
 			@Override
 			public void modifyPrivate(ProgramDB program) {
-				boolean commit = false;
 				DataTypeManager dtm = program.getDataTypeManager();
-				int transactionID = program.startTransaction("test");
+				
+				try {
+					TypeDef td = (TypeDef) dtm.getDataType(new CategoryPath("/MISC"),
+						"Foo * " + formatAttributes("image-base-relative"));
+					assertNotNull(td);
+
+					Settings settings = td.getDefaultSettings();
+					ComponentOffsetSettingsDefinition.DEF.setValue(settings, 0x123);
+
+					Structure st = (Structure) dtm.getDataType(new CategoryPath("/MISC"), "Foo");
+					st.setName("Bill");
+				}
+				catch (InvalidNameException | DuplicateNameException e) {
+					failWithException("unexpected", e);
+				}
+			}
+		});
+		executeMerge();
+
+		chooseOption(DataTypeMergeManager.OPTION_MY); // choose Bill rename of Foo
+		chooseOption(DataTypeMergeManager.OPTION_LATEST); // choose RELATIVE setting and Bob_Ptr_Td rename
+
+		waitForCompletion();
+
+		DataTypeManager dtm = resultProgram.getDataTypeManager();
+		TypeDef td = (TypeDef) dtm.getDataType(new CategoryPath("/MISC"), "Bob_Ptr_Td");
+		assertNotNull(td);
+
+		DataType dt = DataTypeUtilities.getBaseDataType(td.getDataType());
+		assertTrue(dt instanceof Structure);
+		assertEquals("Bill", dt.getName());
+
+		Settings settings = td.getDefaultSettings();
+		assertEquals(
+			"Expected pointer-typedef type: relative",
+			PointerType.RELATIVE, PointerTypeSettingsDefinition.DEF.getType(settings));
+		assertFalse(
+			"Unexpected setting: " +
+				ComponentOffsetSettingsDefinition.DEF.getAttributeSpecification(settings),
+			ComponentOffsetSettingsDefinition.DEF.hasValue(settings));
+
+		checkConflictCount(0);
+	}
+
+	@Test
+	public void testTypeDefs12() throws Exception {
+
+		// Exercise pointer-typedef auto-naming with setting changes
+
+		mtf.initialize("notepad2", new OriginalProgramModifierListener() {
+
+			@Override
+			public void modifyOriginal(ProgramDB program) throws Exception {
+				DataTypeManager dtm = program.getDataTypeManager();
+				
+				// must specify datatype manager when constructing to allow for settings to be made
+				Structure foo = (Structure) dtm.getDataType(new CategoryPath("/MISC"), "Foo");
+				PointerTypedef td =
+					new PointerTypedef(null, foo, -1, dtm, PointerType.IMAGE_BASE_RELATIVE);
+				DataType dt = dtm.resolve(td, DataTypeConflictHandler.DEFAULT_HANDLER);
+				assertEquals("Foo * " + formatAttributes("image-base-relative"), dt.getName());
+			}
+
+			@Override
+			public void modifyLatest(ProgramDB program) {
+				DataTypeManager dtm = program.getDataTypeManager();
+				
+				try {
+					TypeDef td = (TypeDef) dtm.getDataType(new CategoryPath("/MISC"),
+						"Foo * " + formatAttributes("image-base-relative"));
+					assertNotNull(td);
+					td.setName("Bob_Ptr_Td");
+
+					Settings settings = td.getDefaultSettings();
+					PointerTypeSettingsDefinition.DEF.setType(settings,
+						PointerType.RELATIVE);
+				}
+				catch (InvalidNameException | DuplicateNameException e) {
+					failWithException("unexpected", e);
+				}
+			}
+
+			@Override
+			public void modifyPrivate(ProgramDB program) {
+				DataTypeManager dtm = program.getDataTypeManager();
+				try {
+					Structure st = (Structure) dtm.getDataType(new CategoryPath("/MISC"), "Foo");
+					st.setName("Bill");
+				}
+				catch (InvalidNameException | DuplicateNameException e) {
+					failWithException("unexpected", e);
+				}
+			}
+		});
+		executeMerge(true);
+
+		DataTypeManager dtm = resultProgram.getDataTypeManager();
+		TypeDef td = (TypeDef) dtm.getDataType(new CategoryPath("/MISC"), "Bob_Ptr_Td");
+		assertNotNull(td);
+
+		DataType dt = DataTypeUtilities.getBaseDataType(td.getDataType());
+		assertTrue(dt instanceof Structure);
+		assertEquals("Bill", dt.getName());
+
+		Settings settings = td.getDefaultSettings();
+		assertEquals(
+			"Expected pointer-typedef type: relative",
+			PointerType.RELATIVE, PointerTypeSettingsDefinition.DEF.getType(settings));
+		assertFalse(
+			"Unexpected setting: " +
+				ComponentOffsetSettingsDefinition.DEF.getAttributeSpecification(settings),
+			ComponentOffsetSettingsDefinition.DEF.hasValue(settings));
+
+		checkConflictCount(0);
+	}
+
+	@Test
+    public void testArrays() throws Exception {
+
+		mtf.initialize("notepad2", new ProgramModifierListener() {
+
+			@Override
+			public void modifyLatest(ProgramDB program) {
+				DataTypeManager dtm = program.getDataTypeManager();
+
+				Structure s = (Structure) dtm.getDataType(CategoryPath.ROOT, "DLL_Table");
+				dtm.remove(s, TaskMonitor.DUMMY);
+				DataType dt =
+					dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
+				dtm.remove(dt, TaskMonitor.DUMMY);
+
+				// edit FavoriteColors
+				Enum enumm =
+					(Enum) dtm.getDataType(new CategoryPath("/MISC"), "FavoriteColors");
+				enumm.remove("Red");
+				enumm.remove("Black");
+				enumm.add("Crimson", 6);
+			}
+
+			@Override
+			public void modifyPrivate(ProgramDB program) {
+				DataTypeManager dtm = program.getDataTypeManager();
 				Union union =
 					(Union) dtm.getDataType(new CategoryPath("/Category1/Category2"), "CoolUnion");
 
@@ -1505,14 +1536,9 @@ public class DataTypeMerge5Test extends AbstractDataTypeMergeTest {
 					union.add(s);
 					union.add(new ByteDataType());
 					dtm.addDataType(union, DataTypeConflictHandler.DEFAULT_HANDLER);
-
-					commit = true;
 				}
 				catch (DuplicateNameException e) {
 					Assert.fail("Got Duplicate name exception!");
-				}
-				finally {
-					program.endTransaction(transactionID, commit);
 				}
 			}
 		});

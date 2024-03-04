@@ -15,17 +15,17 @@
  */
 package ghidra.app.util.bin.format.coff;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 import ghidra.app.util.bin.*;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.data.*;
 import ghidra.program.model.lang.Language;
-import ghidra.util.*;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.task.TaskMonitor;
 
@@ -65,26 +65,29 @@ public class CoffSectionHeader implements StructConverter {
 		s_scnptr = reader.readNextInt();
 		s_relptr = reader.readNextInt();
 		s_lnnoptr = reader.readNextInt();
-		s_nreloc = reader.readNextShort() & 0xffff;
-		s_nlnno = reader.readNextShort() & 0xffff;
+		s_nreloc = reader.readNextUnsignedShort();
+		s_nlnno = reader.readNextUnsignedShort();
 		s_flags = reader.readNextInt();
 		s_reserved = 0;
 		s_page = 0;
 	}
 
 	protected void readName(BinaryReader reader) throws IOException {
-		byte[] nameBytes = reader.readNextByteArray(CoffConstants.SECTION_NAME_LENGTH);
-		if (nameBytes[0] == 0 && nameBytes[1] == 0 && nameBytes[2] == 0 && nameBytes[3] == 0) {//if 1st 4 bytes are zero, then lookup name in string table
+		// Name field is fixed length 8 bytes.
+		// Can be thought of as union { struct { int32 zeroflag; int32 nameindex; }; char[8] name; }
 
-			DataConverter dc = reader.isLittleEndian() ? LittleEndianDataConverter.INSTANCE
-					: BigEndianDataConverter.INSTANCE;
-			int nameIndex = dc.getInt(nameBytes, 4);//string table index
+		if (reader.peekNextInt() == 0) {
+			// if first 4 bytes are 0, this variant is 2 x int32's.  Read 2 int32 values.
+			reader.readNextInt(); // skip the 0
+			int nameIndex = reader.readNextInt();
 			int stringTableIndex = _header.getSymbolTablePointer() +
 				(_header.getSymbolTableEntries() * CoffConstants.SYMBOL_SIZEOF);
 			s_name = reader.readAsciiString(stringTableIndex + nameIndex);
 		}
 		else {
-			s_name = (new String(nameBytes)).trim();
+			// Read 8 chars
+			// TODO: support "/string_table_offset"?
+			s_name = reader.readNextAsciiString(CoffConstants.SECTION_NAME_LENGTH).trim();
 		}
 	}
 
@@ -306,14 +309,6 @@ public class CoffSectionHeader implements StructConverter {
 		struct.add(WORD, "s_nreloc", null);
 		struct.add(WORD, "s_nlnno", null);
 		struct.add(DWORD, "s_flags", null);
-		if (_header.getMagic() == CoffMachineType.TICOFF1MAGIC) {
-			struct.add(BYTE, "s_reserved", null);
-			struct.add(BYTE, "s_page", null);
-		}
-		else if (_header.getMagic() == CoffMachineType.TICOFF2MAGIC) {
-			struct.add(WORD, "s_reserved", null);
-			struct.add(WORD, "s_page", null);
-		}
 		return struct;
 	}
 
@@ -400,6 +395,10 @@ public class CoffSectionHeader implements StructConverter {
 	public static Address getAddress(Language language, long offset, CoffSectionHeader section) {
 		boolean isData = section == null || section.isData();
 		AddressSpace space = isData ? language.getDefaultDataSpace() : language.getDefaultSpace();
+		if (offset > space.getMaxAddress().getAddressableWordOffset()) {
+			// offset too big to fit, try the opposite space, so at least the blocks will load
+			space = !isData ? language.getDefaultDataSpace() : language.getDefaultSpace();
+		}
 		return space.getAddress(offset * getOffsetUnitSize(language, section));
 	}
 

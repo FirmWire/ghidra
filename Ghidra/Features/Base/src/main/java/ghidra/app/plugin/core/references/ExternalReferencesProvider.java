@@ -24,9 +24,11 @@ import javax.swing.*;
 import org.apache.commons.lang3.StringUtils;
 
 import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.action.builder.ActionBuilder;
 import docking.widgets.dialogs.InputDialog;
 import docking.widgets.table.AbstractSortedTableModel;
+import generic.theme.GIcon;
 import ghidra.app.cmd.refs.*;
 import ghidra.framework.cmd.Command;
 import ghidra.framework.cmd.CompoundCmd;
@@ -41,17 +43,17 @@ import ghidra.program.model.symbol.SourceType;
 import ghidra.util.HelpLocation;
 import ghidra.util.Msg;
 import ghidra.util.table.GhidraTable;
-import resources.ResourceManager;
+import resources.Icons;
 
 /**
  * ComponentProvider that displays a table of External Programs.
  * <p>
  */
 public class ExternalReferencesProvider extends ComponentProviderAdapter {
-	private static ImageIcon ADD_ICON = ResourceManager.loadImage("images/Plus.png");
-	private static ImageIcon DELETE_ICON = ResourceManager.loadImage("images/edit-delete.png");
-	private static ImageIcon EDIT_ICON = ResourceManager.loadImage("images/editbytes.gif");
-	private static ImageIcon CLEAR_ICON = ResourceManager.loadImage("images/erase16.png");
+	private static Icon ADD_ICON = Icons.ADD_ICON;
+	private static Icon DELETE_ICON = Icons.DELETE_ICON;
+	private static Icon EDIT_ICON = new GIcon("icon.base.edit.bytes");
+	private static Icon CLEAR_ICON = Icons.CLEAR_ICON;
 
 	private JPanel mainPanel;
 	private ExternalNamesTableModel tableModel;
@@ -82,36 +84,36 @@ public class ExternalReferencesProvider extends ComponentProviderAdapter {
 
 	private void createActions() {
 		new ActionBuilder("Add External Program Name", getOwner())
-				.popupMenuPath("Add External Program")
-				.popupMenuIcon(ADD_ICON)
-				.toolBarIcon(ADD_ICON)
-				.enabledWhen(ac -> program != null)
-				.onAction(ac -> addExternalProgram())
-				.buildAndInstallLocal(this);
+			.popupMenuPath("Add External Program")
+			.popupMenuIcon(ADD_ICON)
+			.toolBarIcon(ADD_ICON)
+			.enabledWhen(ac -> program != null)
+			.onAction(ac -> addExternalProgram())
+			.buildAndInstallLocal(this);
 
 		new ActionBuilder("Delete External Program Name", getOwner())
-				.popupMenuPath("Delete External Program")
-				.popupMenuIcon(DELETE_ICON)
-				.toolBarIcon(DELETE_ICON)
-				.enabledWhen(ac -> hasSelectedRows())
-				.onAction(ac -> deleteExternalProgram())
-				.buildAndInstallLocal(this);
+			.popupMenuPath("Delete External Program")
+			.popupMenuIcon(DELETE_ICON)
+			.toolBarIcon(DELETE_ICON)
+			.enabledWhen(ac -> hasSelectedRows())
+			.onAction(ac -> deleteExternalProgram())
+			.buildAndInstallLocal(this);
 
 		new ActionBuilder("Set External Name Association", getOwner())
-				.popupMenuPath("Set External Name Association")
-				.popupMenuIcon(EDIT_ICON)
-				.toolBarIcon(EDIT_ICON)
-				.enabledWhen(ac -> isSingleRowSelected())
-				.onAction(ac -> setExternalProgramAssociation())
-				.buildAndInstallLocal(this);
+			.popupMenuPath("Set External Name Association")
+			.popupMenuIcon(EDIT_ICON)
+			.toolBarIcon(EDIT_ICON)
+			.enabledWhen(ac -> isSingleRowSelected())
+			.onAction(ac -> setExternalProgramAssociation())
+			.buildAndInstallLocal(this);
 
 		new ActionBuilder("Clear External Name Association", getOwner())
-				.popupMenuPath("Clear External Name Association")
-				.popupMenuIcon(CLEAR_ICON)
-				.toolBarIcon(CLEAR_ICON)
-				.enabledWhen(ac -> hasSelectedRows())
-				.onAction(ac -> clearExternalAssociation())
-				.buildAndInstallLocal(this);
+			.popupMenuPath("Clear External Name Association")
+			.popupMenuIcon(CLEAR_ICON)
+			.toolBarIcon(CLEAR_ICON)
+			.enabledWhen(ac -> hasSelectedRows())
+			.onAction(ac -> clearExternalAssociation())
+			.buildAndInstallLocal(this);
 
 	}
 
@@ -147,7 +149,7 @@ public class ExternalReferencesProvider extends ComponentProviderAdapter {
 
 	@Override
 	public ActionContext getActionContext(MouseEvent event) {
-		return new ActionContext(this, table);
+		return new DefaultActionContext(this, table);
 	}
 
 	private JPanel buildMainPanel() {
@@ -343,7 +345,8 @@ public class ExternalReferencesProvider extends ComponentProviderAdapter {
 					}
 
 					ExternalNamesRow path =
-						new ExternalNamesRow(programName, extMgr.getExternalLibraryPath(programName));
+						new ExternalNamesRow(programName,
+							extMgr.getExternalLibraryPath(programName));
 					paths.add(path);
 				}
 			}
@@ -363,7 +366,6 @@ public class ExternalReferencesProvider extends ComponentProviderAdapter {
 			}
 			return -1;
 		}
-
 
 		@Override
 		public void dispose() {
@@ -451,7 +453,7 @@ public class ExternalReferencesProvider extends ComponentProviderAdapter {
 				// there are lots of empty path values. 
 				Comparator<ExternalNamesRow> c1 =
 					(r1, r2) -> Objects.requireNonNullElse(r1.getPath(), "")
-							.compareTo(Objects.requireNonNullElse(r2.getPath(), ""));
+						.compareTo(Objects.requireNonNullElse(r2.getPath(), ""));
 				return c1.thenComparing((r1, r2) -> r1.getName().compareTo(r2.getName()));
 			}
 			return super.createSortComparator(columnIndex);

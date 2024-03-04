@@ -22,11 +22,11 @@ import java.util.*;
 
 import db.BinaryField;
 import db.DBRecord;
-import ghidra.trace.model.Trace.TraceStackChangeType;
 import ghidra.trace.model.stack.TraceStack;
 import ghidra.trace.model.stack.TraceStackFrame;
 import ghidra.trace.model.thread.TraceThread;
 import ghidra.trace.util.TraceChangeRecord;
+import ghidra.trace.util.TraceEvents;
 import ghidra.util.LockHold;
 import ghidra.util.database.*;
 import ghidra.util.database.DBCachedObjectStoreFactory.AbstractDBFieldCodec;
@@ -212,8 +212,8 @@ public class DBTraceStack extends DBAnnotatedObject implements TraceStack {
 			}
 			doUpdateFrameKeys();
 		}
-		manager.trace
-				.setChanged(new TraceChangeRecord<>(TraceStackChangeType.CHANGED, null, this));
+		manager.trace.setChanged(
+			new TraceChangeRecord<>(TraceEvents.STACK_CHANGED, null, this, 0L, getSnap()));
 	}
 
 	@Override
@@ -237,7 +237,7 @@ public class DBTraceStack extends DBAnnotatedObject implements TraceStack {
 	}
 
 	@Override
-	public List<TraceStackFrame> getFrames() {
+	public List<TraceStackFrame> getFrames(long snap) {
 		try (LockHold hold = LockHold.lock(manager.lock.readLock())) {
 			return List.copyOf(frames);
 		}
@@ -251,7 +251,11 @@ public class DBTraceStack extends DBAnnotatedObject implements TraceStack {
 			}
 			manager.deleteStack(this);
 		}
-		manager.trace
-				.setChanged(new TraceChangeRecord<>(TraceStackChangeType.DELETED, null, this));
+		manager.trace.setChanged(new TraceChangeRecord<>(TraceEvents.STACK_DELETED, null, this));
+	}
+
+	@Override
+	public boolean hasFixedFrames() {
+		return true;
 	}
 }

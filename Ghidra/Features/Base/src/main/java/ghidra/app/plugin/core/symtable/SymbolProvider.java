@@ -19,12 +19,13 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.util.List;
 
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 import javax.swing.JComponent;
 
 import docking.ActionContext;
 import docking.DockingUtils;
 import docking.action.KeyBindingData;
+import generic.theme.GIcon;
 import ghidra.app.context.ProgramActionContext;
 import ghidra.app.context.ProgramSymbolActionContext;
 import ghidra.app.util.SymbolInspector;
@@ -34,11 +35,10 @@ import ghidra.program.model.listing.Program;
 import ghidra.program.model.symbol.Symbol;
 import ghidra.util.HelpLocation;
 import ghidra.util.table.GhidraTable;
-import resources.ResourceManager;
 
 class SymbolProvider extends ComponentProviderAdapter {
 
-	private static final ImageIcon ICON = ResourceManager.loadImage("images/table.png");
+	private static final Icon ICON = new GIcon("icon.plugin.symboltable.provider");
 
 	private SymbolTablePlugin plugin;
 	private SymbolRenderer renderer;
@@ -58,8 +58,7 @@ class SymbolProvider extends ComponentProviderAdapter {
 		renderer = new SymbolRenderer();
 
 		symbolKeyModel = new SymbolTableModel(this, plugin.getTool());
-		symbolPanel = new SymbolPanel(this, symbolKeyModel, renderer, plugin.getTool(),
-			plugin.getGoToService());
+		symbolPanel = new SymbolPanel(this, symbolKeyModel, renderer, plugin.getTool());
 
 		addToTool();
 	}
@@ -97,7 +96,7 @@ class SymbolProvider extends ComponentProviderAdapter {
 	}
 
 	Symbol getSymbolForRow(int row) {
-		return symbolKeyModel.getRowObject(row);
+		return symbolKeyModel.getRowObject(row).getSymbol();
 	}
 
 	void setCurrentSymbol(Symbol symbol) {
@@ -126,9 +125,9 @@ class SymbolProvider extends ComponentProviderAdapter {
 		}
 	}
 
-	void symbolRemoved(Symbol s) {
+	void symbolRemoved(long symbolId) {
 		if (isVisible()) {
-			symbolKeyModel.symbolRemoved(s);
+			symbolKeyModel.symbolRemoved(symbolId);
 		}
 	}
 

@@ -30,7 +30,8 @@ import docking.widgets.label.GLabel;
 import docking.widgets.textfield.IntegerTextField;
 import ghidra.app.plugin.core.memory.AddBlockModel.InitializedType;
 import ghidra.app.plugin.core.misc.RegisterField;
-import ghidra.app.util.*;
+import ghidra.app.util.AddressInput;
+import ghidra.app.util.HelpTopics;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.database.mem.FileBytes;
 import ghidra.program.model.address.Address;
@@ -71,7 +72,7 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 	private AddressInput baseAddrField; // used for Bit and Byte mapped blocks
 	private IntegerTextField schemeDestByteCountField; // used for Byte mapped blocks
 	private IntegerTextField schemeSrcByteCountField; // used for Byte mapped blocks
-	
+
 	private AddBlockModel model;
 	private GhidraComboBox<MemoryBlockType> comboBox;
 	private boolean updatingInitializedRB;
@@ -79,7 +80,7 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 
 	private final static String MAPPED = "Mapped";
 	private final static String UNMAPPED = "Unmapped";
-	private static final String UNITIALIZED = "UNITIALIZED";
+	private static final String UNINITIALIZED = "UNINITIALIZED";
 	private static final String INITIALIZED = "INITIALIZED";
 	private static final String FILE_BYTES = "FILE_BYTES";
 	private JPanel inializedTypePanel;
@@ -246,7 +247,7 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 		initializedTypeCardLayout = new CardLayout();
 
 		inializedTypePanel = new JPanel(initializedTypeCardLayout);
-		inializedTypePanel.add(new JPanel(), UNITIALIZED);
+		inializedTypePanel.add(new JPanel(), UNINITIALIZED);
 		inializedTypePanel.add(buildInitalValuePanel(), INITIALIZED);
 		inializedTypePanel.add(buildFileBytesPanel(), FILE_BYTES);
 		return inializedTypePanel;
@@ -312,7 +313,7 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 		commentField.setText("");
 		initialValueField.setValue(Long.valueOf(0));
 		model.setBlockType(MemoryBlockType.DEFAULT);
-		model.setInitializedType(AddBlockModel.InitializedType.UNITIALIZED);
+		model.setInitializedType(AddBlockModel.InitializedType.UNINITIALIZED);
 		model.setInitialValue(0);
 
 		readCB.setSelected(model.isRead());
@@ -322,11 +323,12 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 		overlayCB.setSelected(model.isOverlay());
 
 		setOkEnabled(false);
-		tool.showDialog(this, tool.getComponentProvider(PluginConstants.MEMORY_MAP));
+		tool.showDialog(this);
 	}
 
+	@Override
 	public void dispose() {
-		close();
+		super.dispose();
 		model.dispose();
 	}
 
@@ -353,8 +355,8 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 			initializedTypeCardLayout.show(inializedTypePanel, INITIALIZED);
 		}
 		else if (uninitializedRB.isSelected()) {
-			model.setInitializedType(InitializedType.UNITIALIZED);
-			initializedTypeCardLayout.show(inializedTypePanel, UNITIALIZED);
+			model.setInitializedType(InitializedType.UNINITIALIZED);
+			initializedTypeCardLayout.show(inializedTypePanel, UNINITIALIZED);
 		}
 		else if (initializedFromFileBytesRB.isSelected()) {
 			model.setInitializedType(InitializedType.INITIALIZED_FROM_FILE_BYTES);
@@ -427,7 +429,7 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 		}
 		model.setBaseAddress(addr);
 	}
-	
+
 	private void schemeSrcByteCountChanged() {
 		int value = schemeSrcByteCountField.getIntValue();
 		model.setSchemeSrcByteCount(value);
@@ -466,21 +468,21 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 		baseAddrField.setAddressFactory(addrFactory);
 		baseAddrField.setName("Source Addr");
 		baseAddrField.addChangeListener(ev -> baseAddressChanged());
-		
+
 		JPanel schemePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-		
+
 		schemeDestByteCountField = new IntegerTextField(4, 1);
 		schemeDestByteCountField.setAllowNegativeValues(false);
 		schemeDestByteCountField.setAllowsHexPrefix(false);
 		schemeDestByteCountField.setDecimalMode();
 		schemeDestByteCountField.addChangeListener(ev -> schemeDestByteCountChanged());
-		
+
 		schemeSrcByteCountField = new IntegerTextField(4, 1);
 		schemeSrcByteCountField.setAllowNegativeValues(false);
 		schemeSrcByteCountField.setAllowsHexPrefix(false);
 		schemeSrcByteCountField.setDecimalMode();
 		schemeSrcByteCountField.addChangeListener(ev -> schemeSrcByteCountChanged());
-		
+
 		schemePanel.add(schemeDestByteCountField.getComponent());
 		schemePanel.add(new GLabel(" : "));
 		schemePanel.add(schemeSrcByteCountField.getComponent());
@@ -494,10 +496,10 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 		model.setBaseAddress(minAddr);
 		panel.add(new GLabel("Source Address:"));
 		panel.add(baseAddrField);
-		
+
 		panel.add(new GLabel("Mapping Ratio:"));
 		panel.add(schemePanel);
-		
+
 		panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 		return panel;
 	}
@@ -542,7 +544,7 @@ class AddBlockDialog extends DialogComponentProvider implements ChangeListener {
 		addrField = new AddressInput();
 		addrField.setName("Start Addr");
 		addrFactory = model.getProgram().getAddressFactory();
-		addrField.setAddressFactory(addrFactory, true, true);
+		addrField.setAddressFactory(addrFactory, AddressInput.INCLUDE_ALL_MEMORY_SPACES);
 		addrField.addChangeListener(ev -> addrChanged());
 		return addrField;
 	}

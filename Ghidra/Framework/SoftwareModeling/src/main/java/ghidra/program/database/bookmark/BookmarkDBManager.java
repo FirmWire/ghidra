@@ -19,7 +19,7 @@ import java.awt.Color;
 import java.io.IOException;
 import java.util.*;
 
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -33,7 +33,7 @@ import ghidra.program.database.util.DatabaseTableUtils;
 import ghidra.program.database.util.EmptyRecordIterator;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.*;
-import ghidra.program.util.ChangeManager;
+import ghidra.program.util.ProgramEvent;
 import ghidra.util.Lock;
 import ghidra.util.datastruct.ObjectArray;
 import ghidra.util.exception.*;
@@ -50,7 +50,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 
 	private boolean upgrade = false;
 
-	private Map<String, BookmarkType> typesByName = new TreeMap<String, BookmarkType>();
+	private Map<String, BookmarkType> typesByName = new TreeMap<>();
 	private ObjectArray typesArray = new ObjectArray();
 	private Lock lock;
 
@@ -73,7 +73,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 		bookmarkTypeAdapter = BookmarkTypeDBAdapter.getAdapter(handle, openMode);
 		int[] types = bookmarkTypeAdapter.getTypeIds();
 		bookmarkAdapter = BookmarkDBAdapter.getAdapter(handle, openMode, types, addrMap, monitor);
-		cache = new DBObjectCache<BookmarkDB>(100);
+		cache = new DBObjectCache<>(100);
 	}
 
 	@Override
@@ -161,7 +161,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 			if (rec != null) {
 				bookmarkAdapter.updateRecord(rec);
 				Address addr = bm.getAddress();
-				program.setObjChanged(ChangeManager.DOCR_BOOKMARK_CHANGED, addr, bm, null, null);
+				program.setObjChanged(ProgramEvent.BOOKMARK_CHANGED, addr, bm, null, null);
 
 			}
 		}
@@ -211,7 +211,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 			bookmarkAdapter.addType(bmt.getTypeId());
 
 			// fire event
-			program.setObjChanged(ChangeManager.DOCR_BOOKMARK_TYPE_ADDED, bmt, null, null);
+			program.setObjChanged(ProgramEvent.BOOKMARK_TYPE_ADDED, bmt, null, null);
 
 		}
 		return bmt;
@@ -235,7 +235,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 	}
 
 	@Override
-	public BookmarkType defineType(String type, ImageIcon icon, Color color, int priority) {
+	public BookmarkType defineType(String type, Icon icon, Color color, int priority) {
 		lock.acquire();
 		try {
 			String validatedType = StringUtils.trim(type);
@@ -301,7 +301,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 				bm = new BookmarkDB(this, cache, rec);
 
 				// fire event
-				program.setObjChanged(ChangeManager.DOCR_BOOKMARK_ADDED, addr, bm, null, null);
+				program.setObjChanged(ProgramEvent.BOOKMARK_ADDED, addr, bm, null, null);
 			}
 			return bm;
 		}
@@ -375,7 +375,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 		try {
 			bookmarkAdapter.deleteRecord(bm.getId());
 			// fire event
-			program.setObjChanged(ChangeManager.DOCR_BOOKMARK_REMOVED, addr, bm, null, null);
+			program.setObjChanged(ProgramEvent.BOOKMARK_REMOVED, addr, bm, null, null);
 		}
 		catch (IOException e) {
 			dbError(e);
@@ -388,16 +388,6 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 		lock.acquire();
 		try {
 
-			boolean isSpecificType = type != null && type != BookmarkType.ALL_TYPES;
-			if (!isSpecificType) {
-				// no type specified; remove all
-				Iterator<String> iter = typesByName.keySet().iterator();
-				while (iter.hasNext()) {
-					removeBookmarks(iter.next());
-				}
-				return;
-			}
-
 			try {
 				BookmarkTypeDB bmt = (BookmarkTypeDB) typesByName.get(type);
 				if (bmt.hasBookmarks()) {
@@ -405,8 +395,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 					bookmarkAdapter.deleteType(typeId);
 					bookmarkTypeAdapter.deleteRecord(typeId);
 					bmt.setHasBookmarks(false);
-					program.setObjChanged(ChangeManager.DOCR_BOOKMARK_TYPE_REMOVED, bmt, null,
-						null);
+					program.setObjChanged(ProgramEvent.BOOKMARK_TYPE_REMOVED, bmt, null, null);
 				}
 			}
 			catch (IOException e) {
@@ -433,7 +422,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 				DBRecord rec = iter.next();
 				BookmarkDB bm = getBookmark(rec);
 				removeBookmark(bm);
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 			}
 		}
 		catch (IOException e) {
@@ -474,7 +463,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 		lock.acquire();
 		try {
 			int n = typesArray.getLastNonEmptyIndex();
-			List<Bookmark> list = new ArrayList<Bookmark>();
+			List<Bookmark> list = new ArrayList<>();
 			for (int i = 0; i <= n; i++) {
 				BookmarkTypeDB bmt = (BookmarkTypeDB) typesArray.get(i);
 				if (bmt != null && bmt.hasBookmarks()) {
@@ -512,7 +501,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 		lock.acquire();
 		try {
 			Bookmark[] bookmarks = null;
-			List<Bookmark> list = new ArrayList<Bookmark>();
+			List<Bookmark> list = new ArrayList<>();
 			BookmarkType bmt = getBookmarkType(type);
 			if (bmt != null && bmt.hasBookmarks()) {
 				getBookmarks(address, bmt.getTypeId(), list);
@@ -681,18 +670,18 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 	@Override
 	public Iterator<Bookmark> getBookmarksIterator(Address startAddress, boolean forward) {
 
-		List<PeekableIterator<Bookmark>> list = new ArrayList<PeekableIterator<Bookmark>>();
+		List<PeekableIterator<Bookmark>> list = new ArrayList<>();
 		int n = typesArray.getLastNonEmptyIndex();
 		for (int i = 0; i <= n; i++) {
 			BookmarkTypeDB bmt = (BookmarkTypeDB) typesArray.get(i);
 			if (bmt != null && bmt.hasBookmarks()) {
 				Iterator<Bookmark> bookmarksIterator =
 					getBookmarksIterator(startAddress, bmt, forward);
-				list.add(new WrappingPeekableIterator<Bookmark>(bookmarksIterator));
+				list.add(new WrappingPeekableIterator<>(bookmarksIterator));
 			}
 		}
 
-		return new MultiIterator<Bookmark>(list, forward);
+		return new MultiIterator<>(list, forward);
 	}
 
 	@Override
@@ -766,7 +755,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 					if (category == null || category.equals(bm.getCategory())) {
 						doRemoveBookmark(bm);
 					}
-					monitor.checkCanceled();
+					monitor.checkCancelled();
 				}
 				if (bookmarkAdapter.getBookmarkCount(typeId) == 0) {
 					removeBookmarks(bmt.getTypeString());
@@ -880,7 +869,7 @@ public class BookmarkDBManager implements BookmarkManager, ErrorHandler, Manager
 		Iterator<Bookmark> bookmarkIt;
 
 		TotalIterator() {
-			List<BookmarkTypeDB> list = new ArrayList<BookmarkTypeDB>();
+			List<BookmarkTypeDB> list = new ArrayList<>();
 			int n = typesArray.getLastNonEmptyIndex();
 			for (int i = 0; i <= n; i++) {
 				BookmarkTypeDB bmt = (BookmarkTypeDB) typesArray.get(i);

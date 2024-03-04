@@ -51,11 +51,17 @@ public class GnuDemangler implements Demangler {
 			return true;
 		}
 
+		String compiler = program.getCompiler();
+		if (compiler != null && compiler.contains("gcc")) {
+			return true;
+		}
+
 		CompilerSpec spec = program.getCompilerSpec();
 		String specId = spec.getCompilerSpecID().getIdAsString();
 		if (!specId.toLowerCase().contains("windows")) {
 			return true;
 		}
+
 		return false;
 	}
 
@@ -87,7 +93,7 @@ public class GnuDemangler implements Demangler {
 			}
 		}
 		else if (mangled.startsWith("__Z")) {
-			mangled = mangled.substring(1);//removed first underscore....
+			mangled = mangled.substring(1);
 		}
 
 		boolean isDwarf = false;
@@ -106,7 +112,8 @@ public class GnuDemangler implements Demangler {
 			}
 
 			boolean onlyKnownPatterns = options.demangleOnlyKnownPatterns();
-			DemangledObject demangledObject = parse(mangled, process, demangled, onlyKnownPatterns);
+			DemangledObject demangledObject =
+				parse(originalMangled, process, demangled, onlyKnownPatterns);
 			if (demangledObject == null) {
 				return demangledObject;
 			}

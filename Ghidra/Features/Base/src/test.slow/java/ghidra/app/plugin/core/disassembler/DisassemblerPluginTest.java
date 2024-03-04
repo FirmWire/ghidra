@@ -20,6 +20,7 @@ import static org.junit.Assert.*;
 import org.junit.*;
 
 import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.action.DockingActionIf;
 import docking.widgets.EventTrigger;
 import docking.widgets.fieldpanel.FieldPanel;
@@ -453,14 +454,11 @@ public class DisassemblerPluginTest extends AbstractGhidraHeadedIntegrationTest 
 
 	private ActionContext getContext() {
 		ActionContext context = cb.getProvider().getActionContext(null);
-		return context == null ? new ActionContext() : context;
+		return context == null ? new DefaultActionContext() : context;
 	}
 
 	private void setSelection(FieldPanel fp, FieldSelection sel) {
-		fp.setSelection(sel);
-		Class<?>[] argClasses = new Class<?>[] { EventTrigger.class };
-		Object[] args = new Object[] { EventTrigger.GUI_ACTION };
-		invokeInstanceMethod("notifySelectionChanged", fp, argClasses, args);
+		runSwing(() -> fp.setSelection(sel, EventTrigger.GUI_ACTION));
 	}
 
 	private void clear(Address addr) {

@@ -36,6 +36,7 @@ import ghidra.framework.options.Options;
 import ghidra.program.disassemble.Disassembler;
 import ghidra.program.model.address.*;
 import ghidra.program.model.data.*;
+import ghidra.program.model.lang.Processor;
 import ghidra.program.model.lang.RegisterValue;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.mem.*;
@@ -125,8 +126,7 @@ public class OperandReferenceAnalyzer extends AbstractAnalyzer {
 
 	private boolean newCodeFound = false;
 	private int processorAlignment = 1;
-	private MemoryBlock externalBlock;
-	private boolean respectExecuteFlags = true;
+	private boolean respectExecuteFlags = OPTION_DEFAULT_RESPECT_EXECUTE_ENABLED;
 
 	public OperandReferenceAnalyzer() {
 		this(NAME, DESCRIPTION, AnalyzerType.INSTRUCTION_ANALYZER);
@@ -145,7 +145,17 @@ public class OperandReferenceAnalyzer extends AbstractAnalyzer {
 			pointerEnabled = false;
 			addressTablesEnabled = false;
 		}
+		
+		boolean isArm = program.getLanguage()
+				.getProcessor()
+				.equals(Processor.findOrPossiblyCreateProcessor("ARM"));
 
+		// if arm, turn off reference to pointer analysis
+		if (isArm) {
+			pointerEnabled = false;
+			addressTablesEnabled = false;
+		}
+		
 		// only analyze programs with address spaces > 16 bits
 		int bitSize = defaultAddressSpace.getSize();
 		return bitSize > 16;
@@ -192,8 +202,6 @@ public class OperandReferenceAnalyzer extends AbstractAnalyzer {
 
 		processorAlignment = program.getLanguage().getInstructionAlignment();
 
-		externalBlock = program.getMemory().getBlock(MemoryBlock.EXTERNAL_BLOCK_NAME);
-
 		newCodeFound = false;
 		int count = NOTIFICATION_INTERVAL;
 		long initial_count = set.getNumAddresses();
@@ -226,7 +234,7 @@ public class OperandReferenceAnalyzer extends AbstractAnalyzer {
 		AddressSet checkedTargets = new AddressSet();
 
 		while (iter.hasNext() && !newCodeFound) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 
 			Address addr = iter.next();
 
@@ -574,12 +582,8 @@ public class OperandReferenceAnalyzer extends AbstractAnalyzer {
 			throws CancelledException {
 		// Check any direct jumps into the EXTERNAL memory section
 		//   These don't return!
-		if (externalBlock == null) {
-			return false;
-		}
-
 		Address toAddr = reference.getToAddress();
-		if (!externalBlock.contains(toAddr)) {
+		if (!program.getMemory().isExternalBlockAddress(toAddr)) {
 			return false;
 		}
 		Address fromAddr = reference.getFromAddress();
@@ -779,8 +783,8 @@ public class OperandReferenceAnalyzer extends AbstractAnalyzer {
 			instr.removeOperandReference(opIndex, target);
 			program.getReferenceManager()
 					.addOffsetMemReference(instr.getMinAddress(),
-						lastGoodTable.getTopAddress(), -((i + 3) * entryLen), RefType.DATA,
-						SourceType.ANALYSIS, opIndex);
+						lastGoodTable.getTopAddress(), false, -((i + 3) * entryLen),
+						RefType.DATA, SourceType.ANALYSIS, opIndex);
 		}
 
 		return lastGoodTable;
@@ -1039,7 +1043,7 @@ public class OperandReferenceAnalyzer extends AbstractAnalyzer {
 		RelocationTable relocationTable = program.getRelocationTable();
 		if (relocationTable.isRelocatable()) {
 			// if it is relocatable, then there should be no pointers in memory, other than relacatable ones
-			if (relocationTable.getSize() > 0 && relocationTable.getRelocation(target) == null) {
+			if (relocationTable.getSize() != 0 && !relocationTable.hasRelocation(target)) {
 				return false;
 			}
 		}

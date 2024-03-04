@@ -15,19 +15,19 @@
  */
 package ghidra.app.plugin.core.compositeeditor;
 
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 
+import generic.theme.GIcon;
 import ghidra.framework.plugintool.Plugin;
 import ghidra.program.model.data.Union;
-import resources.ResourceManager;
 
 /**
  * Editor for a Union Data Type.
  */
 public class UnionEditorProvider extends CompositeEditorProvider {
 
-	protected static final ImageIcon UNION_EDITOR_ICON =
-		ResourceManager.loadImage("images/cUnion.png");
+	protected static final Icon UNION_EDITOR_ICON =
+		new GIcon("icon.plugin.composite.editor.provider.union");
 
 	public UnionEditorProvider(Plugin plugin, Union unionDataType, boolean showInHex) {
 		super(plugin);
@@ -51,21 +51,22 @@ public class UnionEditorProvider extends CompositeEditorProvider {
 	@Override
 	protected CompositeEditorTableAction[] createActions() {
 		//@formatter:off
-		return new CompositeEditorTableAction[] { 
-			new ApplyAction(this), 
+		return new CompositeEditorTableAction[] {
+			new ApplyAction(this),
 			new MoveUpAction(this),
-			new MoveDownAction(this), 
-			new DuplicateAction(this), 
+			new MoveDownAction(this),
+			new DuplicateAction(this),
 			new DuplicateMultipleAction(this),
-			new DeleteAction(this), 
-			new PointerAction(this), 
+			new DeleteAction(this),
+			new PointerAction(this),
 			new ArrayAction(this),
-			new ShowComponentPathAction(this), 
+			new ShowComponentPathAction(this),
 			new EditComponentAction(this),
-			new EditFieldAction(this), 
+			new EditFieldAction(this),
 			new HexNumbersAction(this),
 			new AddBitFieldAction(this),
-			new EditBitFieldAction(this)
+			new EditBitFieldAction(this),
+			new ShowDataTypeInTreeAction(this)
 		};
 		//@formatter:on
 	}

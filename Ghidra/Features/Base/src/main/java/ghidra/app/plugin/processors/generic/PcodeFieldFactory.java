@@ -16,14 +16,13 @@
 package ghidra.app.plugin.processors.generic;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 import docking.widgets.fieldpanel.field.*;
 import docking.widgets.fieldpanel.support.FieldLocation;
 import ghidra.GhidraOptions;
-import ghidra.app.util.HighlightProvider;
-import ghidra.app.util.pcode.PcodeFormatter;
+import ghidra.app.util.ListingHighlightProvider;
+import ghidra.app.util.pcode.AttributedStringPcodeFormatter;
 import ghidra.app.util.viewer.field.*;
 import ghidra.app.util.viewer.format.FieldFormatModel;
 import ghidra.app.util.viewer.options.OptionsGui;
@@ -48,7 +47,7 @@ public class PcodeFieldFactory extends FieldFactory {
 		GROUP_TITLE + Options.DELIMITER + "Display Raw Pcode";
 	public final static int MAX_DISPLAY_LINES = 30;
 
-	private PcodeFormatter formatter;
+	private AttributedStringPcodeFormatter formatter;
 
 	public PcodeFieldFactory() {
 		super(FIELD_NAME);
@@ -56,24 +55,21 @@ public class PcodeFieldFactory extends FieldFactory {
 	}
 
 	public PcodeFieldFactory(String name, FieldFormatModel model,
-			HighlightProvider highlightProvider, Options displayOptions, Options fieldOptions) {
+			ListingHighlightProvider highlightProvider, Options displayOptions, Options fieldOptions) {
 
 		super(name, model, highlightProvider, displayOptions, fieldOptions);
 		setWidth(300);
-		color = displayOptions.getColor(OptionsGui.BYTES.getColorOptionName(),
-			OptionsGui.BYTES.getDefaultColor());
 		style = displayOptions.getInt(OptionsGui.BYTES.getStyleOptionName(), -1);
-		formatter = new PcodeFormatter();
+		formatter = new AttributedStringPcodeFormatter();
 
-		setColors(displayOptions);
 		setOptions(fieldOptions);
+		formatter.setFontMetrics(getMetrics());
 	}
 
 	@Override
-	public FieldFactory newInstance(FieldFormatModel myModel, HighlightProvider highlightProvider,
-			ToolOptions displayOptions, ToolOptions fieldOptions) {
-		return new PcodeFieldFactory(FIELD_NAME, myModel, highlightProvider, displayOptions,
-			fieldOptions);
+	public FieldFactory newInstance(FieldFormatModel myModel, ListingHighlightProvider highlightProvider,
+			ToolOptions options, ToolOptions fieldOptions) {
+		return new PcodeFieldFactory(FIELD_NAME, myModel, highlightProvider, options, fieldOptions);
 	}
 
 	@Override
@@ -87,8 +83,8 @@ public class PcodeFieldFactory extends FieldFactory {
 
 		ArrayList<TextFieldElement> elements = new ArrayList<>();
 
-		List<AttributedString> pcodeListing =
-			formatter.toAttributedStrings(instr.getProgram(), instr.getPcode(true));
+		List<AttributedString> pcodeListing = formatter.formatOps(instr.getProgram().getLanguage(),
+			instr.getProgram().getAddressFactory(), Arrays.asList(instr.getPcode(true)));
 		int lineCnt = pcodeListing.size();
 		for (int i = 0; i < lineCnt; i++) {
 			elements.add(new TextFieldElement(pcodeListing.get(i), i, 0));
@@ -129,8 +125,8 @@ public class PcodeFieldFactory extends FieldFactory {
 		Instruction instr = (Instruction) obj;
 		Program program = instr.getProgram();
 
-		List<AttributedString> attributedStrings =
-			formatter.toAttributedStrings(program, instr.getPcode(true));
+		List<AttributedString> attributedStrings = formatter.formatOps(program.getLanguage(),
+			program.getAddressFactory(), Arrays.asList(instr.getPcode(true)));
 		List<String> strings = new ArrayList<>(attributedStrings.size());
 		for (AttributedString attributedString : attributedStrings) {
 			strings.add(attributedString.getText());
@@ -166,23 +162,6 @@ public class PcodeFieldFactory extends FieldFactory {
 		}
 	}
 
-	/**
-	 * Called when the fonts are first initialized or when one of the options
-	 * changes.  It looks up all the color settings and resets the its values.
-	 */
-	private void setColors(Options options) {
-		formatter.setColor(
-			options.getColor(OptionsGui.ADDRESS.getColorOptionName(),
-				OptionsGui.ADDRESS.getDefaultColor()),
-			options.getColor(OptionsGui.REGISTERS.getColorOptionName(),
-				OptionsGui.REGISTERS.getDefaultColor()),
-			options.getColor(OptionsGui.CONSTANT.getColorOptionName(),
-				OptionsGui.CONSTANT.getDefaultColor()),
-			options.getColor(OptionsGui.LABELS_LOCAL.getColorOptionName(),
-				OptionsGui.LABELS_LOCAL.getDefaultColor()));
-		formatter.setFontMetrics(getMetrics());
-	}
-
 	private void setOptions(Options fieldOptions) {
 		fieldOptions.registerOption(MAX_DISPLAY_LINES_MSG, MAX_DISPLAY_LINES, null,
 			"Max number line of pcode to display");
@@ -192,5 +171,4 @@ public class PcodeFieldFactory extends FieldFactory {
 		boolean displayRaw = fieldOptions.getBoolean(DISPLAY_RAW_PCODE, false);
 		formatter.setOptions(maxDisplayLines, displayRaw);
 	}
-
 }

@@ -23,28 +23,22 @@ import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
-import docking.ActionContext;
-import docking.DialogComponentProvider;
+import docking.ReusableDialogComponentProvider;
 import docking.action.DockingAction;
 import docking.widgets.checkbox.GCheckBox;
 import docking.widgets.label.GDLabel;
 import docking.widgets.label.GLabel;
 import docking.widgets.textfield.HintTextField;
-import ghidra.app.events.ProgramSelectionPluginEvent;
-import ghidra.app.services.GoToService;
 import ghidra.app.util.HelpTopics;
 import ghidra.app.util.PseudoDisassembler;
-import ghidra.program.model.address.Address;
-import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.MemoryBlock;
-import ghidra.program.util.ProgramSelection;
 import ghidra.util.HelpLocation;
 import ghidra.util.table.*;
 import ghidra.util.table.actions.MakeProgramSelectionAction;
 import ghidra.util.task.Task;
 
-public class AddressTableDialog extends DialogComponentProvider {
+public class AddressTableDialog extends ReusableDialogComponentProvider {
 	private static final int DEFAULT_MINIMUM_TABLE_SIZE = 3;
 	private static final String DIALOG_NAME = "Search For Address Tables";
 
@@ -98,8 +92,7 @@ public class AddressTableDialog extends DialogComponentProvider {
 		// create right side query results table with three columns
 		resultsTablePanel = new GhidraThreadedTablePanel<>(plugin.getModel());
 		resultsTable = resultsTablePanel.getTable();
-		GoToService goToService = plugin.getTool().getService(GoToService.class);
-		resultsTable.installNavigation(goToService, goToService.getDefaultNavigatable());
+		resultsTable.installNavigation(plugin.getTool());
 
 		ListSelectionModel selModel = resultsTable.getSelectionModel();
 		selModel.addListSelectionListener(e -> {
@@ -519,30 +512,7 @@ public class AddressTableDialog extends DialogComponentProvider {
 
 	private void createAction() {
 
-		DockingAction selectAction = new MakeProgramSelectionAction(plugin, resultsTable) {
-			@Override
-			protected ProgramSelection makeSelection(ActionContext context) {
-				Program program = plugin.getProgram();
-				AddressSet set = new AddressSet();
-				AutoTableDisassemblerModel model = plugin.getModel();
-				int[] selectedRows = resultsTable.getSelectedRows();
-				for (int selectedRow : selectedRows) {
-					Address selectedAddress = model.getAddress(selectedRow);
-					AddressTable addrTab = model.get(selectedAddress);
-					if (addrTab != null) {
-						set.addRange(selectedAddress,
-							selectedAddress.add(addrTab.getByteLength() - 1));
-					}
-				}
-				ProgramSelection selection = new ProgramSelection(set);
-				if (!set.isEmpty()) {
-					plugin.firePluginEvent(
-						new ProgramSelectionPluginEvent(plugin.getName(), selection, program));
-				}
-
-				return selection;
-			}
-		};
+		DockingAction selectAction = new MakeProgramSelectionAction(plugin, resultsTable);
 
 		selectionNavigationAction = new SelectionNavigationAction(plugin, resultsTable);
 		selectionNavigationAction.setHelpLocation(

@@ -19,8 +19,6 @@ import java.awt.*;
 
 import javax.swing.*;
 
-import docking.help.Help;
-import docking.help.HelpService;
 import generic.util.WindowUtilities;
 import ghidra.app.merge.datatypes.DataTypeMergeManager;
 import ghidra.app.merge.listing.*;
@@ -31,7 +29,7 @@ import ghidra.app.merge.tool.ListingMergePanelPlugin;
 import ghidra.app.merge.tree.ProgramTreeMergeManager;
 import ghidra.app.nav.*;
 import ghidra.app.plugin.core.navigation.GoToAddressLabelPlugin;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
 import ghidra.app.util.viewer.util.FieldNavigator;
 import ghidra.framework.model.UndoableDomainObject;
 import ghidra.framework.plugintool.ModalPluginTool;
@@ -43,6 +41,8 @@ import ghidra.program.model.listing.ProgramChangeSet;
 import ghidra.program.util.ProgramLocation;
 import ghidra.program.util.ProgramSelection;
 import ghidra.util.HelpLocation;
+import help.Help;
+import help.HelpService;
 
 /** 
  * Top level object that manages each step of the merge/resolve conflicts
@@ -516,12 +516,12 @@ class MergeNavigatable implements Navigatable {
 	}
 
 	@Override
-	public void removeHighlightProvider(HighlightProvider highlightProvider, Program program) {
+	public void removeHighlightProvider(ListingHighlightProvider highlightProvider, Program program) {
 		// currently unsupported
 	}
 
 	@Override
-	public void setHighlightProvider(HighlightProvider highlightProvider, Program program) {
+	public void setHighlightProvider(ListingHighlightProvider highlightProvider, Program program) {
 		// currently unsupported
 
 	}

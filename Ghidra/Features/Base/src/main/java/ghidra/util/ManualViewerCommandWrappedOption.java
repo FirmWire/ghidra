@@ -1,6 +1,5 @@
 /* ###
  * IP: GHIDRA
- * REVIEWED: YES
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +18,7 @@ package ghidra.util;
 import ghidra.framework.OperatingSystem;
 import ghidra.framework.Platform;
 import ghidra.framework.options.CustomOption;
-import ghidra.framework.options.SaveState;
+import ghidra.framework.options.GProperties;
 
 public class ManualViewerCommandWrappedOption implements CustomOption {
 	public static final String OPTIONS_CATEGORY_NAME = "Processor Manuals";
@@ -45,17 +44,17 @@ public class ManualViewerCommandWrappedOption implements CustomOption {
 	}
 
 	@Override
-	public void readState(SaveState saveState) {
-		commandString = saveState.getString(COMMAND_STRING, null);
-		commandArguments = saveState.getStrings(COMMAND_ARGUMENTS, null);
-		urlReplacementString = saveState.getString(URL_STRING, null);
+	public void readState(GProperties properties) {
+		commandString = properties.getString(COMMAND_STRING, null);
+		commandArguments = properties.getStrings(COMMAND_ARGUMENTS, null);
+		urlReplacementString = properties.getString(URL_STRING, null);
 	}
 
 	@Override
-	public void writeState(SaveState saveState) {
-		saveState.putString(COMMAND_STRING, commandString);
-		saveState.putStrings(COMMAND_ARGUMENTS, commandArguments);
-		saveState.putString(URL_STRING, urlReplacementString);
+	public void writeState(GProperties properties) {
+		properties.putString(COMMAND_STRING, commandString);
+		properties.putStrings(COMMAND_ARGUMENTS, commandArguments);
+		properties.putString(URL_STRING, urlReplacementString);
 	}
 
 	@Override
@@ -118,7 +117,7 @@ public class ManualViewerCommandWrappedOption implements CustomOption {
 		ManualViewerCommandWrappedOption option = new ManualViewerCommandWrappedOption();
 
 		if (Platform.CURRENT_PLATFORM.getOperatingSystem() == OperatingSystem.WINDOWS) {
-			option.setCommandString("cmd.exe");
+			option.setCommandString(System.getenv("ComSpec"));
 			String[] args = new String[] { "/c", "start" };
 			option.setCommandArguments(args);
 			option.setUrlReplacementString(DEFAULT_URL_REPLACEMENT_STRING);

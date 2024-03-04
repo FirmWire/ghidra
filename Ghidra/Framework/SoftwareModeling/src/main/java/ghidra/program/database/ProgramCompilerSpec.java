@@ -25,7 +25,9 @@ import ghidra.framework.options.Options;
 import ghidra.program.model.lang.*;
 import ghidra.program.model.listing.Program;
 import ghidra.util.*;
+import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
+import ghidra.xml.XmlParseException;
 
 /**
  * A Program-specific version of the {@link CompilerSpec}.
@@ -119,22 +121,22 @@ public class ProgramCompilerSpec extends BasicCompilerSpec {
 		ArrayList<PrototypeModel> finalList = new ArrayList<>();
 		TreeSet<String> currentNames = new TreeSet<>();
 		for (PrototypeModel model : allmodels) {
-			currentNames.add(model.getName());
 			if (usermodels.containsKey(model.getName())) {
 				continue;
 			}
+			currentNames.add(model.getName());
 			finalList.add(model);		// Add original non-userdef models
 		}
 
+		usermodels.clear();
 		for (PrototypeModel model : extensions) {
 			if (currentNames.contains(model.getName())) {
-				if (!usermodels.containsKey(model.getName())) {
-					Msg.warn(this,
-						"Cannot override prototype model " + model.getName() + " with extension");
-					continue;
-				}
+				Msg.warn(this,
+					"Cannot override prototype model " + model.getName() + " with extension");
+				continue;
 			}
 			markPrototypeAsExtension(model);
+			setDefaultReturnAddressIfNeeded(model);
 			finalList.add(model);
 			usermodels.put(model.getName(), model);
 		}
@@ -150,7 +152,13 @@ public class ProgramCompilerSpec extends BasicCompilerSpec {
 		if (evalCalledModel != null) {
 			evalCalledName = evalCalledModel.getName();
 		}
-		modelXrefs(finalList, defaultName, evalName, evalCalledName);
+		try {
+			modelXrefs(finalList, defaultName, evalName, evalCalledName);
+		}
+		catch (XmlParseException e) {
+			Msg.warn(this, "Prototype model extensions NOT installed: " + e.getMessage());
+			usermodels.clear();
+		}
 		if (usermodels.isEmpty()) {
 			usermodels = null;
 		}
@@ -236,7 +244,7 @@ public class ProgramCompilerSpec extends BasicCompilerSpec {
 			return;
 		}
 		StringBuilder buffer = new StringBuilder();
-		buffer.append("<HTML>User-defined extensions failed to parse: ");
+		buffer.append("<html>User-defined extensions failed to parse: ");
 		buffer.append("<ul>");
 		for (String line : errorList) {
 			buffer.append("<li>").append(line).append("</li>");
@@ -335,7 +343,7 @@ public class ProgramCompilerSpec extends BasicCompilerSpec {
 			case EVAL_CALLED:
 				return evalCalledModel;		// TODO: Currently no option
 		}
-		return null;
+		return defaultModel;
 	}
 
 	/**
@@ -368,6 +376,21 @@ public class ProgramCompilerSpec extends BasicCompilerSpec {
 			program.getOptions(Program.ANALYSIS_PROPERTIES + ".Decompiler Parameter ID");
 		analysisPropertyList.createAlias(EVALUATION_MODEL_PROPERTY_NAME, decompilerPropertyList,
 			EVALUATION_MODEL_PROPERTY_NAME);
+	}
+
+	/**
+	 * Reset options to default (for this CompilerSpec)
+	 * This is for setLanguage to clear out strings that might belong to the old language.
+	 * @param monitor is the monitor for checking cancellation
+	 * @throws CancelledException if operation is cancelled externally
+	 */
+	protected void resetProgramOptions(TaskMonitor monitor) throws CancelledException {
+		Options decompilerPropertyList = program.getOptions(DECOMPILER_PROPERTY_LIST_NAME);
+		decompilerPropertyList.restoreDefaultValue(EVALUATION_MODEL_PROPERTY_NAME);
+		if (decompilerPropertyList.contains(DECOMPILER_OUTPUT_LANGUAGE)) {
+			decompilerPropertyList.restoreDefaultValue(DECOMPILER_OUTPUT_LANGUAGE);
+		}
+		SpecExtension.clearAllExtensions(program, monitor);
 	}
 
 	@Override

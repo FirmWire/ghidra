@@ -15,7 +15,8 @@
  */
 package ghidra.app.plugin.assembler.sleigh.symbol;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Map.Entry;
 
 import org.apache.commons.collections4.MultiValuedMap;
@@ -35,6 +36,7 @@ public class AssemblyStringMapTerminal extends AssemblyTerminal {
 
 	/**
 	 * Construct a terminal with the given name, accepting only the keys of a given map
+	 * 
 	 * @param name the name
 	 * @param map the map from display text to token value
 	 */
@@ -45,7 +47,7 @@ public class AssemblyStringMapTerminal extends AssemblyTerminal {
 
 	@Override
 	public Collection<AssemblyParseNumericToken> match(String buffer, int pos,
-			AssemblyGrammar grammar, Map<String, Long> labels) {
+			AssemblyGrammar grammar, AssemblyNumericSymbols symbols) {
 		Collection<AssemblyParseNumericToken> result = new LinkedHashSet<>();
 		for (Entry<String, Integer> ent : map.entries()) {
 			String str = ent.getKey();
@@ -57,12 +59,16 @@ public class AssemblyStringMapTerminal extends AssemblyTerminal {
 	}
 
 	@Override
-	public Collection<String> getSuggestions(String string, Map<String, Long> labels) {
+	public Collection<String> getSuggestions(String string, AssemblyNumericSymbols symbols) {
 		return map.keySet();
 	}
 
 	@Override
 	public String toString() {
 		return "[list:" + name + "]";
+	}
+
+	public MultiValuedMap<String, Integer> getMap() {
+		return map;
 	}
 }

@@ -20,6 +20,7 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import db.*;
+import ghidra.app.util.task.OpenProgramRequest;
 import ghidra.app.util.task.OpenProgramTask;
 import ghidra.feature.vt.api.correlator.program.ImpliedMatchProgramCorrelator;
 import ghidra.feature.vt.api.correlator.program.ManualMatchProgramCorrelator;
@@ -27,6 +28,7 @@ import ghidra.feature.vt.api.impl.*;
 import ghidra.feature.vt.api.main.*;
 import ghidra.framework.data.DomainObjectAdapterDB;
 import ghidra.framework.model.*;
+import ghidra.framework.model.TransactionInfo.Status;
 import ghidra.framework.options.Options;
 import ghidra.framework.store.LockException;
 import ghidra.program.database.DBObjectCache;
@@ -39,7 +41,7 @@ import ghidra.util.exception.*;
 import ghidra.util.task.TaskLauncher;
 import ghidra.util.task.TaskMonitor;
 
-public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTChangeManager {
+public class VTSessionDB extends DomainObjectAdapterDB implements VTSession {
 	private final static Field[] COL_FIELDS = new Field[] { StringField.INSTANCE };
 	private final static String[] COL_TYPES = new String[] { "Value" };
 	private final static Schema SCHEMA =
@@ -211,7 +213,7 @@ public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTC
 	}
 
 	private VTSessionDB(DBHandle dbHandle, Object consumer) {
-		super(dbHandle, UNUSED_DEFAULT_NAME, EVENT_NOTIFICATION_DELAY, EVENT_BUFFER_SIZE, consumer);
+		super(dbHandle, UNUSED_DEFAULT_NAME, EVENT_NOTIFICATION_DELAY, consumer);
 		propertyTable = dbHandle.getTable(PROPERTY_TABLE_NAME);
 	}
 
@@ -309,7 +311,8 @@ public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTC
 
 		TaskLauncher.launch(openTask);
 
-		return openTask.getOpenProgram();
+		OpenProgramRequest openProgram = openTask.getOpenProgram();
+		return openProgram != null ? openProgram.getProgram() : null;
 	}
 
 	@Override
@@ -401,7 +404,7 @@ public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTC
 			matchSets.add(matchSet);
 			changeSetsModified = true; // signal endTransaction to clear undo stack
 
-			setObjectChanged(VTChangeManager.DOCR_VT_MATCH_SET_ADDED, matchSet, null, matchSet);
+			setObjectChanged(VTEvent.MATCH_SET_ADDED, matchSet, null, matchSet);
 
 			return matchSet;
 		}
@@ -506,11 +509,16 @@ public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTC
 		return getName();
 	}
 
-	@Override
-	public void setChanged(int type, Object oldValue, Object newValue) {
+	/**
+	 * Mark the state of a Version Tracking item as having changed and generate
+	 * the event of the specified type.  Any or all parameters may be null.
+	 * @param eventType event type
+	 * @param oldValue original value or an Object that is related to the event.
+	 * @param newValue new value or an Object that is related to the event.
+	 */
+	public void setChanged(VTEvent eventType, Object oldValue, Object newValue) {
 		changed = true;
-
-		fireEvent(new VersionTrackingChangeRecord(type, null, oldValue, newValue));
+		fireEvent(new VersionTrackingChangeRecord(eventType, null, oldValue, newValue));
 	}
 
 	@Override
@@ -522,12 +530,19 @@ public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTC
 		return matches;
 	}
 
-	@Override
-	public void setObjectChanged(int type, Object affectedObject, Object oldValue,
+	/**
+	 * Mark the state of a Version Tracking item as having changed and generate
+	 * the event of the specified type.  Any or all parameters may be null.
+	 * @param eventType event type
+	 * @param affected the version tracking object that was affected by the change.
+	 * @param oldValue original value or an Object that is related to the event.
+	 * @param newValue new value or an Object that is related to the event.
+	 */
+	public void setObjectChanged(VTEvent eventType, Object affected, Object oldValue,
 			Object newValue) {
 		changed = true;
 
-		fireEvent(new VersionTrackingChangeRecord(type, affectedObject, oldValue, newValue));
+		fireEvent(new VersionTrackingChangeRecord(eventType, affected, oldValue, newValue));
 	}
 
 	@Override
@@ -578,7 +593,7 @@ public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTC
 		finally {
 			lock.release();
 		}
-		setObjectChanged(VTChangeManager.DOCR_VT_TAG_REMOVED, this, tagName, null);
+		setObjectChanged(VTEvent.TAG_REMOVED, this, tagName, null);
 	}
 
 	@Override
@@ -599,7 +614,7 @@ public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTC
 		finally {
 			lock.release();
 		}
-		setObjectChanged(VTChangeManager.DOCR_VT_TAG_ADDED, matchTag, null, matchTag);
+		setObjectChanged(VTEvent.TAG_ADDED, matchTag, null, matchTag);
 		return matchTag;
 	}
 
@@ -693,9 +708,9 @@ public class VTSessionDB extends DomainObjectAdapterDB implements VTSession, VTC
 
 	@Override
 	public void endTransaction(int transactionID, boolean commit) {
-		Transaction transaction = getCurrentTransaction();
+		TransactionInfo transaction = getCurrentTransactionInfo();
 		super.endTransaction(transactionID, commit);
-		if (changeSetsModified && transaction.getStatus() == Transaction.COMMITTED) {
+		if (changeSetsModified && transaction.getStatus() == Status.COMMITTED) {
 			changeSetsModified = false;
 		}
 	}

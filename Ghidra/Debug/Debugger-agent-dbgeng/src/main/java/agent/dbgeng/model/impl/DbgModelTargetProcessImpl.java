@@ -20,13 +20,24 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import agent.dbgeng.dbgeng.DebugProcessId;
-import agent.dbgeng.manager.*;
+import agent.dbgeng.manager.DbgCause;
+import agent.dbgeng.manager.DbgProcess;
+import agent.dbgeng.manager.DbgState;
+import agent.dbgeng.manager.DbgThread;
 import agent.dbgeng.manager.impl.DbgManagerImpl;
-import agent.dbgeng.model.iface1.DbgModelTargetFocusScope;
-import agent.dbgeng.model.iface2.*;
-import ghidra.dbg.target.*;
+import agent.dbgeng.model.iface2.DbgModelTargetDebugContainer;
+import agent.dbgeng.model.iface2.DbgModelTargetMemoryContainer;
+import agent.dbgeng.model.iface2.DbgModelTargetModuleContainer;
+import agent.dbgeng.model.iface2.DbgModelTargetProcess;
+import agent.dbgeng.model.iface2.DbgModelTargetProcessContainer;
+import agent.dbgeng.model.iface2.DbgModelTargetThreadContainer;
+import ghidra.dbg.DebuggerObjectModel.RefreshBehavior;
+import ghidra.dbg.target.TargetAttachable;
 import ghidra.dbg.target.TargetEventScope.TargetEventType;
-import ghidra.dbg.target.schema.*;
+import ghidra.dbg.target.TargetObject;
+import ghidra.dbg.target.schema.TargetAttributeType;
+import ghidra.dbg.target.schema.TargetElementType;
+import ghidra.dbg.target.schema.TargetObjectSchemaInfo;
 import ghidra.dbg.util.PathUtils;
 
 @TargetObjectSchemaInfo(
@@ -38,26 +49,32 @@ import ghidra.dbg.util.PathUtils;
 			name = "Debug",
 			type = DbgModelTargetDebugContainerImpl.class,
 			required = true,
-			fixed = true),
+			fixed = true
+		),
 		@TargetAttributeType(
 			name = "Memory",
 			type = DbgModelTargetMemoryContainerImpl.class,
 			required = true,
-			fixed = true),
+			fixed = true
+		),
 		@TargetAttributeType(
 			name = "Modules",
 			type = DbgModelTargetModuleContainerImpl.class,
 			required = true,
-			fixed = true),
+			fixed = true
+		),
 		@TargetAttributeType(
 			name = "Threads",
 			type = DbgModelTargetThreadContainerImpl.class,
 			required = true,
-			fixed = true),
+			fixed = true
+		),
 		@TargetAttributeType(
 			name = DbgModelTargetProcessImpl.EXIT_CODE_ATTRIBUTE_NAME,
-			type = Long.class),
-		@TargetAttributeType(type = Void.class) })
+			type = Long.class
+		),
+		@TargetAttributeType(type = Void.class) }
+)
 public class DbgModelTargetProcessImpl extends DbgModelTargetObjectImpl
 		implements DbgModelTargetProcess {
 
@@ -68,7 +85,7 @@ public class DbgModelTargetProcessImpl extends DbgModelTargetObjectImpl
 		TargetAttachKind.BY_OBJECT_REF, TargetAttachKind.BY_ID);
 
 	protected static String indexProcess(DebugProcessId debugProcessId) {
-		return PathUtils.makeIndex(debugProcessId.id);
+		return debugProcessId.id();
 	}
 
 	protected static String indexProcess(DbgProcess process) {
@@ -85,8 +102,6 @@ public class DbgModelTargetProcessImpl extends DbgModelTargetObjectImpl
 	protected final DbgModelTargetMemoryContainer memory;
 	protected final DbgModelTargetModuleContainer modules;
 	protected final DbgModelTargetThreadContainer threads;
-	// Note: not sure section info is available from the dbgeng
-	//protected final DbgModelTargetProcessSectionContainer sections;
 
 	private Integer base = 16;
 
@@ -99,55 +114,65 @@ public class DbgModelTargetProcessImpl extends DbgModelTargetObjectImpl
 		this.debug = new DbgModelTargetDebugContainerImpl(this);
 		this.memory = new DbgModelTargetMemoryContainerImpl(this);
 		this.modules = new DbgModelTargetModuleContainerImpl(this);
-		//this.sections = new DbgModelTargetProcessSectionContainerImpl(this);
 		this.threads = new DbgModelTargetThreadContainerImpl(this);
 
 		changeAttributes(List.of(), List.of( //
 			debug, //
 			memory, //
 			modules, //
-			//sections, //
 			threads //
 		), Map.of( //
 			ACCESSIBLE_ATTRIBUTE_NAME, accessible = false, //
 			DISPLAY_ATTRIBUTE_NAME, getDisplay(), //
-			TargetMethod.PARAMETERS_ATTRIBUTE_NAME, PARAMETERS, //
 			SUPPORTED_ATTACH_KINDS_ATTRIBUTE_NAME, SUPPORTED_KINDS, //
 			SUPPORTED_STEP_KINDS_ATTRIBUTE_NAME, DbgModelTargetThreadImpl.SUPPORTED_KINDS //
 		), "Initialized");
-		setExecutionState(TargetExecutionState.ALIVE, "Initialized");
+		if (getManager().isKernelMode()) {
+			TargetExecutionState state =
+				process.getPid() > 0 ? TargetExecutionState.INACTIVE : TargetExecutionState.ALIVE;
+			setExecutionState(state, "Initialized");
+		}
+		else {
+			setExecutionState(TargetExecutionState.ALIVE, "Initialized");
+		}
 
 		getManager().addEventsListener(this);
 	}
 
 	@Override
 	public String getDisplay() {
+		DebugProcessId id = process.getId();
+		Long pid = process.getPid();
 		if (getManager().isKernelMode()) {
-			return "[kernel]";
+			if (id.isSystem()) {
+				return "[" + id.id() + "]";
+			}
+			String pidstr = Long.toString(pid, base);
+			if (base == 16) {
+				pidstr = "0x" + pidstr;
+			}
+			Long offset = process.getOffset();
+			return offset == null ? "[" + pidstr + "]"
+					: "[" + pidstr + " : " + Long.toHexString(offset) + "]";
 		}
-
-		String pidstr = Long.toString(process.getPid(), base);
-		if (base == 16) {
-			pidstr = "0x" + pidstr;
+		else {
+			if (pid < 0) {
+				return "[" + id.id() + "]";
+			}
+			String pidstr = Long.toString(pid, base);
+			if (base == 16) {
+				pidstr = "0x" + pidstr;
+			}
+			String name = process.getExecutableName();
+			return name == null ? "[" + id.id() + ":" + pidstr + "]"
+					: "[" + id.id() + ":" + pidstr + "]" + " : " + name;
 		}
-		return "[" + process.getId().id + ":" + pidstr + "]";
 	}
 
 	@Override
-	public void processSelected(DbgProcess eventProcess, DbgCause cause) {
-		if (eventProcess.equals(process)) {
-			((DbgModelTargetFocusScope) searchForSuitable(TargetFocusScope.class)).setFocus(this);
-		}
-	}
-
 	public void threadStateChangedSpecific(DbgThread thread, DbgState state) {
 		TargetExecutionState targetState = convertState(state);
 		setExecutionState(targetState, "ThreadStateChanged");
-	}
-
-	@Override
-	public CompletableFuture<Void> launch(List<String> args) {
-		return model.gateFuture(DbgModelImplUtils.launch(getModel(), process, args));
 	}
 
 	@Override
@@ -188,8 +213,6 @@ public class DbgModelTargetProcessImpl extends DbgModelTargetObjectImpl
 		switch (kind) {
 			case SKIP:
 				throw new UnsupportedOperationException(kind.name());
-			case ADVANCE: // Why no exec-advance in dbgeng?
-				throw new UnsupportedOperationException(kind.name());
 			default:
 				return model.gateFuture(process.step(convertToDbg(kind)));
 		}
@@ -218,7 +241,7 @@ public class DbgModelTargetProcessImpl extends DbgModelTargetObjectImpl
 				STATE_ATTRIBUTE_NAME, TargetExecutionState.TERMINATED, //
 				EXIT_CODE_ATTRIBUTE_NAME, proc.getExitCode() //
 			), "Exited");
-			getListeners().fire.event(getProxy(), null, TargetEventType.PROCESS_EXITED,
+			broadcast().event(getProxy(), null, TargetEventType.PROCESS_EXITED,
 				"Process " + proc.getId() + " exited code=" + proc.getExitCode(),
 				List.of(getProxy()));
 		}
@@ -227,7 +250,7 @@ public class DbgModelTargetProcessImpl extends DbgModelTargetObjectImpl
 	@Override
 	public void memoryChanged(DbgProcess proc, long addr, int len, DbgCause cause) {
 		if (proc.equals(this.process)) {
-			listeners.fire.invalidateCacheRequested(memory);
+			broadcast().invalidateCacheRequested(memory);
 		}
 	}
 
@@ -268,4 +291,14 @@ public class DbgModelTargetProcessImpl extends DbgModelTargetObjectImpl
 			DISPLAY_ATTRIBUTE_NAME, getDisplay()//
 		), "Started");
 	}
+
+	@Override
+	public CompletableFuture<Void> resync(RefreshBehavior refreshAttributes,
+			RefreshBehavior refreshElements) {
+		if (memory != null) {
+			memory.requestElements(RefreshBehavior.REFRESH_ALWAYS);
+		}
+		return super.resync(refreshAttributes, refreshElements);
+	}
+
 }

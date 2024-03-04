@@ -19,6 +19,7 @@ import java.io.IOException;
 
 import db.*;
 import ghidra.util.UniversalID;
+import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.VersionException;
 import ghidra.util.task.TaskMonitor;
 
@@ -28,34 +29,40 @@ import ghidra.util.task.TaskMonitor;
 abstract class TypedefDBAdapter {
 
 	static final String TYPEDEF_TABLE_NAME = "Typedefs";
-	static final Schema SCHEMA = TypedefDBAdapterV1.V1_SCHEMA;
+	static final Schema SCHEMA = TypedefDBAdapterV2.V2_SCHEMA;
 
-	static final int TYPEDEF_DT_ID_COL = TypedefDBAdapterV1.V1_TYPEDEF_DT_ID_COL;
-	static final int TYPEDEF_NAME_COL = TypedefDBAdapterV1.V1_TYPEDEF_NAME_COL;
-	static final int TYPEDEF_CAT_COL = TypedefDBAdapterV1.V1_TYPEDEF_CAT_COL;
+	static final int TYPEDEF_DT_ID_COL = TypedefDBAdapterV2.V2_TYPEDEF_DT_ID_COL;
+	static final int TYPEDEF_FLAGS_COL = TypedefDBAdapterV2.V2_TYPEDEF_FLAGS_COL;
+	static final int TYPEDEF_NAME_COL = TypedefDBAdapterV2.V2_TYPEDEF_NAME_COL;
+	static final int TYPEDEF_CAT_COL = TypedefDBAdapterV2.V2_TYPEDEF_CAT_COL;
 	static final int TYPEDEF_SOURCE_ARCHIVE_ID_COL =
-		TypedefDBAdapterV1.V1_TYPEDEF_SOURCE_ARCHIVE_ID_COL;
+		TypedefDBAdapterV2.V2_TYPEDEF_SOURCE_ARCHIVE_ID_COL;
 	static final int TYPEDEF_UNIVERSAL_DT_ID_COL =
-		TypedefDBAdapterV1.V1_TYPEDEF_UNIVERSAL_DT_ID_COL;
+		TypedefDBAdapterV2.V2_TYPEDEF_UNIVERSAL_DT_ID_COL;
 	static final int TYPEDEF_SOURCE_SYNC_TIME_COL =
-		TypedefDBAdapterV1.V1_TYPEDEF_SOURCE_SYNC_TIME_COL;
+		TypedefDBAdapterV2.V2_TYPEDEF_SOURCE_SYNC_TIME_COL;
 	static final int TYPEDEF_LAST_CHANGE_TIME_COL =
-		TypedefDBAdapterV1.V1_TYPEDEF_LAST_CHANGE_TIME_COL;
+		TypedefDBAdapterV2.V2_TYPEDEF_LAST_CHANGE_TIME_COL;
+
+	// Typedef flags bits
+	static final int TYPEDEF_FLAG_AUTONAME = 0x1;
 
 	/**
 	 * Gets an adapter for working with the Typedef data type database table. The adapter is based
 	 * on the version of the database associated with the specified database handle and the openMode.
 	 * @param handle handle to the database to be accessed.
 	 * @param openMode the mode this adapter is to be opened for (CREATE, UPDATE, READ_ONLY, UPGRADE).
+	 * @param tablePrefix prefix to be used with default table name
 	 * @param monitor the monitor to use for displaying status or for canceling.
 	 * @return the adapter for accessing the table of Typedef data types.
 	 * @throws VersionException if the database handle's version doesn't match the expected version.
 	 * @throws IOException if there is trouble accessing the database.
+	 * @throws CancelledException if task is cancelled
 	 */
-	static TypedefDBAdapter getAdapter(DBHandle handle, int openMode, TaskMonitor monitor)
-			throws VersionException, IOException {
+	static TypedefDBAdapter getAdapter(DBHandle handle, int openMode, String tablePrefix,
+			TaskMonitor monitor) throws VersionException, IOException, CancelledException {
 		try {
-			return new TypedefDBAdapterV1(handle, openMode == DBConstants.CREATE);
+			return new TypedefDBAdapterV2(handle, tablePrefix, openMode == DBConstants.CREATE);
 		}
 		catch (VersionException e) {
 			if (!e.isUpgradable() || openMode == DBConstants.UPDATE) {
@@ -63,7 +70,7 @@ abstract class TypedefDBAdapter {
 			}
 			TypedefDBAdapter adapter = findReadOnlyAdapter(handle);
 			if (openMode == DBConstants.UPGRADE) {
-				adapter = upgrade(handle, adapter);
+				adapter = upgrade(handle, adapter, tablePrefix, monitor);
 			}
 			return adapter;
 		}
@@ -75,7 +82,13 @@ abstract class TypedefDBAdapter {
 	 * @return the read only Typedef table adapter
 	 * @throws VersionException if a read only adapter can't be obtained for the database handle's version.
 	 */
-	static TypedefDBAdapter findReadOnlyAdapter(DBHandle handle) throws VersionException {
+	private static TypedefDBAdapter findReadOnlyAdapter(DBHandle handle) throws VersionException {
+		try {
+			return new TypedefDBAdapterV1(handle);
+		}
+		catch (VersionException e) {
+			// ignore
+		}
 		return new TypedefDBAdapterV0(handle);
 	}
 
@@ -83,28 +96,34 @@ abstract class TypedefDBAdapter {
 	 * Upgrades the Typedef data type table from the oldAdapter's version to the current version.
 	 * @param handle handle to the database whose table is to be upgraded to a newer version.
 	 * @param oldAdapter the adapter for the existing table to be upgraded.
+	 * @param tablePrefix prefix to be used with default table name
+	 * @param monitor task monitor
 	 * @return the adapter for the new upgraded version of the table.
 	 * @throws VersionException if the the table's version does not match the expected version
 	 * for this adapter.
 	 * @throws IOException if the database can't be read or written.
+	 * @throws CancelledException if task is cancelled
 	 */
-	static TypedefDBAdapter upgrade(DBHandle handle, TypedefDBAdapter oldAdapter)
-			throws VersionException, IOException {
+	private static TypedefDBAdapter upgrade(DBHandle handle, TypedefDBAdapter oldAdapter,
+			String tablePrefix, TaskMonitor monitor)
+			throws VersionException, IOException, CancelledException {
 
 		DBHandle tmpHandle = new DBHandle();
 		long id = tmpHandle.startTransaction();
 		TypedefDBAdapter tmpAdapter = null;
 		try {
-			tmpAdapter = new TypedefDBAdapterV1(tmpHandle, true);
+			tmpAdapter = new TypedefDBAdapterV2(tmpHandle, tablePrefix, true);
 			RecordIterator it = oldAdapter.getRecords();
 			while (it.hasNext()) {
+				monitor.checkCancelled();
 				DBRecord rec = it.next();
 				tmpAdapter.updateRecord(rec, false);
 			}
 			oldAdapter.deleteTable(handle);
-			TypedefDBAdapter newAdapter = new TypedefDBAdapterV1(handle, true);
+			TypedefDBAdapter newAdapter = new TypedefDBAdapterV2(handle, tablePrefix, true);
 			it = tmpAdapter.getRecords();
 			while (it.hasNext()) {
+				monitor.checkCancelled();
 				DBRecord rec = it.next();
 				newAdapter.updateRecord(rec, false);
 			}
@@ -120,6 +139,7 @@ abstract class TypedefDBAdapter {
 	 * Creates a database record for a type definition data type.
 	 * @param dataTypeID the ID of the data type that is referred to by this type definition.
 	 * @param name the unique name for this data type
+	 * @param flags typedef flags (e.g., auto-name flag bit).
 	 * @param categoryID the ID for the category that contains this data type.
 	 * @param sourceArchiveID the ID for the source archive where this data type originated.
 	 * @param sourceDataTypeID the ID of the associated data type in the source archive.
@@ -127,7 +147,7 @@ abstract class TypedefDBAdapter {
 	 * @return the database record for this data type.
 	 * @throws IOException if the database can't be accessed.
 	 */
-	abstract DBRecord createRecord(long dataTypeID, String name, long categoryID,
+	abstract DBRecord createRecord(long dataTypeID, String name, short flags, long categoryID,
 			long sourceArchiveID, long sourceDataTypeID, long lastChangeTime) throws IOException;
 
 	/**
@@ -195,5 +215,11 @@ abstract class TypedefDBAdapter {
 	 */
 	abstract DBRecord getRecordWithIDs(UniversalID sourceID, UniversalID datatypeID)
 			throws IOException;
+
+	/**
+	 * Get the number of typedef datatype records
+	 * @return total number of composite records
+	 */
+	public abstract int getRecordCount();
 
 }

@@ -110,102 +110,102 @@ public class DWARFNameInfoTest extends DWARFTestBase {
 
 	@Test
 	public void testNestedStructNames() throws CancelledException, IOException, DWARFException {
-		DebugInfoEntry structDIE = newStruct("struct", 100).create(cu);
-		DebugInfoEntry substructDIE = newStruct("substruct", 200).setParent(structDIE).create(cu);
+		DebugInfoEntry structDIE = newStruct("struct", 100).create();
+		DebugInfoEntry substructDIE = newStruct("substruct", 200).setParent(structDIE).create();
 
 		importAllDataTypes();
 
 		DataType structDT = dwarfDTM.getDataType(structDIE.getOffset(), null);
 		DataType substructDT = dwarfDTM.getDataType(substructDIE.getOffset(), null);
 
-		assertEquals(rootCP.getPath() + "/struct", structDT.getPathName());
-		assertEquals(rootCP.getPath() + "/struct/substruct", substructDT.getPathName());
+		assertEquals(uncatCP.getPath() + "/struct", structDT.getPathName());
+		assertEquals(uncatCP.getPath() + "/struct/substruct", substructDT.getPathName());
 	}
 
 	@Test
 	public void testNestedAnonStructNames_NotUsedInParent()
 			throws CancelledException, IOException, DWARFException {
-		DebugInfoEntry structDIE = newStruct("struct", 100).create(cu);
-		DebugInfoEntry substructDIE = newStruct(null, 200).setParent(structDIE).create(cu);
+		DebugInfoEntry structDIE = newStruct("struct", 100).create();
+		DebugInfoEntry substructDIE = newStruct(null, 200).setParent(structDIE).create();
 
 		importAllDataTypes();
 
 		DataType structDT = dwarfDTM.getDataType(structDIE.getOffset(), null);
 		DataType substructDT = dwarfDTM.getDataType(substructDIE.getOffset(), null);
 
-		assertEquals(rootCP.getPath() + "/struct", structDT.getPathName());
-		assertEquals(rootCP.getPath() + "/struct/anon_struct_200_0_00000001",
+		assertEquals(uncatCP.getPath() + "/struct", structDT.getPathName());
+		assertEquals(uncatCP.getPath() + "/struct/anon_struct_200_0_00000001",
 			substructDT.getPathName());
 	}
 
 	@Test
 	public void testNestedAnonStructNames_UsedInParent_Once()
 			throws CancelledException, IOException, DWARFException {
-		DebugInfoEntry structDIE = newStruct("struct", 100).create(cu);
-		DebugInfoEntry substructDIE = newStruct(null, 10).setParent(structDIE).create(cu);
-		newMember(structDIE, "f1", substructDIE, 0).create(cu);
+		DebugInfoEntry structDIE = newStruct("struct", 100).create();
+		DebugInfoEntry substructDIE = newStruct(null, 10).setParent(structDIE).create();
+		newMember(structDIE, "f1", substructDIE, 0).create();
 
 		importAllDataTypes();
 
 		DataType structDT = dwarfDTM.getDataType(structDIE.getOffset(), null);
 		DataType substructDT = dwarfDTM.getDataType(substructDIE.getOffset(), null);
 
-		assertEquals(rootCP.getPath() + "/struct", structDT.getPathName());
-		assertEquals(rootCP.getPath() + "/struct/anon_struct_10_0_00000001_for_f1",
+		assertEquals(uncatCP.getPath() + "/struct", structDT.getPathName());
+		assertEquals(uncatCP.getPath() + "/struct/anon_struct_10_0_00000001_for_f1",
 			substructDT.getPathName());
 	}
 
 	@Test
 	public void testNestedAnonStructNames_UsedInParent_Multi()
 			throws CancelledException, IOException, DWARFException {
-		DebugInfoEntry structDIE = newStruct("struct", 100).create(cu);
-		DebugInfoEntry substructDIE = newStruct(null, 10).setParent(structDIE).create(cu);
-		newMember(structDIE, "f1", substructDIE, 0).create(cu);
-		newMember(structDIE, "f2", substructDIE, 20).create(cu);
+		DebugInfoEntry structDIE = newStruct("struct", 100).create();
+		DebugInfoEntry substructDIE = newStruct(null, 10).setParent(structDIE).create();
+		newMember(structDIE, "f1", substructDIE, 0).create();
+		newMember(structDIE, "f2", substructDIE, 20).create();
 
 		importAllDataTypes();
 
 		DataType structDT = dwarfDTM.getDataType(structDIE.getOffset(), null);
 		DataType substructDT = dwarfDTM.getDataType(substructDIE.getOffset(), null);
 
-		assertEquals(rootCP.getPath() + "/struct", structDT.getPathName());
-		assertEquals(rootCP.getPath() + "/struct/anon_struct_10_0_00000001_for_f1_f2",
+		assertEquals(uncatCP.getPath() + "/struct", structDT.getPathName());
+		assertEquals(uncatCP.getPath() + "/struct/anon_struct_10_0_00000001_for_f1_f2",
 			substructDT.getPathName());
 	}
 
 	@Test
 	public void testNonNestedAnonStructNames_UsedInParent_Once()
 			throws CancelledException, IOException, DWARFException {
-		DebugInfoEntry anonstructDIE = newStruct(null, 10).create(cu);
-		DebugInfoEntry structDIE = newStruct("struct", 100).create(cu);
-		newMember(structDIE, "f1", anonstructDIE, 0).create(cu);
-		newMember(structDIE, "f2", anonstructDIE, 20).create(cu);
+		DebugInfoEntry anonstructDIE = newStruct(null, 10).create();
+		DebugInfoEntry structDIE = newStruct("struct", 100).create();
+		newMember(structDIE, "f1", anonstructDIE, 0).create();
+		newMember(structDIE, "f2", anonstructDIE, 20).create();
 
 		importAllDataTypes();
 
 		Structure structDT = (Structure) dwarfDTM.getDataType(structDIE.getOffset(), null);
 
-		assertEquals(rootCP.getPath() + "/struct", structDT.getPathName());
+		assertEquals(uncatCP.getPath() + "/struct", structDT.getPathName());
 	}
 
 	@Test
 	public void testNonNestedStructNames() throws CancelledException, IOException, DWARFException {
-		DebugInfoEntry struct4FieldDIE = newStruct("struct_10", 10).create(cu);
-		DebugInfoEntry structDIE = newStruct("struct", 100).create(cu);
-		newMember(structDIE, "f1", struct4FieldDIE, 0).create(cu);
-		newMember(structDIE, "f2", struct4FieldDIE, 20).create(cu);
+		DebugInfoEntry struct4FieldDIE = newStruct("struct_10", 10).create();
+		DebugInfoEntry structDIE = newStruct("struct", 100).create();
+		newMember(structDIE, "f1", struct4FieldDIE, 0).create();
+		newMember(structDIE, "f2", struct4FieldDIE, 20).create();
 
 		importAllDataTypes();
 
 		Structure structDT = (Structure) dwarfDTM.getDataType(structDIE.getOffset(), null);
 
-		assertEquals(rootCP.getPath() + "/struct", structDT.getPathName());
+		assertEquals(uncatCP.getPath() + "/struct", structDT.getPathName());
 	}
 
 	@Test
 	public void testFuncDef() throws CancelledException, IOException, DWARFException {
-		DebugInfoEntry intDIE = addInt(cu);
-		DebugInfoEntry funcDIE = addSubroutineType("operator <", intDIE, cu);
+		DebugInfoEntry intDIE = addInt();
+		DebugInfoEntry funcDIE = addSubroutineType("operator <", intDIE);
 
 		importAllDataTypes();
 
@@ -217,16 +217,16 @@ public class DWARFNameInfoTest extends DWARFTestBase {
 
 	@Test
 	public void testAnonFuncDef() throws CancelledException, IOException, DWARFException {
-		DebugInfoEntry intDIE = addInt(cu);
-		DebugInfoEntry funcDIE = addSubroutineType(null, intDIE, cu);
-		DebugInfoEntry func2DIE = addSubroutineType(null, null, cu);
+		DebugInfoEntry intDIE = addInt();
+		DebugInfoEntry funcDIE = addSubroutineType(null, intDIE);
+		DebugInfoEntry func2DIE = addSubroutineType(null, null);
 
 		importAllDataTypes();
 
 		DataType dt = dwarfDTM.getDataType(funcDIE.getOffset(), null);
 		DataType dt2 = dwarfDTM.getDataType(func2DIE.getOffset(), null);
 
-		assertEquals("anon_subr_int", dt.getName());
-		assertEquals("anon_subr_void", dt2.getName());
+		assertEquals("_func_int", dt.getName());
+		assertEquals("_func_void", dt2.getName());
 	}
 }

@@ -1,6 +1,5 @@
 /* ###
  * IP: GHIDRA
- * REVIEWED: YES
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +129,7 @@ public class InMemoryRangeMapAdapter implements RangeMapAdapter {
 		AddressRangeObjectMap<byte[]> newRangeMap = new AddressRangeObjectMap<byte[]>();
 		AddressRangeIterator addressRangeIterator = rangeMap.getAddressRangeIterator();
 		while (addressRangeIterator.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			AddressRange range = addressRangeIterator.next();
 			byte[] oldBytes = rangeMap.getObject(range.getMinAddress());
 			RegisterValue regValue = new RegisterValue(mapReg, oldBytes);
@@ -142,5 +141,10 @@ public class InMemoryRangeMapAdapter implements RangeMapAdapter {
 			newRangeMap.setObject(range.getMinAddress(), range.getMaxAddress(), newBytes);
 		}
 		rangeMap = newRangeMap;
+	}
+
+	@Override
+	public void invalidate() {
+		rangeMap.clearCache();
 	}
 }

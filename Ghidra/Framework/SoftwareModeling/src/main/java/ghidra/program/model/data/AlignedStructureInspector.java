@@ -117,11 +117,6 @@ public class AlignedStructureInspector extends AlignedStructurePacker {
 		}
 
 		@Override
-		public void setDefaultSettings(Settings settings) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
 		public void setComment(String comment) {
 			throw new UnsupportedOperationException();
 		}
@@ -138,10 +133,7 @@ public class AlignedStructureInspector extends AlignedStructurePacker {
 
 		@Override
 		public String getDefaultFieldName() {
-			if (isZeroBitFieldComponent()) {
-				return "";
-			}
-			return DEFAULT_FIELD_NAME_PREFIX + "_0x" + Integer.toHexString(getOffset());
+			return component.getDefaultFieldName();
 		}
 
 		@Override

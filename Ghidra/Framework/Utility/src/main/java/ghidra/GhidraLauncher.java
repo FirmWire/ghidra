@@ -16,12 +16,14 @@
 package ghidra;
 
 import java.io.*;
+import java.lang.reflect.Constructor;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import generic.jar.ResourceFile;
 import ghidra.framework.GModule;
 import ghidra.util.SystemUtilities;
+import utilities.util.FileUtilities;
 import utility.application.ApplicationLayout;
 import utility.module.ModuleUtilities;
 
@@ -46,16 +48,33 @@ public class GhidraLauncher {
 
 		// Initialize the Ghidra environment
 		GhidraApplicationLayout layout = initializeGhidraEnvironment();
-		
-		// Make sure the thing to launch is a GhidraLaunchable
-		Class<?> cls = ClassLoader.getSystemClassLoader().loadClass(args[0]);
+
+		// Make sure the thing to launch meets the criteria:
+		// 1) Class exists
+		// 2) Class implements GhidraLaunchable
+		// 3) Class has a 0-argument constructor
+		Class<?> cls;
+		try {
+			cls = ClassLoader.getSystemClassLoader().loadClass(args[0]);
+		}
+		catch (ClassNotFoundException e) {
+			throw new IllegalArgumentException("\"" + args[0] + "\" class was not found");
+		}
 		if (!GhidraLaunchable.class.isAssignableFrom(cls)) {
 			throw new IllegalArgumentException("\"" + args[0] + "\" is not a launchable class");
+		}
+		Constructor<?> constructor;
+		try {
+			constructor = cls.getConstructor();
+		}
+		catch (NoSuchMethodException e) {
+			throw new IllegalArgumentException(
+				"\"" + args[0] + "\" does not have a 0-argument constructor");
 		}
 
 		// Launch the target class, which is the first argument.  Strip off the first argument
 		// and pass the rest through to the target class's launch method.
-		GhidraLaunchable launchable = (GhidraLaunchable) cls.getConstructor().newInstance();
+		GhidraLaunchable launchable = (GhidraLaunchable) constructor.newInstance();
 		launchable.launch(layout, Arrays.copyOfRange(args, 1, args.length));
 	}
 
@@ -97,7 +116,7 @@ public class GhidraLauncher {
 
 		// Get application layout
 		GhidraApplicationLayout layout = new GhidraApplicationLayout();
-		
+
 		// Get the classpath
 		List<String> classpathList = buildClasspath(layout);
 
@@ -122,13 +141,40 @@ public class GhidraLauncher {
 		Map<String, GModule> modules = getOrderedModules(layout);
 
 		if (SystemUtilities.isInDevelopmentMode()) {
+
+			// First add Eclipse's module "bin" paths.  If we didn't find any, assume Ghidra was 
+			// compiled with Gradle, and add the module jars Gradle built.
 			addModuleBinPaths(classpathList, modules);
+			boolean gradleDevMode = classpathList.isEmpty();
+			if (gradleDevMode) {
+				// Add the module jars Gradle built.
+				// Note: this finds Extensions' jar files so there is no need to to call
+				// addExtensionJarPaths()
+				addModuleJarPaths(classpathList, modules);
+			}
+			else { /* Eclipse dev mode */
+				// Support loading pre-built, jar-based, non-repo extensions in Eclipse dev mode
+				addExtensionJarPaths(classpathList, modules, layout);
+			}
+
+			// In development mode, jars do not live in module directories. Instead, each jar lives
+			// in an external, non-repo location, which is listed in build/libraryDependencies.txt.
 			addExternalJarPaths(classpathList, layout.getApplicationRootDirs());
 		}
 		else {
 			addPatchPaths(classpathList, layout.getPatchDir());
 			addModuleJarPaths(classpathList, modules);
 		}
+
+		//
+		// The framework may choose to handle extension class loading separately from all other 
+		// class loading.  In that case, we will separate the extension jar files from standard 
+		// module jar files. 
+		//
+		// (If the custom extension class loading is disabled, then the extensions will be put onto
+		// the standard classpath.)
+		setExtensionJarPaths(modules, layout, classpathList);
+
 		classpathList = orderClasspath(classpathList, modules);
 		return classpathList;
 	}
@@ -160,7 +206,7 @@ public class GhidraLauncher {
 	 * @param modules The modules to get the bin directories of.
 	 */
 	private static void addModuleBinPaths(List<String> pathList, Map<String, GModule> modules) {
-		Collection<ResourceFile> dirs = ModuleUtilities.getModuleBinDirectories(modules);
+		Collection<ResourceFile> dirs = ModuleUtilities.getModuleBinDirectories(modules.values());
 		dirs.forEach(d -> pathList.add(d.getAbsolutePath()));
 	}
 
@@ -171,8 +217,67 @@ public class GhidraLauncher {
 	 * @param modules The modules to get the jars of.
 	 */
 	private static void addModuleJarPaths(List<String> pathList, Map<String, GModule> modules) {
-		Collection<ResourceFile> dirs = ModuleUtilities.getModuleLibDirectories(modules);
+		Collection<ResourceFile> dirs = ModuleUtilities.getModuleLibDirectories(modules.values());
 		dirs.forEach(d -> pathList.addAll(findJarsInDir(d)));
+	}
+
+	/**
+	 * Initializes the Extension classpath system property, unless disabled.
+	 * @param modules the known modules
+	 * @param layout the application layout
+	 * @param classpathList the standard classpath elements
+	 */
+	private static void setExtensionJarPaths(Map<String, GModule> modules,
+			GhidraApplicationLayout layout, List<String> classpathList) {
+
+		if (!Boolean.getBoolean(GhidraClassLoader.ENABLE_RESTRICTED_EXTENSIONS_PROPERTY)) {
+			// custom extension class loader is disabled; use normal classpath
+			return;
+		}
+
+		List<String> extClasspathList = new ArrayList<>();
+		addExtensionJarPaths(extClasspathList, modules, layout);
+
+		// Remove the extensions that were added before this method was called
+		classpathList.removeAll(extClasspathList);
+
+		String extCp = String.join(File.pathSeparator, extClasspathList);
+		System.setProperty(GhidraClassLoader.CP_EXT, extCp);
+	}
+
+	/**
+	 * Add extension module lib jars to the given path list.  (This only needed in dev mode to find 
+	 * any pre-built extensions that have been installed, since  we already find extension module 
+	 * jars in production mode.)
+	 * 
+	 * @param pathList The list of paths to add to.
+	 * @param modules The modules to get the jars of.
+	 * @param layout the application layout.
+	 */
+	private static void addExtensionJarPaths(List<String> pathList,
+			Map<String, GModule> modules, GhidraApplicationLayout layout) {
+
+		List<ResourceFile> extensionInstallationDirs = layout.getExtensionInstallationDirs();
+		for (GModule module : modules.values()) {
+
+			ResourceFile moduleDir = module.getModuleRoot();
+			if (!FileUtilities.isPathContainedWithin(extensionInstallationDirs, moduleDir)) {
+				continue; // not an extension
+			}
+
+			Collection<ResourceFile> libDirs =
+				ModuleUtilities.getModuleLibDirectories(Set.of(module));
+			if (libDirs.size() != 1) {
+				continue; // assume multiple lib dirs signals a non-built development project
+			}
+
+			// We have one lib dir; the name 'lib' is used for a fully built extension.  Grab all 
+			// jars from the built extensions lib directory.
+			ResourceFile dir = libDirs.iterator().next();
+			if (dir.getName().equals("lib")) {
+				pathList.addAll(findJarsInDir(dir));
+			}
+		}
 	}
 
 	/**
@@ -213,6 +318,10 @@ public class GhidraLauncher {
 				String path = line.trim();
 				if (!path.startsWith("Module:") && path.endsWith(".jar")) {
 					ResourceFile jarFile = new ResourceFile(path);
+					if (path.startsWith("#") || path.startsWith("//")) {
+						System.err.println("Skipping jar file: " + jarFile);
+						continue;
+					}
 					if (!jarFile.isFile()) {
 						System.err.println("Failed to find required jar file: " + jarFile);
 						continue;

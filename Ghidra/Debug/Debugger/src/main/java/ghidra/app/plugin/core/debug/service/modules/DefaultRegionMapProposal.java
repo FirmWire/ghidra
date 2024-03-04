@@ -18,13 +18,12 @@ package ghidra.app.plugin.core.debug.service.modules;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import com.google.common.collect.Range;
-
-import ghidra.app.services.RegionMapProposal;
-import ghidra.app.services.RegionMapProposal.RegionMapEntry;
+import ghidra.debug.api.modules.RegionMapProposal;
+import ghidra.debug.api.modules.RegionMapProposal.RegionMapEntry;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.Trace;
 import ghidra.trace.model.memory.TraceMemoryRegion;
 
@@ -52,7 +51,7 @@ public class DefaultRegionMapProposal
 		}
 
 		@Override
-		public Range<Long> getFromLifespan() {
+		public Lifespan getFromLifespan() {
 			return getRegion().getLifespan();
 		}
 
@@ -94,10 +93,14 @@ public class DefaultRegionMapProposal
 		}
 
 		protected int computeOffsetScore() {
-			long fOff = fromRange.getMinAddress().subtract(fromBase);
-			long tOff = toRange.getMinAddress().subtract(toBase);
-			if (fOff == tOff) {
-				return 10;
+			try {
+				long fOff = fromRange.getMinAddress().subtract(fromBase);
+				long tOff = toRange.getMinAddress().subtract(toBase);
+				if (fOff == tOff) {
+					return 10;
+				}
+			} catch (IllegalArgumentException e) {
+				// fell-through
 			}
 			return 0;
 		}

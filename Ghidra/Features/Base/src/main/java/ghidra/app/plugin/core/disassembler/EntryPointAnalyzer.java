@@ -15,7 +15,7 @@
  */
 /*
  * EntryPointAnalyzer.java
- * 
+ *
  * Created on Aug 27, 2003
  */
 package ghidra.app.plugin.core.disassembler;
@@ -30,8 +30,8 @@ import ghidra.app.util.importer.MessageLog;
 import ghidra.framework.options.Options;
 import ghidra.program.disassemble.Disassembler;
 import ghidra.program.model.address.*;
-import ghidra.program.model.data.DataTypeConflictException;
 import ghidra.program.model.data.PointerDataType;
+import ghidra.program.model.lang.AddressLabelInfo;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.*;
@@ -41,7 +41,7 @@ import ghidra.util.task.TaskMonitor;
 
 public class EntryPointAnalyzer extends AbstractAnalyzer {
 
-	private final static String NAME = "Disassemble Entry Points";
+	public final static String NAME = "Disassemble Entry Points";
 	private static final String DESCRIPTION = "Disassembles entry points in newly added memory.";
 
 	private final static String OPTION_NAME_RESPECT_EXECUTE_FLAG = "Respect Execute Flag";
@@ -78,8 +78,7 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 
 	@Override
 	public boolean added(Program program, AddressSetView addressSet, TaskMonitor monitor,
-			MessageLog log)
-			throws CancelledException {
+			MessageLog log) throws CancelledException {
 
 		monitor.initialize(addressSet.getNumAddresses());
 
@@ -139,13 +138,12 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 	/**
 	 * Process the items on the do later set.  If doing block analysis, then this is the initial
 	 * analysis of the program, so schedule the do later set after some analysis has occurred.
-	 * 
+	 *
 	 * @param program - this program
 	 * @param monitor - monitor
 	 * @param doLaterSet - set of functions that were put off until later
 	 */
-	private void processDoLaterSet(Program program, TaskMonitor monitor,
-			Set<Address> doLaterSet) {
+	private void processDoLaterSet(Program program, TaskMonitor monitor, Set<Address> doLaterSet) {
 		// nothing to do
 		if (doLaterSet.isEmpty()) {
 			return;
@@ -166,11 +164,11 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 
 	/**
 	 * Check for a single external entry point.
-	 * 
+	 *
 	 * @param program - program to check
 	 * @param externalCount - count of external entry points found
 	 * @param doNowSet - set of functions that are to be done now
-	 * 
+	 *
 	 * @return true if this program has only one external entry point
 	 */
 	private boolean isSingleExternalEntryPoint(Program program, int externalCount,
@@ -233,10 +231,8 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 				// find all functions that jumped to this one, and re-create them
 				while (referencesTo.hasNext()) {
 					Reference reference = referencesTo.next();
-					Function func =
-						program.getFunctionManager()
-								.getFunctionContaining(
-									reference.getFromAddress());
+					Function func = program.getFunctionManager()
+							.getFunctionContaining(reference.getFromAddress());
 					if (func != null) {
 						recreateFunctionSet.add(func.getEntryPoint());
 					}
@@ -263,15 +259,15 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 		}
 	}
 
-	private void checkDoLaterSet(Program program, TaskMonitor monitor,
-			Set<Address> doLaterSet) throws CancelledException {
+	private void checkDoLaterSet(Program program, TaskMonitor monitor, Set<Address> doLaterSet)
+			throws CancelledException {
 		PseudoDisassembler pdis = new PseudoDisassembler(program);
 		pdis.setRespectExecuteFlag(respectExecuteFlags);
 		Listing listing = program.getListing();
 		for (Iterator<Address> laterIter = doLaterSet.iterator(); laterIter.hasNext();) {
 			Address entry = laterIter.next();
 
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 
 			if (!listing.isUndefined(entry, entry)) {
 				laterIter.remove();
@@ -279,7 +275,7 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 			}
 
 			// relocation at this place, don't trust it
-			if (program.getRelocationTable().getRelocation(entry) != null) {
+			if (program.getRelocationTable().hasRelocation(entry)) {
 				laterIter.remove();
 				continue;
 			}
@@ -301,13 +297,15 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 		Listing listing = program.getListing();
 		SymbolTable symbolTable = program.getSymbolTable();
 
+		Set<Address> indirectSet = new HashSet();
+
 		Iterator<Address> iter = doNowSet.iterator();
 		while (iter.hasNext()) {
 			Address entry = iter.next();
 
 			monitor.setProgress(count++);
 
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 
 			// already disassembled
 			if (!listing.isUndefined(entry, entry)) {
@@ -328,7 +326,10 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 				// check for an address
 				if (isLanguageDefinedEntryPointer(program, entry)) {
 					// put down an address if it is
-					layDownCodePointer(program, doLaterSet, entry);
+					Address newLoc = layDownCodePointer(program, entry);
+					if (newLoc != null) {
+						indirectSet.add(newLoc);
+					}
 					iter.remove();
 				}
 			}
@@ -337,34 +338,34 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 				iter.remove();
 			}
 		}
+
+		// add any language defined pointers back into the do now set
+		doNowSet.addAll(indirectSet);
 	}
 
-	private void layDownCodePointer(Program program, Set<Address> doLaterSet, Address entry) {
+	private Address layDownCodePointer(Program program, Address entry) {
 		int defaultPointerSize = program.getDefaultPointerSize();
 		try {
-			Data data =
-				program.getListing()
-						.createData(entry,
-							PointerDataType.getPointer(null, defaultPointerSize));
+			Data data = program.getListing()
+					.createData(entry, PointerDataType.getPointer(null, defaultPointerSize));
 			Object value = data.getValue();
 			if (value instanceof Address) {
 				Address codeLoc = (Address) value;
-				// align if necessary
-				int instructionAlignment = program.getLanguage().getInstructionAlignment();
-				if (codeLoc.getOffset() % instructionAlignment != 0) {
-					codeLoc = codeLoc.subtract(codeLoc.getOffset() % instructionAlignment);
-				}
 				if (codeLoc.getOffset() != 0) {
-					doLaterSet.add(codeLoc);
+					PseudoDisassembler.setTargetContextForDisassembly(program, codeLoc);
+					// align if necessary
+					int instructionAlignment = program.getLanguage().getInstructionAlignment();
+					if (codeLoc.getOffset() % instructionAlignment != 0) {
+						codeLoc = codeLoc.subtract(codeLoc.getOffset() % instructionAlignment);
+					}
+					return codeLoc;
 				}
 			}
 		}
 		catch (CodeUnitInsertionException e) {
 			// couldn't create
 		}
-		catch (DataTypeConflictException e) {
-			// couldn't create
-		}
+		return null;
 	}
 
 	private int addExternalSymbolsToSet(Program program, AddressSetView addressSet,
@@ -375,7 +376,7 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 		AddressIterator aiter = program.getSymbolTable().getExternalEntryPointIterator();
 		while (aiter.hasNext()) {
 			externalCount++;
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			Address entryAddr = aiter.next();
 			Symbol entry = symbolTable.getPrimarySymbol(entryAddr);
 			// make sure to put on things that are external entry points, but not defined symbols.
@@ -393,7 +394,7 @@ public class EntryPointAnalyzer extends AbstractAnalyzer {
 		SymbolIterator symbolIter = symbolTable.getSymbols(addressSet, SymbolType.LABEL, true);
 
 		while (symbolIter.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			Symbol entry = symbolIter.next();
 			Address entryAddr = entry.getAddress();
 			if (addressSet.contains(entryAddr)) {

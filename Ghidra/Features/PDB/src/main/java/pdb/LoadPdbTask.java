@@ -21,6 +21,7 @@ import java.lang.reflect.InvocationTargetException;
 
 import ghidra.app.plugin.core.analysis.*;
 import ghidra.app.plugin.core.datamgr.archive.DuplicateIdException;
+import ghidra.app.plugin.core.disassembler.EntryPointAnalyzer;
 import ghidra.app.services.DataTypeManagerService;
 import ghidra.app.util.bin.format.pdb.PdbException;
 import ghidra.app.util.bin.format.pdb.PdbParser;
@@ -84,7 +85,7 @@ class LoadPdbTask extends Task {
 					else if (!parseWithNewParser(log, wrappedMonitor)) {
 						return false;
 					}
-					analyzeSymbols(currentMonitor, log);
+					scheduleAdditionalAnalysis();
 				}
 				catch (IOException e) {
 					log.appendMsg("PDB IO Error: " + e.getMessage());
@@ -94,8 +95,8 @@ class LoadPdbTask extends Task {
 		};
 
 		try {
-			AutoAnalysisManager.getAnalysisManager(program).scheduleWorker(worker, null, true,
-				wrappedMonitor);
+			AutoAnalysisManager.getAnalysisManager(program)
+					.scheduleWorker(worker, null, true, wrappedMonitor);
 		}
 		catch (InterruptedException | CancelledException e) {
 			// ignore
@@ -141,13 +142,13 @@ class LoadPdbTask extends Task {
 
 		pdbApplicatorOptions.setProcessingControl(control);
 
-		try (AbstractPdb pdb = ghidra.app.util.bin.format.pdb2.pdbreader.PdbParser.parse(
-			pdbFile.getAbsolutePath(), pdbReaderOptions, monitor)) {
+		try (AbstractPdb pdb = ghidra.app.util.bin.format.pdb2.pdbreader.PdbParser.parse(pdbFile,
+			pdbReaderOptions, monitor)) {
 			monitor.setMessage("PDB: Parsing " + pdbFile + "...");
-			pdb.deserialize(monitor);
-			PdbApplicator applicator = new PdbApplicator(pdbFile.getAbsolutePath(), pdb);
+			pdb.deserialize();
+			DefaultPdbApplicator applicator = new DefaultPdbApplicator(pdb);
 			applicator.applyTo(program, program.getDataTypeManager(), program.getImageBase(),
-				pdbApplicatorOptions, monitor, log);
+				pdbApplicatorOptions, log);
 
 			return true;
 		}
@@ -157,27 +158,43 @@ class LoadPdbTask extends Task {
 		return false;
 	}
 
-	private void analyzeSymbols(TaskMonitor monitor, MessageLog log) {
+	// We need to kick off any byte analyzers (like getting import symbols), as they typically
+	// won't get kicked off by our loading of the PDB.
+	private void scheduleAdditionalAnalysis() {
 
-		MicrosoftDemanglerAnalyzer demanglerAnalyzer = new MicrosoftDemanglerAnalyzer();
-		String analyzerName = demanglerAnalyzer.getName();
-
+		AddressSetView addrs = program.getMemory();
+		AutoAnalysisManager manager = AutoAnalysisManager.getAnalysisManager(program);
 		Options analysisProperties = program.getOptions(Program.ANALYSIS_PROPERTIES);
-		String defaultValueAsString = analysisProperties.getValueAsString(analyzerName);
-		boolean doDemangle = true;
-		if (defaultValueAsString != null) {
-			doDemangle = Boolean.parseBoolean(defaultValueAsString);
+
+		if (!useMsDiaParser && control == PdbApplicatorControl.ALL) {
+			// one-byte functions could have been laid down
+			scheduleEntryPointAnalyzer(manager, analysisProperties, addrs);
+		}
+		if (useMsDiaParser || control != PdbApplicatorControl.DATA_TYPES_ONLY) {
+			// mangled symbols could have been laid down
+			scheduleDemanglerAnalyzer(manager, analysisProperties, addrs);
 		}
 
-		if (doDemangle) {
-			AddressSetView addrs = program.getMemory();
-			monitor.initialize(addrs.getNumAddresses());
-			try {
-				demanglerAnalyzer.added(program, addrs, monitor, log);
-			}
-			catch (CancelledException e) {
-				// ignore cancel
-			}
-		}
 	}
+
+	private void scheduleEntryPointAnalyzer(AutoAnalysisManager manager, Options analysisProperties,
+			AddressSetView addrs) {
+		// Only schedule analyzer if enabled
+		if (!analysisProperties.getBoolean(EntryPointAnalyzer.NAME, false)) {
+			return;
+		}
+		EntryPointAnalyzer entryPointAnalyzer = new EntryPointAnalyzer();
+		manager.scheduleOneTimeAnalysis(entryPointAnalyzer, addrs);
+	}
+
+	private void scheduleDemanglerAnalyzer(AutoAnalysisManager manager, Options analysisProperties,
+			AddressSetView addrs) {
+		// Only schedule analyzer if enabled
+		if (!analysisProperties.getBoolean(MicrosoftDemanglerAnalyzer.NAME, false)) {
+			return;
+		}
+		MicrosoftDemanglerAnalyzer demanglerAnalyzer = new MicrosoftDemanglerAnalyzer();
+		manager.scheduleOneTimeAnalysis(demanglerAnalyzer, addrs);
+	}
+
 }

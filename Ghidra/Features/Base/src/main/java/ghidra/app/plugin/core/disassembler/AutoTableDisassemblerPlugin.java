@@ -67,7 +67,7 @@ public class AutoTableDisassemblerPlugin extends ProgramPlugin implements Domain
 	final static String SEARCH_ACTION_NAME = "Search for Address Tables";
 
 	public AutoTableDisassemblerPlugin(PluginTool tool) {
-		super(tool, true, true);
+		super(tool);
 	}
 
 	@Override
@@ -151,7 +151,8 @@ public class AutoTableDisassemblerPlugin extends ProgramPlugin implements Domain
 		findTableAction.setHelpLocation(
 			new HelpLocation(HelpTopics.SEARCH, findTableAction.getName()));
 		findTableAction.setMenuBarData(new MenuData(
-			new String[] { ToolConstants.MENU_SEARCH, "For Address Tables" }, null, "search for"));
+			new String[] { ToolConstants.MENU_SEARCH, "For Address Tables" }, null, "search for",
+			-1, "AddressTables"));
 		findTableAction.setDescription(getPluginDescription().getDescription());
 		findTableAction.addToWindowWhen(NavigatableActionContext.class);
 		tool.addAction(findTableAction);

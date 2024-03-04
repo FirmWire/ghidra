@@ -27,6 +27,7 @@ import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.format.dwarf4.DWARFUtil.LengthResult;
 import ghidra.app.util.bin.format.dwarf4.encoding.DWARFAttribute;
 import ghidra.app.util.bin.format.dwarf4.next.DWARFProgram;
+import ghidra.program.model.data.LEB128;
 
 public class DWARFLine {
 	private long unit_length;
@@ -48,7 +49,7 @@ public class DWARFLine {
 	 * DebugLine stream (if present).
 	 * 
 	 * @param diea {@link DIEAggregate} compile unit DIE(a) 
-	 * @return a new DWARFLine instance if DW_AT_stmt_list & stream are present, otherwise null
+	 * @return a new DWARFLine instance if DW_AT_stmt_list and stream are present, otherwise null
 	 * @throws IOException if error reading data
 	 * @throws DWARFException if bad DWARF values
 	 */
@@ -189,6 +190,17 @@ public class DWARFLine {
 			"Negative file index was given: " + Integer.toString(index));
 	}
 
+	/**
+	 * Returns true if file exists.
+	 * 
+	 * @param index file number, excluding 0
+	 * @return boolean true if file exists
+	 */
+	public boolean isValidFileIndex(int index) {
+		index--;
+		return 0 <= index && index < file_names.size();
+	}
+
 	@Override
 	public String toString() {
 		StringBuffer buffer = new StringBuffer();
@@ -226,9 +238,9 @@ public class DWARFLine {
 
 			// This entry exists only if the length of the string is more than 0
 			if (this.name.length() > 0) {
-				this.directory_index = LEB128.readAsLong(reader, false);
-				this.modification_time = LEB128.readAsLong(reader, false);
-				this.length = LEB128.readAsLong(reader, false);
+				this.directory_index = reader.readNext(LEB128::unsigned);
+				this.modification_time = reader.readNext(LEB128::unsigned);
+				this.length = reader.readNext(LEB128::unsigned);
 			}
 		}
 

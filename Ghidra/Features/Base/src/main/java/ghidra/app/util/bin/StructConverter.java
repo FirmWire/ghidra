@@ -70,11 +70,21 @@ public interface StructConverter {
 	/**
 	 * Reusable 32-bit image base offset datatype. 
 	 */
-	public final static DataType IBO32 = new ImageBaseOffset32DataType();
+	public final static DataType IBO32 = IBO32DataType.dataType;
 	/**
 	 * Reusable 64-bit image base offset datatype. 
 	 */
-	public final static DataType IBO64 = new ImageBaseOffset64DataType();
+	public final static DataType IBO64 = IBO64DataType.dataType;
+
+	/**
+	 * Reusable Unsigned LEB128 dynamic length data type
+	 */
+	public static final UnsignedLeb128DataType ULEB128 = UnsignedLeb128DataType.dataType;
+
+	/**
+	 * Reusable Signed LEB128 dynamic length data type
+	 */
+	public static final SignedLeb128DataType SLEB128 = SignedLeb128DataType.dataType;
 
 	/**
 	 * Returns a structure datatype representing the

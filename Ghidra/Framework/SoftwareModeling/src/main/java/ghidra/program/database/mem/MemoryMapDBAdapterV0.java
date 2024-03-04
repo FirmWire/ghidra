@@ -167,7 +167,7 @@ class MemoryMapDBAdapterV0 extends MemoryMapDBAdapter {
 				record.setIntValue(SUB_INT_DATA1_COL, bufID);
 				return new BufferSubMemoryBlock(this, record);
 			case UNINITIALIZED:
-				record.setByteValue(SUB_TYPE_COL, SUB_TYPE_UNITIALIZED);
+				record.setByteValue(SUB_TYPE_COL, SUB_TYPE_UNINITIALIZED);
 				return new UninitializedSubMemoryBlock(this, record);
 			default:
 				throw new IOException("Unknown memory block type: " + type);
@@ -210,7 +210,7 @@ class MemoryMapDBAdapterV0 extends MemoryMapDBAdapter {
 	}
 
 	@Override
-	void deleteMemoryBlock(long key) throws IOException {
+	void deleteMemoryBlock(MemoryBlockDB block) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 

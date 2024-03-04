@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 import ghidra.async.AsyncFence;
 import ghidra.async.AsyncUtils;
 import ghidra.dbg.*;
+import ghidra.dbg.DebuggerObjectModel.RefreshBehavior;
 import ghidra.dbg.error.DebuggerModelTypeException;
 import ghidra.dbg.target.schema.*;
 import ghidra.dbg.util.PathUtils;
@@ -155,6 +156,13 @@ import ghidra.lifecycle.Internal;
  * object or throw an exception. In those cases, unless otherwise noted, this actually means the
  * future will complete with that object, or complete exceptionally. Specifying this in every
  * instance is just pedantic.
+ * 
+ * <p>
+ * Assuming Trace RMI is successful, this interface will face a serious identity crisis. It will no
+ * longer serve its purpose as a proper Java interface, and instead will only serve as a type name
+ * in the object-model schema, which survives in the trace database. For some of the interfaces, we
+ * already have defined equivalent interfaces in the trace object manager. We will probably port
+ * additional interfaces over and eventually remove all of these.
  */
 public interface TargetObject extends Comparable<TargetObject> {
 
@@ -527,17 +535,18 @@ public interface TargetObject extends Comparable<TargetObject> {
 	 * @param refresh true to invalidate all caches involved in handling this request
 	 * @return a future which completes with a name-value map of attributes
 	 */
-	public default CompletableFuture<? extends Map<String, ?>> fetchAttributes(boolean refresh) {
+	public default CompletableFuture<? extends Map<String, ?>> fetchAttributes(
+			RefreshBehavior refresh) {
 		return getModel().fetchObjectAttributes(getPath(), refresh);
 	}
 
 	/**
 	 * Fetch all attributes of this object, without refreshing
 	 * 
-	 * @see #fetchAttributes(boolean)
+	 * @see #fetchAttributes(RefreshBehavior)
 	 */
 	public default CompletableFuture<? extends Map<String, ?>> fetchAttributes() {
-		return fetchAttributes(false);
+		return fetchAttributes(RefreshBehavior.REFRESH_NEVER);
 	}
 
 	/**
@@ -618,17 +627,17 @@ public interface TargetObject extends Comparable<TargetObject> {
 	 * @return a future which completes with a index-value map of elements
 	 */
 	public default CompletableFuture<? extends Map<String, ? extends TargetObject>> fetchElements(
-			boolean refresh) {
+			RefreshBehavior refresh) {
 		return getModel().fetchObjectElements(getPath(), refresh);
 	}
 
 	/**
 	 * Fetch all elements of this object, without refreshing
 	 * 
-	 * @see #fetchElements(boolean)
+	 * @see #fetchElements(RefreshBehavior)
 	 */
 	public default CompletableFuture<? extends Map<String, ? extends TargetObject>> fetchElements() {
-		return fetchElements(false);
+		return fetchElements(RefreshBehavior.REFRESH_NEVER);
 	}
 
 	/**
@@ -653,7 +662,8 @@ public interface TargetObject extends Comparable<TargetObject> {
 	 * @param refresh true to invalidate all caches involved in handling this request
 	 * @return a future which completes with a name-value map of children
 	 */
-	public default CompletableFuture<? extends Map<String, ?>> fetchChildren(boolean refresh) {
+	public default CompletableFuture<? extends Map<String, ?>> fetchChildren(
+			RefreshBehavior refresh) {
 		AsyncFence fence = new AsyncFence();
 		Map<String, Object> children = new TreeMap<>(TargetObjectKeyComparator.CHILD);
 		fence.include(fetchElements(refresh).thenAccept(elements -> {
@@ -671,7 +681,7 @@ public interface TargetObject extends Comparable<TargetObject> {
 	 * @see #fetchChildren(boolean)
 	 */
 	public default CompletableFuture<? extends Map<String, ?>> fetchChildren() {
-		return fetchChildren(false);
+		return fetchChildren(RefreshBehavior.REFRESH_NEVER);
 	}
 
 	/**
@@ -951,7 +961,8 @@ public interface TargetObject extends Comparable<TargetObject> {
 	 * @param refreshElements as the model to refresh elements, querying the debugger if needed
 	 * @return a future which completes when the children are updated.
 	 */
-	CompletableFuture<Void> resync(boolean refreshAttributes, boolean refreshElements);
+	CompletableFuture<Void> resync(RefreshBehavior refreshAttributes,
+			RefreshBehavior refreshElements);
 
 	/**
 	 * Refresh the elements of this object
@@ -959,7 +970,7 @@ public interface TargetObject extends Comparable<TargetObject> {
 	 * @return a future which completes when the children are updated.
 	 */
 	default CompletableFuture<Void> resync() {
-		return resync(false, true);
+		return resync(RefreshBehavior.REFRESH_NEVER, RefreshBehavior.REFRESH_ALWAYS);
 	}
 
 	/**
@@ -1051,6 +1062,25 @@ public interface TargetObject extends Comparable<TargetObject> {
 	}
 
 	/**
+	 * Search the model for a suitable-related object of the given interface
+	 * 
+	 * @see TargetObjectSchema#searchForSuitable(Class, List)
+	 * @param <T> the expected type of the interface
+	 * @param cls the class giving the expected type
+	 * @return the found object, or null
+	 */
+	public default <T extends TargetObject> T getCachedSuitable(Class<T> cls) {
+		if (cls == TargetObject.class) {
+			return cls.cast(this);
+		}
+		List<String> found = getModel().getRootSchema().searchForSuitable(cls, getPath());
+		if (found == null) {
+			return null;
+		}
+		return cls.cast(getModel().getModelValue(found));
+	}
+
+	/**
 	 * Invalidate caches associated with this object, other than those for cached children
 	 * 
 	 * <p>
@@ -1066,43 +1096,6 @@ public interface TargetObject extends Comparable<TargetObject> {
 	 * @return a future which completes when the caches are invalidated
 	 */
 	public default CompletableFuture<Void> invalidateCaches() {
-		return AsyncUtils.NIL;
-	}
-
-	/**
-	 * Listen for object events
-	 * 
-	 * <p>
-	 * The client must maintain a strong reference to the listener. To allow stale listeners to be
-	 * garbage collected, the implementation should use weak or soft references. That said, the
-	 * client should not rely on the implementation to garbage collect its listeners. All unneeded
-	 * listeners should be removed using {@link #removeListener(TargetObjectListener)}. The
-	 * exception is when an object is invalidated. The client may safely neglect removing any
-	 * listeners it registered with that object. If the object does not keep listeners, i.e., it
-	 * produces no events, this method may do nothing.
-	 * 
-	 * <p>
-	 * Clients ought to listen on the model instead of specific objects, especially since an object
-	 * may emit events immediately after its creation, but before the client has a chance to add a
-	 * listener. Worse yet, the object could be invalidated before the client can retrieve its
-	 * children. Listening on the model ensures the reception of a complete log of events.
-	 * 
-	 * @see DebuggerObjectModel#addModelListener(DebuggerModelListener)
-	 * @param l the listener
-	 */
-	public default void addListener(DebuggerModelListener l) {
-		throw new UnsupportedOperationException();
-	}
-
-	/**
-	 * Remove a listener
-	 * 
-	 * <p>
-	 * If the given listener is not registered with this object, this method does nothing.
-	 * 
-	 * @param l the listener
-	 */
-	public default void removeListener(DebuggerModelListener l) {
-		throw new UnsupportedOperationException();
+		return AsyncUtils.nil();
 	}
 }

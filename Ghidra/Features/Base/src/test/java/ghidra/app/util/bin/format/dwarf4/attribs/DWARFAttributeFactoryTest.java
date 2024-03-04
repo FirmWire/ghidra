@@ -50,8 +50,10 @@ public class DWARFAttributeFactoryTest extends AbstractGenericTest {
 		ToyProgramBuilder builder = new ToyProgramBuilder("Test", true);
 		Program ghidraProgram = builder.getProgram();
 
+		ghidraProgram.startTransaction("Test");
 		prog = new DWARFProgram(ghidraProgram, new DWARFImportOptions(), TaskMonitor.DUMMY,
 			new NullSectionProvider());
+		prog.setDebugStrings(new StringTable(new byte[1000]));
 		stringTable = prog.getDebugStrings();
 		attribFactory = prog.getAttributeFactory();
 

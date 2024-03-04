@@ -72,7 +72,7 @@ abstract class MemoryMapDBAdapter {
 	static final byte SUB_TYPE_BIT_MAPPED = MemoryMapDBAdapterV3.V3_SUB_TYPE_BIT_MAPPED;
 	static final byte SUB_TYPE_BYTE_MAPPED = MemoryMapDBAdapterV3.V3_SUB_TYPE_BYTE_MAPPED;
 	static final byte SUB_TYPE_BUFFER = MemoryMapDBAdapterV3.V3_SUB_TYPE_BUFFER;
-	static final byte SUB_TYPE_UNITIALIZED = MemoryMapDBAdapterV3.V3_SUB_TYPE_UNITIALIZED;
+	static final byte SUB_TYPE_UNINITIALIZED = MemoryMapDBAdapterV3.V3_SUB_TYPE_UNINITIALIZED;
 	static final byte SUB_TYPE_FILE_BYTES = MemoryMapDBAdapterV3.V3_SUB_TYPE_FILE_BYTES;
 
 	static MemoryMapDBAdapter getAdapter(DBHandle handle, int openMode, MemoryMapDB memMap,
@@ -228,10 +228,10 @@ abstract class MemoryMapDBAdapter {
 
 	/**
 	 * Deletes the given memory block.
-	 * @param key the key for the memory block record
+	 * @param block the memory block to be deleted
 	 * @throws IOException if a database IO error occurs.
 	 */
-	abstract void deleteMemoryBlock(long key) throws IOException;
+	abstract void deleteMemoryBlock(MemoryBlockDB block) throws IOException;
 
 	/**
 	 * Updates the memory block record.

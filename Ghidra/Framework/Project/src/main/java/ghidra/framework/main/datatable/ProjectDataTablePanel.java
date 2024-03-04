@@ -25,8 +25,6 @@ import javax.swing.*;
 
 import docking.ActionContext;
 import docking.ComponentProvider;
-import docking.help.Help;
-import docking.help.HelpService;
 import docking.widgets.label.GHtmlLabel;
 import docking.widgets.table.*;
 import docking.widgets.table.threaded.*;
@@ -36,6 +34,8 @@ import ghidra.framework.plugintool.PluginTool;
 import ghidra.util.*;
 import ghidra.util.bean.GGlassPane;
 import ghidra.util.bean.GGlassPanePainter;
+import help.Help;
+import help.HelpService;
 
 public class ProjectDataTablePanel extends JPanel {
 
@@ -54,9 +54,9 @@ public class ProjectDataTablePanel extends JPanel {
 	public Set<DomainFile> filesPendingSelection;
 
 	private GHtmlLabel capacityExceededText =
-		new GHtmlLabel("<HTML><CENTER><I>Table view disabled for very large projects, or<BR>" +
+		new GHtmlLabel("<html><CENTER><I>Table view disabled for very large projects, or<BR>" +
 			"if an older project/repository filesystem is in use.<BR>" +
-			"View will remain disabled until project is closed.</I></CENTER></HTML>");
+			"View will remain disabled until project is closed.</I></CENTER></html>");
 
 	private GGlassPanePainter painter = new TableGlassPanePainter();
 
@@ -95,8 +95,9 @@ public class ProjectDataTablePanel extends JPanel {
 				checkOpen(e);
 			}
 		});
-		gTable.getSelectionModel().addListSelectionListener(
-			e -> plugin.getTool().contextChanged(null));
+		gTable.getSelectionModel()
+				.addListSelectionListener(
+					e -> plugin.getTool().contextChanged(null));
 		gTable.setDefaultRenderer(Date.class, new DateCellRenderer());
 		gTable.setDefaultRenderer(DomainFileType.class, new TypeCellRenderer());
 
@@ -182,9 +183,12 @@ public class ProjectDataTablePanel extends JPanel {
 			this.projectData.removeDomainFolderChangeListener(changeListener);
 			model.setProjectData(null);
 			SystemUtilities.runSwingLater(() -> {
-				GGlassPane glassPane = (GGlassPane) gTable.getRootPane().getGlassPane();
-				glassPane.removePainter(painter);
-				glassPane.addPainter(painter);
+				JRootPane rootPane = gTable.getRootPane();
+				if (rootPane != null) {
+					GGlassPane glassPane = (GGlassPane) rootPane.getGlassPane();
+					glassPane.removePainter(painter);
+					glassPane.addPainter(painter);
+				}
 			});
 		}
 	}
@@ -272,7 +276,7 @@ public class ProjectDataTablePanel extends JPanel {
 
 //==================================================================================================
 // Inner Classes
-//==================================================================================================	
+//==================================================================================================
 
 	private class ProjectDataTableDomainFolderChangeListener implements DomainFolderChangeListener {
 

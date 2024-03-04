@@ -23,8 +23,10 @@ import java.util.stream.Collectors;
 import agent.dbgeng.manager.DbgEventFilter;
 import agent.dbgeng.manager.cmd.DbgListEventFiltersCommand;
 import agent.dbgeng.manager.impl.DbgManagerImpl;
+import agent.dbgeng.manager.impl.DbgProcessImpl;
 import agent.dbgeng.model.iface2.*;
 import ghidra.async.AsyncUtils;
+import ghidra.dbg.DebuggerObjectModel.RefreshBehavior;
 import ghidra.dbg.target.TargetObject;
 import ghidra.dbg.target.schema.*;
 import ghidra.util.datastruct.WeakValueHashMap;
@@ -47,14 +49,16 @@ public class DbgModelTargetEventContainerImpl extends DbgModelTargetObjectImpl
 	public DbgModelTargetEventContainerImpl(DbgModelTargetDebugContainer debug) {
 		super(debug.getModel(), debug, "Events", "EventContainer");
 		this.debug = debug;
-		requestElements(true);
+		requestElements(RefreshBehavior.REFRESH_ALWAYS);
 	}
 
 	@Override
-	public CompletableFuture<Void> requestElements(boolean refresh) {
+	public CompletableFuture<Void> requestElements(RefreshBehavior refresh) {
 		DbgModelTargetProcess targetProcess = getParentProcess();
-		if (!refresh || !targetProcess.getProcess().equals(getManager().getCurrentProcess())) {
-			return AsyncUtils.NIL;
+		DbgProcessImpl currentProcess = getManager().getCurrentProcess();
+		if (!refresh.equals(RefreshBehavior.REFRESH_ALWAYS) ||
+			(currentProcess != null && !currentProcess.equals(targetProcess.getProcess()))) {
+			return AsyncUtils.nil();
 		}
 		return listEventFilters().thenAccept(byName -> {
 			List<TargetObject> eventObjs;

@@ -19,7 +19,9 @@ import java.util.Collection;
 
 import ghidra.dbg.target.TargetModule;
 import ghidra.dbg.target.TargetObject;
+import ghidra.program.model.address.AddressRange;
 import ghidra.trace.database.module.TraceObjectSection;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.target.TraceObjectInterface;
 import ghidra.trace.model.target.annot.TraceObjectInfo;
 
@@ -31,6 +33,11 @@ import ghidra.trace.model.target.annot.TraceObjectInfo;
 		TargetModule.RANGE_ATTRIBUTE_NAME
 	})
 public interface TraceObjectModule extends TraceModule, TraceObjectInterface {
+
+	void setName(Lifespan lifespan, String name);
+
+	void setRange(Lifespan lifespan, AddressRange range);
+
 	@Override
 	Collection<? extends TraceObjectSection> getSections();
 

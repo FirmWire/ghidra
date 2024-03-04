@@ -44,9 +44,8 @@ public class SubroutineMatchSet extends ArrayList<SubroutineMatch> {
 	private final CodeBlockModel bModel;
 
 	/**
-	 * @param thisProgramName Name of this program (i.e. the program from
-	 * which the matching was initiated.
-	 * @param otherProgramName Name of the program being matched.
+	 * @param aProgram The program from which the matching was initiated.
+	 * @param bProgram The program being matched.
 	 */
 	public SubroutineMatchSet(Program aProgram, CodeBlockModel aModel, Program bProgram,
 			CodeBlockModel bModel) {
@@ -75,11 +74,11 @@ public class SubroutineMatchSet extends ArrayList<SubroutineMatch> {
 //		Address aAddr = m.getAAddresses()[0];
 //		a[0] = aAddr;
 //		a[1] = aSymbolTable.getPrimarySymbol( aAddr );
-//		a[2] = new Integer( getLength( aAddr, aModel ));
+//		a[2] = Integer.valueOf( getLength( aAddr, aModel ));
 //		Address bAddr = m.getBAddresses()[0];
 //		a[3] = bAddr;
 //		a[4] = bSymbolTable.getPrimarySymbol( bAddr );
-//		a[5] = new Integer( getLength( bAddr, bModel ) );
+//		a[5] = Integer.valueOf( getLength( bAddr, bModel ) );
 //		a[6] = m.getReason();
 //		return a;
 //	}

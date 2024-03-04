@@ -35,8 +35,8 @@ public class ReadOnlyDataTypeComponent implements DataTypeComponent, Serializabl
 	private final int length; // my length
 	
 	private String fieldName; // name of this prototype in the component
-	private Settings settings;
-
+	private Settings defaultSettings;
+	
 	/**
 	 * Create a new DataTypeComponent
 	 * @param dataType the dataType for this component
@@ -114,11 +114,6 @@ public class ReadOnlyDataTypeComponent implements DataTypeComponent, Serializabl
 	}
 
 	@Override
-	public String getDefaultFieldName() {
-		return "field_" + getOrdinal();
-	}
-
-	@Override
 	public void setFieldName(String fieldName) throws DuplicateNameException {
 		// ignore - read-only
 	}
@@ -148,15 +143,12 @@ public class ReadOnlyDataTypeComponent implements DataTypeComponent, Serializabl
 
 	@Override
 	public Settings getDefaultSettings() {
-		if (settings == null) {
-			settings = new SettingsImpl();
+		if (defaultSettings == null) {
+			SettingsImpl settings = new SettingsImpl(true);
+			settings.setDefaultSettings(dataType.getDefaultSettings());
+			defaultSettings = settings;
 		}
-		return settings;
-	}
-
-	@Override
-	public void setDefaultSettings(Settings settings) {
-		this.settings = settings;
+		return defaultSettings;
 	}
 
 	@Override

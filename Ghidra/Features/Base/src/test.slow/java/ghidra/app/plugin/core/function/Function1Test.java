@@ -20,13 +20,13 @@ import static org.junit.Assert.*;
 import java.awt.Component;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.swing.*;
 
 import org.junit.*;
 
 import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.action.DockingActionIf;
 import docking.widgets.OptionDialog;
 import docking.widgets.combobox.GhidraComboBox;
@@ -55,11 +55,10 @@ import ghidra.program.model.listing.*;
 import ghidra.program.model.symbol.*;
 import ghidra.program.util.ProgramSelection;
 import ghidra.test.*;
-import ghidra.util.task.TaskMonitorAdapter;
+import ghidra.util.Msg;
+import ghidra.util.task.TaskMonitor;
 
 public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
-
-	private static final int DIALOG_WAIT_TIME = 3000;
 
 	private TestEnv env;
 	private PluginTool tool;
@@ -103,14 +102,14 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 	public void testEnablement() throws Exception {
 		ActionContext actionContext = cb.getProvider().getActionContext(null);
 		assertNull(actionContext);
-		actionContext = new ActionContext();
-		assertTrue(!createFunction.isEnabledForContext(actionContext));
-		assertTrue(!createThunk.isEnabledForContext(actionContext));
-		assertTrue(!editThunk.isEnabledForContext(actionContext));
-		assertTrue(!revertThunk.isEnabledForContext(actionContext));
-		assertTrue(!deleteFunction.isEnabledForContext(actionContext));
-		assertTrue(!editComment.isEnabledForContext(actionContext));
-		assertTrue(!deleteComment.isEnabledForContext(actionContext));
+		actionContext = new DefaultActionContext();
+		assertFalse(createFunction.isEnabledForContext(actionContext));
+		assertFalse(createThunk.isEnabledForContext(actionContext));
+		assertFalse(editThunk.isEnabledForContext(actionContext));
+		assertFalse(revertThunk.isEnabledForContext(actionContext));
+		assertFalse(deleteFunction.isEnabledForContext(actionContext));
+		assertFalse(editComment.isEnabledForContext(actionContext));
+		assertFalse(deleteComment.isEnabledForContext(actionContext));
 		env.showTool();
 		loadProgram("notepad");
 
@@ -119,21 +118,21 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		actionContext = cb.getProvider().getActionContext(null);
 		assertTrue(createFunction.isEnabledForContext(actionContext));
 		assertTrue(createThunk.isEnabledForContext(actionContext));
-		assertTrue(!editThunk.isEnabledForContext(actionContext));
-		assertTrue(!revertThunk.isEnabledForContext(actionContext));
-		assertTrue(!deleteFunction.isEnabledForContext(actionContext));
-		assertTrue(!editComment.isEnabledForContext(actionContext));
-		assertTrue(!deleteComment.isEnabledForContext(actionContext));
+		assertFalse(editThunk.isEnabledForContext(actionContext));
+		assertFalse(revertThunk.isEnabledForContext(actionContext));
+		assertFalse(deleteFunction.isEnabledForContext(actionContext));
+		assertFalse(editComment.isEnabledForContext(actionContext));
+		assertFalse(deleteComment.isEnabledForContext(actionContext));
 
 		assertTrue(cb.goToField(addr("0x1001000"), "Address", 0, 0));
 		actionContext = cb.getProvider().getActionContext(null);
-		assertTrue(!createFunction.isEnabledForContext(actionContext));
-		assertTrue(!createThunk.isEnabledForContext(actionContext));
-		assertTrue(!editThunk.isEnabledForContext(actionContext));
-		assertTrue(!revertThunk.isEnabledForContext(actionContext));
-		assertTrue(!deleteFunction.isEnabledForContext(actionContext));
-		assertTrue(!editComment.isEnabledForContext(actionContext));
-		assertTrue(!deleteComment.isEnabledForContext(actionContext));
+		assertFalse(createFunction.isEnabledForContext(actionContext));
+		assertFalse(createThunk.isEnabledForContext(actionContext));
+		assertFalse(editThunk.isEnabledForContext(actionContext));
+		assertFalse(revertThunk.isEnabledForContext(actionContext));
+		assertFalse(deleteFunction.isEnabledForContext(actionContext));
+		assertFalse(editComment.isEnabledForContext(actionContext));
+		assertFalse(deleteComment.isEnabledForContext(actionContext));
 
 		assertTrue(cb.goToField(addr("0x1006420"), "Address", 0, 0));
 		actionContext = cb.getProvider().getActionContext(null);
@@ -146,46 +145,46 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 
 		assertTrue(cb.goToField(addr("0x1006420"), "Function Signature", 0, 0));
 		actionContext = cb.getProvider().getActionContext(null);
-		assertTrue(!createFunction.isEnabledForContext(actionContext));
-		assertTrue(!createThunk.isEnabledForContext(actionContext));
+		assertFalse(createFunction.isEnabledForContext(actionContext));
+		assertFalse(createThunk.isEnabledForContext(actionContext));
 		assertTrue(editThunk.isEnabledForContext(actionContext));
-		assertTrue(!revertThunk.isEnabledForContext(actionContext));
+		assertFalse(revertThunk.isEnabledForContext(actionContext));
 		assertTrue(deleteFunction.isEnabledForContext(actionContext));
-		assertTrue(!editComment.isEnabledForContext(actionContext));
-		assertTrue(!deleteComment.isEnabledForContext(actionContext));
+		assertFalse(editComment.isEnabledForContext(actionContext));
+		assertFalse(deleteComment.isEnabledForContext(actionContext));
 
 		assertTrue(cb.goToField(addr("0x1006420"), "Variable Name", 1, 0, 0));
 		actionContext = cb.getProvider().getActionContext(null);
-		assertTrue(!createFunction.isEnabledForContext(actionContext));
-		assertTrue(!createThunk.isEnabledForContext(actionContext));
+		assertFalse(createFunction.isEnabledForContext(actionContext));
+		assertFalse(createThunk.isEnabledForContext(actionContext));
 		assertTrue(editThunk.isEnabledForContext(actionContext));
-		assertTrue(!revertThunk.isEnabledForContext(actionContext));
-		assertTrue(!deleteFunction.isEnabledForContext(actionContext));
+		assertFalse(revertThunk.isEnabledForContext(actionContext));
+		assertFalse(deleteFunction.isEnabledForContext(actionContext));
 		assertTrue(editComment.isEnabledForContext(actionContext));
-		assertTrue(!deleteComment.isEnabledForContext(actionContext));
+		assertFalse(deleteComment.isEnabledForContext(actionContext));
 
 		createThunk(addr("0x10030d2"), "comdlg32.dll::CommDlgExtendedError", true);
 
 		assertTrue(cb.goToField(addr("0x10030d2"), "Function Signature", 0, 0));
 		actionContext = cb.getProvider().getActionContext(null);
-		assertTrue(!createFunction.isEnabledForContext(actionContext));
-		assertTrue(!createThunk.isEnabledForContext(actionContext));
+		assertFalse(createFunction.isEnabledForContext(actionContext));
+		assertFalse(createThunk.isEnabledForContext(actionContext));
 		assertTrue(editThunk.isEnabledForContext(actionContext));
 		assertTrue(revertThunk.isEnabledForContext(actionContext));
 		assertTrue(deleteFunction.isEnabledForContext(actionContext));
-		assertTrue(!editComment.isEnabledForContext(actionContext));
-		assertTrue(!deleteComment.isEnabledForContext(actionContext));
+		assertFalse(editComment.isEnabledForContext(actionContext));
+		assertFalse(deleteComment.isEnabledForContext(actionContext));
 
 		closeProgram();
 		actionContext = cb.getProvider().getActionContext(null);
 		assertNull(actionContext);
-		actionContext = new ActionContext();
-		assertTrue(!createFunction.isEnabledForContext(actionContext));
-		assertTrue(!deleteFunction.isEnabledForContext(actionContext));
-		assertTrue(!editThunk.isEnabledForContext(actionContext));
-		assertTrue(!revertThunk.isEnabledForContext(actionContext));
-		assertTrue(!editComment.isEnabledForContext(actionContext));
-		assertTrue(!deleteComment.isEnabledForContext(actionContext));
+		actionContext = new DefaultActionContext();
+		assertFalse(createFunction.isEnabledForContext(actionContext));
+		assertFalse(deleteFunction.isEnabledForContext(actionContext));
+		assertFalse(editThunk.isEnabledForContext(actionContext));
+		assertFalse(revertThunk.isEnabledForContext(actionContext));
+		assertFalse(editComment.isEnabledForContext(actionContext));
+		assertFalse(deleteComment.isEnabledForContext(actionContext));
 
 	}
 
@@ -323,7 +322,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		performAction(editThunk, cb.getProvider(), false);
 
 		ThunkReferenceAddressDialog thunkDlg =
-			waitForDialogComponent(null, ThunkReferenceAddressDialog.class, 100);
+			waitForDialogComponent(ThunkReferenceAddressDialog.class);
 		assertNotNull(thunkDlg);
 		JTextField thunkedEntryField = findComponent(thunkDlg, JTextField.class);
 		assertEquals("comdlg32.dll::CommDlgExtendedError", thunkedEntryField.getText());
@@ -356,6 +355,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		Function func = createThunk(addr("0x10030d2"), "comdlg32.dll::CommDlgExtendedError", true);
 
 		assertTrue(cb.goToField(addr("0x10030d2"), "Function Signature", 0, 0));
+		assertTrue(func.isThunk());
 
 		performAction(revertThunk, cb.getProvider(), false);
 
@@ -371,16 +371,23 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 
 		undo(program);// undo changed function
 
+		if (!func.isThunk()) {
+
+			Msg.debug(this, "\n\t>>> test will fail...waiting a bit to see if it is timing");
+			waitForValueWithoutFailing(() -> {
+
+				Msg.debug(this, "\tchecking again...");
+				if (!func.isThunk()) {
+					return null; // not ready
+				}
+				return true;
+			});
+		}
+
 		assertTrue(func.isThunk());
 		assertEquals("CommDlgExtendedError", func.getName());
 
-		int txId = program.startTransaction("Set Name");
-		try {
-			func.setName("foo", SourceType.USER_DEFINED);
-		}
-		finally {
-			program.endTransaction(txId, true);
-		}
+		tx(program, () -> func.setName("foo", SourceType.USER_DEFINED));
 
 		performAction(revertThunk, cb.getProvider(), false);
 		waitForBusyTool();
@@ -406,7 +413,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		Function func = program.getListing().getFunctionAt(addr("0x1006420"));
 		assertNotNull(func);
 
-		assertTrue(!func.isThunk());
+		assertFalse(func.isThunk());
 		assertEquals("entry", func.getName());
 		assertTrue(func.getLocalVariables().length != 0);
 
@@ -417,7 +424,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		waitForSwing();
 
 		ThunkReferenceAddressDialog thunkDlg =
-			waitForDialogComponent(null, ThunkReferenceAddressDialog.class, 100);
+			waitForDialogComponent(ThunkReferenceAddressDialog.class);
 		assertNotNull(thunkDlg);
 		JTextField thunkedEntryField = findComponent(thunkDlg, JTextField.class);
 		assertEquals("", thunkedEntryField.getText());
@@ -433,7 +440,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 
 		undo(program);// undo changed function
 
-		assertTrue(!func.isThunk());
+		assertFalse(func.isThunk());
 		assertEquals("entry", func.getName());
 		assertTrue(func.getLocalVariables().length != 0);
 
@@ -530,11 +537,10 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		loadProgram("notepad");
 		createFunctionAtEntry();
 		assertTrue(cb.goToField(addr("0x1006420"), "Variable Name", 1, 0, 0));
-		assertTrue(!deleteComment.isEnabledForContext(cb.getProvider().getActionContext(null)));
+		assertFalse(deleteComment.isEnabledForContext(cb.getProvider().getActionContext(null)));
 		performAction(editComment, cb.getProvider(), false);
 		waitForBusyTool();
-		VariableCommentDialog vcd = waitForDialogComponent(tool.getToolFrame(),
-			VariableCommentDialog.class, DIALOG_WAIT_TIME);
+		VariableCommentDialog vcd = waitForDialogComponent(VariableCommentDialog.class);
 		assertNotNull(vcd);
 		JTextArea textArea = findComponent(vcd, JTextArea.class);
 		triggerText(textArea, "My New Comment");
@@ -544,8 +550,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		assertTrue(deleteComment.isEnabledForContext(cb.getProvider().getActionContext(null)));
 
 		performAction(editComment, cb.getProvider(), false);
-		vcd = waitForDialogComponent(tool.getToolFrame(), VariableCommentDialog.class,
-			DIALOG_WAIT_TIME);
+		vcd = waitForDialogComponent(VariableCommentDialog.class);
 		textArea = findComponent(vcd, JTextArea.class);
 		triggerText(textArea, "more stuff");
 		pressButtonByText(vcd.getComponent(), "OK");
@@ -894,17 +899,13 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		// put a byte at local_8
 		Function function = program.getListing().getFunctionAt(a);
 		Variable[] vars = function.getLocalVariables(VariableFilter.STACK_VARIABLE_FILTER);
-		int transactionID = program.startTransaction("test");
-		try {
-			DataType byteDT = program.getDataTypeManager().addDataType(new ByteDataType(),
-				DataTypeConflictHandler.DEFAULT_HANDLER);
+		tx(program, () -> {
+			DataType byteDT = program.getDataTypeManager()
+					.addDataType(new ByteDataType(),
+						DataTypeConflictHandler.DEFAULT_HANDLER);
 			vars[1].setDataType(byteDT, SourceType.ANALYSIS);
-		}
-		finally {
-			program.endTransaction(transactionID, true);
-		}
-		program.flushEvents();
-		waitForSwing();
+		});
+
 		cb.updateNow();
 
 		assertTrue(cb.goToField(a, "Variable Type", 5, 0, 0));
@@ -912,18 +913,14 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 
 		performAction(createArray, cb.getProvider(), false);
 		waitForSwing();
-		final NumberInputDialog d =
-			env.waitForDialogComponent(NumberInputDialog.class, DIALOG_WAIT_TIME);
+		NumberInputDialog d = waitForDialogComponent(NumberInputDialog.class);
 
 		assertNotNull(d);
-		vars = function.getLocalVariables(VariableFilter.STACK_VARIABLE_FILTER);
-
 		assertEquals(1, d.getMin());
 		assertEquals(Integer.MAX_VALUE, d.getMax());
 
-		final AtomicInteger result = new AtomicInteger(0);
-		runSwing(() -> result.set(d.getValue()));
-		assertEquals(12, result.get());
+		int result = runSwing(() -> d.getValue());
+		assertEquals(12, result);
 
 		runSwing(() -> d.setInput(4));
 
@@ -1032,7 +1029,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		performAction(rename, cb.getProvider(), false);
 		waitForBusyTool();
 
-		AddEditDialog dialog = env.waitForDialogComponent(AddEditDialog.class, DIALOG_WAIT_TIME);
+		AddEditDialog dialog = waitForDialogComponent(AddEditDialog.class);
 		assertNotNull(dialog);
 
 		GhidraComboBox<?> combo = findComponent(dialog, GhidraComboBox.class);
@@ -1058,14 +1055,14 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 
 		performAction(rename, cb.getProvider(), false);
 
-		dialog = env.waitForDialogComponent(AddEditDialog.class, DIALOG_WAIT_TIME);
+		dialog = waitForDialogComponent(AddEditDialog.class);
 		assertNotNull(dialog);
 
 		JComboBox<?> nameBox = (JComboBox<?>) getInstanceField("labelNameChoices", dialog);
-		final JTextField editorField = (JTextField) nameBox.getEditor().getEditorComponent();
+		JTextField editorField = (JTextField) nameBox.getEditor().getEditorComponent();
 		assertNotNull(editorField);
-		SwingUtilities.invokeAndWait(() -> editorField.setText("fred"));
-		//typeText("fred");
+		runSwing(() -> editorField.setText("fred"));
+
 		pressButtonByText(dialog, "OK");
 
 		assertEquals("fred", cb.getCurrentFieldText());
@@ -1084,17 +1081,14 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		assertEquals("dword ptr [EBP + fred],0x0", cb.getCurrentFieldText());
 		performAction(renameFunctionVar, cb.getProvider(), false);
 
-		dialog = env.waitForDialogComponent(AddEditDialog.class, DIALOG_WAIT_TIME);
+		dialog = waitForDialogComponent(AddEditDialog.class);
 		assertNotNull(dialog);
 
 		nameBox = (JComboBox<?>) getInstanceField("labelNameChoices", dialog);
-		final JTextField editorField2 = (JTextField) nameBox.getEditor().getEditorComponent();
+		JTextField editorField2 = (JTextField) nameBox.getEditor().getEditorComponent();
 		assertNotNull(editorField);
-		SwingUtilities.invokeAndWait(() -> editorField2.setText("bob"));
+		runSwing(() -> editorField2.setText("bob"));
 
-//
-//		typeText("bob");
-//		waitForSwing();
 		pressButtonByText(dialog, "OK");
 		waitForBusyTool();
 		assertEquals("dword ptr [EBP + bob],0x0", cb.getCurrentFieldText());
@@ -1137,7 +1131,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 
 		undo(program);
 		cb.updateNow();
-		assertTrue(!cb.getCurrentFieldText().equals("undefined"));
+		assertFalse(cb.getCurrentFieldText().equals("undefined"));
 		redo(program);
 		cb.updateNow();
 		assertEquals("undefined", cb.getCurrentFieldText());
@@ -1235,7 +1229,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		performAction(rename, cb.getProvider(), false);
 		waitForBusyTool();
 
-		AddEditDialog dialog = env.waitForDialogComponent(AddEditDialog.class, DIALOG_WAIT_TIME);
+		AddEditDialog dialog = waitForDialogComponent(AddEditDialog.class);
 		assertNotNull(dialog);
 
 		GhidraComboBox<?> combo = findComponent(dialog, GhidraComboBox.class);
@@ -1246,7 +1240,6 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		waitForBusyTool();
 
 		assertEquals("hello", cb.getCurrentFieldText());
-
 		assertEquals("hello", function.getName());
 	}
 
@@ -1262,18 +1255,18 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		Function entry = getFunction("entry");
 		assertNotNull(entry);
 
-		Set<Function> called = entry.getCalledFunctions(TaskMonitorAdapter.DUMMY_MONITOR);
+		Set<Function> called = entry.getCalledFunctions(TaskMonitor.DUMMY);
 		assertEquals(4, called.size());
-		Set<Function> calling = entry.getCallingFunctions(TaskMonitorAdapter.DUMMY_MONITOR);
+		Set<Function> calling = entry.getCallingFunctions(TaskMonitor.DUMMY);
 		assertEquals(0, calling.size());// nobody calls entry
 
 		for (Function f : called) {
-			Set<Function> calling_f = f.getCallingFunctions(TaskMonitorAdapter.DUMMY_MONITOR);
+			Set<Function> calling_f = f.getCallingFunctions(TaskMonitor.DUMMY);
 			assertTrue(calling_f.contains(entry));
 		}
 	}
 
-	/**
+	/*
 	 * Tests that setting a function register param to have a data type larger than
 	 * its storage allows will produce an error message in the status box, and not simply fail
 	 * silently.
@@ -1292,8 +1285,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		assertTrue(cb.goToField(addr("0x1006420"), "Variable Type", 0, 0));
 
 		performAction(chooseDataType, cb.getProvider(), false);
-		DataTypeSelectionDialog dialog =
-			waitForDialogComponent(null, DataTypeSelectionDialog.class, DIALOG_WAIT_TIME);
+		DataTypeSelectionDialog dialog = waitForDialogComponent(DataTypeSelectionDialog.class);
 
 		setEditorText(dialog, "int[0x8888888]");
 
@@ -1301,6 +1293,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		// the following text (this is only a part of the status message, but is enough
 		// to verify the test):
 		assertTrue(dialog.getStatusText().contains("doesn't fit within"));
+		close(dialog);
 	}
 
 //==================================================================================================
@@ -1403,13 +1396,12 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 			throws Exception {
 
 		deleteExistingFunction(thunkEntry);
-
 		assertTrue(cb.goToField(thunkEntry, "Address", 0, 0));
 
 		performAction(createThunk, cb.getProvider(), false);
 
 		ThunkReferenceAddressDialog thunkDialog =
-			waitForDialogComponent(null, ThunkReferenceAddressDialog.class, 100);
+			waitForDialogComponent(ThunkReferenceAddressDialog.class);
 		assertNotNull(thunkDialog);
 		JTextField thunkedEntryField = findComponent(thunkDialog, JTextField.class);
 		assertEquals(expectedDefault ? refFunc : "", thunkedEntryField.getText());
@@ -1486,12 +1478,6 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 		}
 
 		performAction(createFunction, cb.getProvider(), false);
-
-		//		FunctionNameDialog d = (FunctionNameDialog)waitForDialogComponent(tool.getToolFrame(),
-		//		FunctionNameDialog.class, 2000);
-		//assertNotNull(d);
-		//pressButtonByText(d, "OK");
-
 		waitForBusyTool();
 
 		// cheat setting custom storage since we are not testing the edit function dialog here
@@ -1510,13 +1496,7 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 	}
 
 	private void setCustomParameterStorage(Function function, boolean enabled) {
-		int txId = program.startTransaction("Set Custom Storage");
-		try {
-			function.setCustomVariableStorage(enabled);
-		}
-		finally {
-			program.endTransaction(txId, true);
-		}
+		tx(program, () -> function.setCustomVariableStorage(enabled));
 	}
 
 	private void waitForBusyTool() {
@@ -1569,19 +1549,12 @@ public class Function1Test extends AbstractGhidraHeadedIntegrationTest {
 
 	private void loadProgram(String programName) throws Exception {
 
-		if ("notepad".equals(programName)) {
-			ClassicSampleX86ProgramBuilder builder = new ClassicSampleX86ProgramBuilder();
-			program = builder.getProgram();
+		ClassicSampleX86ProgramBuilder builder = new ClassicSampleX86ProgramBuilder();
+		program = builder.getProgram();
 
-			ProgramManager pm = tool.getService(ProgramManager.class);
-			pm.openProgram(program.getDomainFile());
-			builder.dispose();
-			waitForSwing();
-			addrFactory = program.getAddressFactory();
-		}
-		else {
-			Assert.fail("don't have program: " + programName);
-		}
+		ProgramManager pm = tool.getService(ProgramManager.class);
+		pm.openProgram(program.getDomainFile());
+		addrFactory = program.getAddressFactory();
 	}
 
 	private Function getFunction(String name) {

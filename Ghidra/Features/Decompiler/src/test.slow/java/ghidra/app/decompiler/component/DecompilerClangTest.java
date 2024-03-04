@@ -30,11 +30,13 @@ import org.junit.Before;
 import org.junit.Test;
 
 import docking.action.DockingActionIf;
+import docking.options.OptionsService;
 import docking.options.editor.GhidraColorChooser;
 import docking.widgets.dialogs.InputDialog;
 import docking.widgets.fieldpanel.FieldPanel;
 import docking.widgets.fieldpanel.field.Field;
 import docking.widgets.fieldpanel.support.FieldLocation;
+import generic.theme.GThemeDefaults.Colors.Palette;
 import ghidra.app.cmd.comments.SetCommentCmd;
 import ghidra.app.decompiler.*;
 import ghidra.app.decompiler.DecompileOptions.NamespaceStrategy;
@@ -43,7 +45,6 @@ import ghidra.app.plugin.core.decompile.DecompilerProvider;
 import ghidra.app.plugin.core.decompile.actions.*;
 import ghidra.app.util.AddEditDialog;
 import ghidra.framework.options.ToolOptions;
-import ghidra.framework.plugintool.util.OptionsService;
 import ghidra.program.model.listing.CodeUnit;
 
 public class DecompilerClangTest extends AbstractDecompilerTest {
@@ -68,40 +69,41 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 
 		/*
 			 1|
-			 2|	int _main(int argc,char **argv)
+			 2| int _main(int argc,char **argv)
 			 3|
-			 4|	{
-			 5|	  _a.id = 1;
-			 6|	  _a.name = "A";
-			 7|	  _b.id = 2;
-			 8|	  _b.name = "B";
-			 9|	  _c.id = 3;
-			10|	  _c.name = "C";
-			11|	  _d.id = 4;
-			12|	  _d.name = "D";
-			13|	  _e.id = 5;
-			14|	  _e.name = "E";
-			15|	  _c.d.e._0_8_ = CONCAT44(_e._4_4_,5);
-			16|	  _d.e.name = "E";
-			17|	  _c.d._0_8_ = CONCAT44(_d._4_4_,4);
-			18|	  _c.d.name = "D";
-			19|	  _c.d.e.name = "E";
-			20|	  _d.e._0_8_ = _c.d.e._0_8_;
-			21|	  _memcpy(&_b.c,&_c,0x30);
-			22|	  _memcpy(&_a.b,&_b,0x40);
-			23|	  _call_structure_A(&_a);
-			24|	  return 0;
-			25|	}
-			16|
+			 4| {
+			 5|   _a.id = 1;
+			 6|   _a.name = "A";
+			 7|   _b.id = 2;
+			 8|   _b.name = "B";
+			 9|   _c.id = 3;
+			10|   _c.name = "C";
+			11|   _d.id = 4;
+			12|   _d.name = "D";
+			13|   _e.id = 5;
+			14|   _e.name = "E";
+			15|   _c.d.e._4_4_ = _e._4_4_;
+			16|   _c.d.e.id = 5;
+			17|   _d.e.name = "E";
+			18|   _c.d._4_4_ = _d._4_4_;
+			19|   _c.d.id = 4;
+			20|   _c.d.name = "D";
+			21|   _c.d.e.name = "E";
+			22|   _d.e._0_8_ = _c.d.e._0_8_;
+			23|   __stubs::_memcpy(&_b.c,&_c,0x30);
+			24|   __stubs::_memcpy(&_a.b,&_b,0x40);
+			25|   _call_structure_A(&_a);
+			26|   return 0;
+			27| }
 		 	
 		 */
 
 		decompile("100000bf0"); // 'main'
 
 		/*
-		 	24: return 0;
+		 	26: return 0;
 		 */
-		int line = 24;
+		int line = 26;
 		assertToken("return", line, 0, 1, 2, 3, 4, 5);
 		assertTokenIndex(0, line, 0, 1, 2, 3, 4, 5);
 		assertToken(" ", line, 6);
@@ -116,41 +118,41 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 	public void testClangTextField_getNextTokenIndex() {
 
 		/*
-			 1|
-			 2|	int _main(int argc,char **argv)
-			 3|
-			 4|	{
-			 5|	  _a.id = 1;
-			 6|	  _a.name = "A";
-			 7|	  _b.id = 2;
-			 8|	  _b.name = "B";
-			 9|	  _c.id = 3;
-			10|	  _c.name = "C";
-			11|	  _d.id = 4;
-			12|	  _d.name = "D";
-			13|	  _e.id = 5;
-			14|	  _e.name = "E";
-			15|	  _c.d.e._0_8_ = CONCAT44(_e._4_4_,5);
-			16|	  _d.e.name = "E";
-			17|	  _c.d._0_8_ = CONCAT44(_d._4_4_,4);
-			18|	  _c.d.name = "D";
-			19|	  _c.d.e.name = "E";
-			20|	  _d.e._0_8_ = _c.d.e._0_8_;
-			21|	  _memcpy(&_b.c,&_c,0x30);
-			22|	  _memcpy(&_a.b,&_b,0x40);
-			23|	  _call_structure_A(&_a);
-			24|	  return 0;
-			25|	}
-			16|
-		 	
-		 */
-
+		 1|
+		 2| int _main(int argc,char **argv)
+		 3|
+		 4| {
+		 5|   _a.id = 1;
+		 6|   _a.name = "A";
+		 7|   _b.id = 2;
+		 8|   _b.name = "B";
+		 9|   _c.id = 3;
+		10|   _c.name = "C";
+		11|   _d.id = 4;
+		12|   _d.name = "D";
+		13|   _e.id = 5;
+		14|   _e.name = "E";
+		15|   _c.d.e._4_4_ = _e._4_4_;
+		16|   _c.d.e.id = 5;
+		17|   _d.e.name = "E";
+		18|   _c.d._4_4_ = _d._4_4_;
+		19|   _c.d.id = 4;
+		20|   _c.d.name = "D";
+		21|   _c.d.e.name = "E";
+		22|   _d.e._0_8_ = _c.d.e._0_8_;
+		23|   __stubs::_memcpy(&_b.c,&_c,0x30);
+		24|   __stubs::_memcpy(&_a.b,&_b,0x40);
+		25|   _call_structure_A(&_a);
+		26|   return 0;
+		27| }
+		
+		*/
 		decompile("100000bf0"); // 'main'
 
 		/*
-		 	24: return 0;
+		 	26: return 0;
 		 */
-		int line = 24;
+		int line = 26;
 		int nextIndex = 1;
 		assertToken("return", line, 1, 2, 3, 4, 5);
 		assertNextTokenIndex(nextIndex, line, 1, 2, 3, 4, 5);
@@ -927,7 +929,7 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		String secondaryHighlightText = token.getText();
 		assertEquals("_printf", secondaryHighlightText);
 
-		Color myColor = Color.PINK;
+		Color myColor = Palette.PINK;
 		highlightWithColorChooser(myColor);
 		assertAllFieldsSecondaryHighlighted(token, myColor);
 	}
@@ -964,13 +966,13 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		String secondaryHighlightText = token.getText();
 		assertEquals("_printf", secondaryHighlightText);
 
-		Color myColor = Color.PINK;
+		Color myColor = Palette.PINK;
 		highlightWithColorChooser(myColor);
 
 		removeSecondaryHighlight();
 
 		Color hlColor2 = highlight();
-		assertEquals(myColor, hlColor2);
+		assertEquals(myColor.getRGB(), hlColor2.getRGB());
 	}
 
 	@Test
@@ -1130,15 +1132,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		decompile("100000d60"); // '_call_structure_A'
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1183,15 +1182,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		assertPrimaryHighlights("(\"call_structure_A: %s\\n\",a->name)");
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1248,15 +1244,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		assertAllFieldsSecondaryHighlighted(secondrayToken, secondaryHlColor);
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1313,15 +1306,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		assertAllFieldsSecondaryHighlighted(secondaryToken, secondaryHlColor);
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1364,15 +1354,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		decompile("100000d60"); // '_call_structure_A'
 
 		String hlText1 = "_printf";
-		Color hlColor1 = Color.PINK;
-		CTokenHighlightMatcher hlMatcher1 = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText1)) {
-					return hlColor1;
-				}
-				return null;
+		Color hlColor1 = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher1 = token -> {
+			if (token.getText().contains(hlText1)) {
+				return hlColor1;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher1 = new SpyCTokenHighlightMatcher(hlMatcher1);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1385,15 +1372,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		assertNoFieldsSecondaryHighlighted(hlText1);
 
 		String hlText2 = "name";
-		Color hlColor2 = Color.GREEN;
-		CTokenHighlightMatcher hlMatcher2 = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText2)) {
-					return hlColor2;
-				}
-				return null;
+		Color hlColor2 = Palette.GREEN;
+		CTokenHighlightMatcher hlMatcher2 = token -> {
+			if (token.getText().contains(hlText2)) {
+				return hlColor2;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher2 = new SpyCTokenHighlightMatcher(hlMatcher2);
 		DecompilerHighlighter highlighter2 = hlService.createHighlighter(spyMatcher2);
@@ -1442,30 +1426,24 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		assertPrimaryHighlights("(\"call_structure_A: %s\\n\",a->name)");
 
 		String hlText = "_printf";
-		Color hlColor1 = Color.PINK;
-		CTokenHighlightMatcher hlMatcher1 = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor1;
-				}
-				return null;
+		Color hlColor1 = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher1 = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor1;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher1 = new SpyCTokenHighlightMatcher(hlMatcher1);
 		DecompilerHighlightService hlService = getHighlightService();
 		DecompilerHighlighter highlighter1 = hlService.createHighlighter(spyMatcher1);
 		highlighter1.applyHighlights();
 
-		Color hlColor2 = Color.GREEN;
-		CTokenHighlightMatcher hlMatcher2 = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor2;
-				}
-				return null;
+		Color hlColor2 = Palette.GREEN;
+		CTokenHighlightMatcher hlMatcher2 = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor2;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher2 = new SpyCTokenHighlightMatcher(hlMatcher2);
 		DecompilerHighlighter highlighter2 = hlService.createHighlighter(spyMatcher2);
@@ -1509,15 +1487,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		decompile("100000d60"); // '_call_structure_A'
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1559,15 +1534,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		decompile("100000d60"); // '_call_structure_A'
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher1 = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1620,15 +1592,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		decompile("100000d60"); // '_call_structure_A'
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1671,15 +1640,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		decompile("100000d60"); // '_call_structure_A'
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1724,15 +1690,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		decompile("100000d60"); // '_call_structure_A'
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -1775,15 +1738,12 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		decompile("100000d60"); // '_call_structure_A'
 
 		String hlText = "_printf";
-		Color hlColor = Color.PINK;
-		CTokenHighlightMatcher hlMatcher = new CTokenHighlightMatcher() {
-			@Override
-			public Color getTokenHighlight(ClangToken token) {
-				if (token.getText().contains(hlText)) {
-					return hlColor;
-				}
-				return null;
+		Color hlColor = Palette.PINK;
+		CTokenHighlightMatcher hlMatcher = token -> {
+			if (token.getText().contains(hlText)) {
+				return hlColor;
 			}
+			return null;
 		};
 		SpyCTokenHighlightMatcher spyMatcher = new SpyCTokenHighlightMatcher(hlMatcher);
 		DecompilerHighlightService hlService = getHighlightService();
@@ -2022,7 +1982,7 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 
 		Color hlColor = getSecondaryHighlight(token);
 		assertNotNull("No highlight for token: " + token, hlColor);
-		assertEquals(color, hlColor);
+		assertEquals(color.getRGB(), hlColor.getRGB());
 	}
 
 	private void removeSecondaryHighlight() {
@@ -2047,8 +2007,8 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		assertAllFieldsHighlighted(name, cm, noIgnores);
 	}
 
-	private void assertAllHighlighterFieldsHighlighted(
-			SpyCTokenHighlightMatcher spyMatcher, String hlText, Color hlColor) {
+	private void assertAllHighlighterFieldsHighlighted(SpyCTokenHighlightMatcher spyMatcher,
+			String hlText, Color hlColor) {
 
 		ClangToken cursorToken = getToken(provider);
 		Predicate<ClangToken> ignores = t -> t == cursorToken;
@@ -2133,8 +2093,8 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 			}
 
 			Color actual = token.getHighlight();
-			assertTrue("Token is not highlighted: '" + token + "'" + "\n\texpected: " +
-				cm + "; found: " + toString(actual), cm.matches(actual));
+			assertTrue("Token is not highlighted: '" + token + "'" + "\n\texpected: " + cm +
+				"; found: " + toString(actual), cm.matches(actual));
 		}
 	}
 
@@ -2160,8 +2120,8 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 			}
 
 			Color actual = token.getHighlight();
-			assertTrue("Token is not highlighted: '" + token + "'" + "\n\texpected: " +
-				cm + "; found: " + toString(actual), cm.matches(actual));
+			assertTrue("Token is not highlighted: '" + token + "'" + "\n\texpected: " + cm +
+				"; found: " + toString(actual), cm.matches(actual));
 		}
 	}
 
@@ -2216,8 +2176,9 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 			Color actual = otherToken.getHighlight();
 			Color combinedColor = getCombinedHighlightColor(otherToken);
 			ColorMatcher combinedColorMatcher = colorMatcher.with(combinedColor);
-			assertTrue("Token is not highlighted: '" + otherToken + "'" + "\n\texpected: " +
-				combinedColorMatcher + "; found: " + toString(actual),
+			assertTrue(
+				"Token is not highlighted: '" + otherToken + "'" + "\n\texpected: " +
+					combinedColorMatcher + "; found: " + toString(actual),
 				combinedColorMatcher.matches(actual));
 		}
 	}
@@ -2320,7 +2281,17 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 
 		public boolean matches(Color otherColor) {
 			for (Color c : myColors) {
-				if (Objects.equals(c, otherColor)) {
+				if (c == null) {
+					if (otherColor == null) {
+						return true;
+					}
+					continue;
+				}
+				if (otherColor == null) {
+					continue;
+				}
+
+				if (c.getRGB() == otherColor.getRGB()) {
 					return true;
 				}
 			}

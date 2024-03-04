@@ -79,7 +79,7 @@ attach variables [ ext_m16r32 m16_i8_r32 ] [
 
 @ifdef MIPS64
 attach variables [ m16_rxa m16_rya m16_rza m16_mv_rza]
-				 [ s0_lo s1_lo v0_lo v1_lo a0_lo a1_lo a2_lo a3_lo ];                 
+				 [ s0_lo s1_lo v0_lo v1_lo a0_lo a1_lo a2_lo a3_lo ];
 
 attach variables [ ext_m16r32a m16_i8_r32a ] [ 
     zero_lo  at_lo  v0_lo  v1_lo  a0_lo  a1_lo  a2_lo  a3_lo
@@ -88,7 +88,7 @@ attach variables [ ext_m16r32a m16_i8_r32a ] [
     t8_lo    t9_lo  k0_lo  k1_lo  gp_lo  sp_lo  s8_lo  ra_lo 
 ];
 
-RZ: m16_rz          is m16_rz           		{ export m16_rz; }
+RZ: m16_rz is m16_rz		{ export m16_rz; }
 
 @else # !MIPS64
 attach variables [ m16_rxa m16_rya m16_rza m16_mv_rza ]
@@ -109,10 +109,7 @@ RX: m16_rx          is m16_rx           		{ export m16_rx; }
 RX32: m16_rx		is m16_rx & m16_rxa 		{ export m16_rxa; }
 RY32: m16_ry		is m16_ry & m16_rya 		{ export m16_rya; }
 RZ32: m16_rz		is m16_rz & m16_rza 		{ export m16_rza; }
-#RMZ32: m16_mv_rz	is m16_mv_rz & m16_mv_rza	{ export m16_mv_rza; }
 
-#R32M: ext_m16r32	is ext_m16r32 & ext_m16r32a	{ export ext_m16r32a; }
-#R32I: m16_i8_r32	is m16_i8_r32 & m16_i8_r32a { export m16_i8_r32a; }
 
 attach names [ ext_svrs_sreg][
 	_		"s0"		"s1"	"s0-s1"
@@ -615,7 +612,7 @@ SAVE_TOP: SAVE_ARG^EXT_FRAME^SAVE_RA^SAVE_SREG^SAVE_STAT	is EXT_FRAME & SAVE_RA 
 
 :ehb						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=4 & m16_rx=0 & m16_ry=0 & ext_2016=0b00000 & ext_0201=0b0 & ext_2622=0b00011
 {
-    clearExecutionHazards();
+    hazzard();
 }
 
 :pause						is ISA_MODE=1 & RELP=1 & ext_isjal=0 & ext_is_ext=1 & m16_op=0b00110 & m16_shft_f=0b00 & m16_shft_sa=6 & m16_rx=0 & m16_ry=0 & ext_2016=0b00000 & ext_0201=0b0 & ext_2622=0b00101

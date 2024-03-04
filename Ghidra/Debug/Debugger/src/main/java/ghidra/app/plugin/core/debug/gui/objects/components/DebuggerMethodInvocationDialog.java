@@ -15,23 +15,24 @@
  */
 package ghidra.app.plugin.core.debug.gui.objects.components;
 
-import java.awt.BorderLayout;
-import java.awt.FlowLayout;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.beans.*;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.*;
+import java.util.List;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
 import org.apache.commons.collections4.BidiMap;
 import org.apache.commons.collections4.bidimap.DualLinkedHashBidiMap;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.MutablePair;
+import org.apache.commons.text.StringEscapeUtils;
 import org.jdom.Element;
 
 import docking.DialogComponentProvider;
+import ghidra.app.plugin.core.debug.gui.DebuggerResources;
 import ghidra.app.plugin.core.debug.utils.MiscellaneousUtils;
 import ghidra.dbg.target.TargetMethod;
 import ghidra.dbg.target.TargetMethod.ParameterDescription;
@@ -44,6 +45,113 @@ import ghidra.util.layout.PairLayout;
 public class DebuggerMethodInvocationDialog extends DialogComponentProvider
 		implements PropertyChangeListener {
 	private static final String KEY_MEMORIZED_ARGUMENTS = "memorizedArguments";
+
+	static class ChoicesPropertyEditor implements PropertyEditor {
+		private final List<?> choices;
+		private final String[] tags;
+
+		private final List<PropertyChangeListener> listeners = new ArrayList<>();
+
+		private Object value;
+
+		public ChoicesPropertyEditor(Set<?> choices) {
+			this.choices = List.copyOf(choices);
+			this.tags = choices.stream().map(Objects::toString).toArray(String[]::new);
+		}
+
+		@Override
+		public void setValue(Object value) {
+			if (Objects.equals(value, this.value)) {
+				return;
+			}
+			if (!choices.contains(value)) {
+				throw new IllegalArgumentException("Unsupported value: " + value);
+			}
+			Object oldValue;
+			List<PropertyChangeListener> listeners;
+			synchronized (this.listeners) {
+				oldValue = this.value;
+				this.value = value;
+				if (this.listeners.isEmpty()) {
+					return;
+				}
+				listeners = List.copyOf(this.listeners);
+			}
+			PropertyChangeEvent evt = new PropertyChangeEvent(this, null, oldValue, value);
+			for (PropertyChangeListener l : listeners) {
+				l.propertyChange(evt);
+			}
+		}
+
+		@Override
+		public Object getValue() {
+			return value;
+		}
+
+		@Override
+		public boolean isPaintable() {
+			return false;
+		}
+
+		@Override
+		public void paintValue(Graphics gfx, Rectangle box) {
+			// Not paintable
+		}
+
+		@Override
+		public String getJavaInitializationString() {
+			if (value == null) {
+				return "null";
+			}
+			if (value instanceof String str) {
+				return "\"" + StringEscapeUtils.escapeJava(str) + "\"";
+			}
+			return Objects.toString(value);
+		}
+
+		@Override
+		public String getAsText() {
+			return Objects.toString(value);
+		}
+
+		@Override
+		public void setAsText(String text) throws IllegalArgumentException {
+			int index = ArrayUtils.indexOf(tags, text);
+			if (index < 0) {
+				throw new IllegalArgumentException("Unsupported value: " + text);
+			}
+			setValue(choices.get(index));
+		}
+
+		@Override
+		public String[] getTags() {
+			return tags.clone();
+		}
+
+		@Override
+		public Component getCustomEditor() {
+			return null;
+		}
+
+		@Override
+		public boolean supportsCustomEditor() {
+			return false;
+		}
+
+		@Override
+		public void addPropertyChangeListener(PropertyChangeListener listener) {
+			synchronized (listeners) {
+				listeners.add(listener);
+			}
+		}
+
+		@Override
+		public void removePropertyChangeListener(PropertyChangeListener listener) {
+			synchronized (listeners) {
+				listeners.remove(listener);
+			}
+		}
+	}
 
 	final static class NameTypePair extends MutablePair<String, Class<?>> {
 
@@ -88,13 +196,16 @@ public class DebuggerMethodInvocationDialog extends DialogComponentProvider
 		new DualLinkedHashBidiMap<>();
 
 	private JPanel panel;
+	private JLabel descriptionLabel;
 	private JPanel pairPanel;
 	private PairLayout layout;
 
 	protected JButton invokeButton;
+	protected JButton resetButton;
+	protected boolean resetRequested;
 
 	private final PluginTool tool;
-	private Map<String, ParameterDescription<?>> parameters;
+	Map<String, ParameterDescription<?>> parameters;
 
 	// TODO: Not sure this is the best keying, but I think it works.
 	private Map<NameTypePair, Object> memorized = new HashMap<>();
@@ -102,7 +213,7 @@ public class DebuggerMethodInvocationDialog extends DialogComponentProvider
 
 	public DebuggerMethodInvocationDialog(PluginTool tool, String title, String buttonText,
 			Icon buttonIcon) {
-		super(title, true, false, true, false);
+		super(title, true, true, true, false);
 		this.tool = tool;
 
 		populateComponents(buttonText, buttonIcon);
@@ -140,54 +251,81 @@ public class DebuggerMethodInvocationDialog extends DialogComponentProvider
 		panel.add(scrolling, BorderLayout.CENTER);
 		centering.add(pairPanel);
 
+		descriptionLabel = new JLabel();
+		descriptionLabel.setMaximumSize(new Dimension(300, 100));
+		panel.add(descriptionLabel, BorderLayout.NORTH);
+
 		addWorkPanel(panel);
 
 		invokeButton = new JButton(buttonText, buttonIcon);
 		addButton(invokeButton);
+		resetButton = new JButton("Reset", DebuggerResources.ICON_REFRESH);
+		addButton(resetButton);
 		addCancelButton();
 
 		invokeButton.addActionListener(this::invoke);
+		resetButton.addActionListener(this::reset);
+		resetRequested = false;
 	}
 
 	@Override
 	protected void cancelCallback() {
 		this.arguments = null;
+		this.resetRequested = false;
 		close();
 	}
 
-	private void invoke(ActionEvent evt) {
+	void invoke(ActionEvent evt) {
 		this.arguments = TargetMethod.validateArguments(parameters, collectArguments(), false);
+		this.resetRequested = false;
 		close();
+	}
+
+	void reset(ActionEvent evt) {
+		this.arguments = new LinkedHashMap<>();
+		this.resetRequested = true;
+		close();
+	}
+
+	protected PropertyEditor getEditor(ParameterDescription<?> param) {
+		if (!param.choices.isEmpty()) {
+			return new ChoicesPropertyEditor(param.choices);
+		}
+		Class<?> type = param.type;
+		PropertyEditor editor = PropertyEditorManager.findEditor(type);
+		if (editor != null) {
+			return editor;
+		}
+		Msg.warn(this, "No editor for " + type + "? Trying String instead");
+		return PropertyEditorManager.findEditor(String.class);
 	}
 
 	void populateOptions() {
 		pairPanel.removeAll();
-		//layout.setRows(Math.max(1, parameters.size()));
 		paramEditors.clear();
 		for (ParameterDescription<?> param : parameters.values()) {
 			JLabel label = new JLabel(param.display);
 			label.setToolTipText(param.description);
 			pairPanel.add(label);
 
-			Class<?> type = param.type;
-			PropertyEditor editor = PropertyEditorManager.findEditor(type);
-			if (editor == null) {
-				Msg.warn(this, "No editor for " + type + "? Trying String instead");
-				editor = PropertyEditorManager.findEditor(String.class);
-			}
-			editor.setValue(computeMemorizedValue(param));
+			PropertyEditor editor = getEditor(param);
+			Object val = computeMemorizedValue(param);
+			editor.setValue(val);
 			editor.addPropertyChangeListener(this);
 			pairPanel.add(MiscellaneousUtils.getEditorComponent(editor));
-			// TODO: How to handle parameter with choices?
 			paramEditors.put(param, editor);
 		}
 	}
 
 	protected Map<String, ?> collectArguments() {
-		return paramEditors.keySet()
-				.stream()
-				.collect(Collectors.toMap(param -> param.name,
-					param -> memorized.get(NameTypePair.fromParameter(param))));
+		Map<String, Object> map = new LinkedHashMap<>();
+		for (ParameterDescription<?> param : paramEditors.keySet()) {
+			Object val = memorized.get(NameTypePair.fromParameter(param));
+			if (val != null) {
+				map.put(param.name, val);
+			}
+		}
+		return map;
 	}
 
 	public Map<String, ?> getArguments() {
@@ -195,11 +333,18 @@ public class DebuggerMethodInvocationDialog extends DialogComponentProvider
 	}
 
 	public <T> void setMemorizedArgument(String name, Class<T> type, T value) {
+		if (value == null) {
+			return;
+		}
 		memorized.put(new NameTypePair(name, type), value);
 	}
 
 	public <T> T getMemorizedArgument(String name, Class<T> type) {
 		return type.cast(memorized.get(new NameTypePair(name, type)));
+	}
+
+	public void forgetMemorizedArguments() {
+		memorized.clear();
 	}
 
 	@Override
@@ -234,6 +379,21 @@ public class DebuggerMethodInvocationDialog extends DialogComponentProvider
 			catch (Exception e) {
 				Msg.error(this, "Error restoring memorized parameter " + name, e);
 			}
+		}
+	}
+
+	public boolean isResetRequested() {
+		return resetRequested;
+	}
+
+	public void setDescription(String htmlDescription) {
+		if (htmlDescription == null) {
+			descriptionLabel.setBorder(BorderFactory.createEmptyBorder());
+			descriptionLabel.setText("");
+		}
+		else {
+			descriptionLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+			descriptionLabel.setText(htmlDescription);
 		}
 	}
 }

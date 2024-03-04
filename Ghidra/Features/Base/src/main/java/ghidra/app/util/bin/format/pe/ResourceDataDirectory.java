@@ -18,7 +18,7 @@ package ghidra.app.util.bin.format.pe;
 import java.io.IOException;
 import java.util.*;
 
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
+import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.format.pe.resource.*;
 import ghidra.app.util.datatype.microsoft.*;
 import ghidra.app.util.importer.MessageLog;
@@ -157,26 +157,21 @@ public class ResourceDataDirectory extends DataDirectory {
 	 */
 	public final static byte RT_MANIFEST = 24;
 
+	/**
+	 * Gets a program property name to represent PE resource property with the given key name
+	 * 
+	 * @param key The key name
+	 * @return A program property name to represent PE resource property with the given key name
+	 */
+	public static String getPeResourceProperty(String key) {
+		return "PE Property[" + key.replaceAll("\\.", "_dot_") + "]";
+	}
+
 	private ResourceDirectory rootDirectory;
 
 	public static Set<Integer> directoryMap;
 
-	static ResourceDataDirectory createResourceDataDirectory(NTHeader ntHeader,
-			FactoryBundledWithBinaryReader reader) throws IOException {
-		ResourceDataDirectory resourceDataDirectory =
-			(ResourceDataDirectory) reader.getFactory().create(ResourceDataDirectory.class);
-		resourceDataDirectory.initResourceDataDirectory(ntHeader, reader);
-		return resourceDataDirectory;
-	}
-
-	/**
-	 * DO NOT USE THIS CONSTRUCTOR, USE create*(GenericFactory ...) FACTORY METHODS INSTEAD.
-	 */
-	public ResourceDataDirectory() {
-	}
-
-	private void initResourceDataDirectory(NTHeader ntHeader, FactoryBundledWithBinaryReader reader)
-			throws IOException {
+	ResourceDataDirectory(NTHeader ntHeader, BinaryReader reader) throws IOException {
 		directoryMap = new HashSet<>();
 		processDataDirectory(ntHeader, reader);
 	}
@@ -192,8 +187,8 @@ public class ResourceDataDirectory extends DataDirectory {
 
 	@Override
 	public void markup(Program program, boolean isBinary, TaskMonitor monitor, MessageLog log,
-			NTHeader ntHeader) throws DuplicateNameException, CodeUnitInsertionException,
-			DataTypeConflictException, IOException {
+			NTHeader ntHeader)
+			throws DuplicateNameException, CodeUnitInsertionException, IOException {
 
 		if (rootDirectory == null) {
 			return;
@@ -401,7 +396,6 @@ public class ResourceDataDirectory extends DataDirectory {
 
 	private void processVersionInfo(Address addr, ResourceInfo info, Program program,
 			MessageLog log, TaskMonitor monitor) throws IOException {
-		Options infoList = program.getOptions(Program.PROGRAM_INFO);
 		VS_VERSION_INFO versionInfo = null;
 		try {
 			int ptr = ntHeader.rvaToPointer(info.getAddress());
@@ -424,13 +418,14 @@ public class ResourceDataDirectory extends DataDirectory {
 			markupChild(child, addr, program, log, monitor);
 		}
 
+		Options programInfoOptions = program.getOptions(Program.PROGRAM_INFO);
 		String[] keys = versionInfo.getKeys();
 		for (String key : keys) {
 			if (monitor.isCancelled()) {
 				return;
 			}
 			String value = versionInfo.getValue(key);
-			infoList.setString(key, value);
+			programInfoOptions.setString(getPeResourceProperty(key), value);
 		}
 	}
 
@@ -638,17 +633,18 @@ public class ResourceDataDirectory extends DataDirectory {
 	private String setExtraCommentForMenuResource(Data data) throws MemoryAccessException {
 
 		short MF_POPUP = 0x0010;
-		short LAST = 0x0090;
+		short MF_END = 0x0080;
 
 		DumbMemBufferImpl buffer = new DumbMemBufferImpl(data.getMemory(), data.getAddress());
 
 		StringBuilder comment = new StringBuilder();
 		if (data.getBaseDataType().getName().equals("MenuResource")) {
 
-			//get first structure
+			short menuItemOption = 0;
+			Stack<Short> parentItemOptions = new Stack<>();
+			parentItemOptions.push((short) 0);
 
 			int numComponents = data.getNumComponents();
-			boolean topLevel = false;
 			for (int i = 0; i < numComponents; i++) {
 				DataType dt = data.getComponent(i).getBaseDataType();
 				int offset = data.getComponent(i).getRootOffset();
@@ -667,30 +663,24 @@ public class ResourceDataDirectory extends DataDirectory {
 
 				}
 				if (dt.getName().equals("word")) {
-					short option = buffer.getShort(offset);
+					menuItemOption = buffer.getShort(offset);
 
-					if (option == MF_POPUP) {
-						topLevel = true; //this type has no mtID to skip
-					}
-					else if (option == LAST) {
-						topLevel = true;
-						i++; //skip the mtID
-					}
-					else {
-						topLevel = false;
+					if ((menuItemOption & MF_POPUP) == 0) {
 						i++; //skip the mtID
 					}
 				}
+
 				if (dt.getName().equals("unicode")) {
-					if (topLevel) {
+					int depth = parentItemOptions.size() - 1;
+					if (depth == 0) {
 						comment.append("\n");
 					}
 					else {
-						comment.append("  ");
+						comment.append(" ".repeat(2 * depth));
 					}
 
 					String menuString = fixupStringRepForDisplay(
-						data.getComponentAt(offset).getDefaultValueRepresentation());
+						data.getComponentContaining(offset).getDefaultValueRepresentation());
 					menuString = menuString.replaceAll("\"", "");
 					if (menuString.equals("")) {
 						comment.append("-------------------\n");
@@ -698,6 +688,19 @@ public class ResourceDataDirectory extends DataDirectory {
 					else {
 						comment.append(menuString + "\n");
 					}
+
+					if ((menuItemOption & MF_POPUP) == MF_POPUP) {
+						// Increase the current depth
+						parentItemOptions.push(menuItemOption);
+					}
+					else if ((menuItemOption & MF_END) == MF_END) {
+						// Decrease the current depth until we have found a parent menu item that isn't the last item in its parent
+						short parentOptions = parentItemOptions.pop();
+						while ((parentOptions & MF_END) == MF_END) {
+							parentOptions = parentItemOptions.pop();
+						}
+					}
+
 				}
 
 			}

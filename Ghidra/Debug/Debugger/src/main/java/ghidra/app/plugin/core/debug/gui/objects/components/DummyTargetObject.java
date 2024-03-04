@@ -21,8 +21,8 @@ import java.util.concurrent.CompletableFuture;
 import org.apache.commons.lang3.StringUtils;
 
 import ghidra.async.AsyncUtils;
-import ghidra.dbg.DebuggerModelListener;
 import ghidra.dbg.DebuggerObjectModel;
+import ghidra.dbg.DebuggerObjectModel.RefreshBehavior;
 import ghidra.dbg.target.TargetObject;
 
 public class DummyTargetObject implements TargetObject {
@@ -158,8 +158,8 @@ public class DummyTargetObject implements TargetObject {
 	}
 
 	@Override
-	public CompletableFuture<Void> resync(boolean attributes, boolean elements) {
-		return AsyncUtils.NIL;
+	public CompletableFuture<Void> resync(RefreshBehavior attributes, RefreshBehavior elements) {
+		return AsyncUtils.nil();
 	}
 
 	@Override
@@ -181,8 +181,8 @@ public class DummyTargetObject implements TargetObject {
 	@Override
 	public CompletableFuture<? extends Map<String, ?>> fetchAttributes() {
 		if (!key.equals(TargetObject.DISPLAY_ATTRIBUTE_NAME)) {
-			if (value != null) {
-				String display = getName() + " : " + value;
+			if (getValue() != null) {
+				String display = getName() + " : " + getValue();
 				addAttribute(TargetObject.DISPLAY_ATTRIBUTE_NAME, display);
 			}
 			if (kind != null && !kind.equals("")) {
@@ -191,8 +191,8 @@ public class DummyTargetObject implements TargetObject {
 			else {
 				addAttribute(TargetObject.KIND_ATTRIBUTE_NAME, "OBJECT_INTRINSIC");
 			}
-			if (value != null) {
-				addAttribute(TargetObject.VALUE_ATTRIBUTE_NAME, value);
+			if (getValue() != null) {
+				addAttribute(TargetObject.VALUE_ATTRIBUTE_NAME, getValue());
 			}
 			if (type != null) {
 				addAttribute(TargetObject.TYPE_ATTRIBUTE_NAME, type);
@@ -212,26 +212,22 @@ public class DummyTargetObject implements TargetObject {
 		return attributes;
 	}
 
-	@Override
-	public void addListener(DebuggerModelListener l) {
-	}
-
-	@Override
-	public void removeListener(DebuggerModelListener l) {
-	}
-
 	public String getJoinedPath() {
 		return joinedPath;
 	}
 
 	@Override
 	public boolean isValid() {
-		// TODO Auto-generated method stub
 		return true;
 	}
 
 	@Override
 	public String toString() {
 		return getName();
+	}
+
+	@Override
+	public Object getValue() {
+		return value;
 	}
 }

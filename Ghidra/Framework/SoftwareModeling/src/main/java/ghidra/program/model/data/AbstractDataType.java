@@ -29,10 +29,13 @@ import ghidra.util.exception.DuplicateNameException;
  * classes can be created without implementing too many methods.
  */
 public abstract class AbstractDataType implements DataType {
+
+	private final static TypeDefSettingsDefinition[] EMPTY_TYPEDEF_DEFINITIONS =
+		new TypeDefSettingsDefinition[0];
+
 	protected String name;
 	protected CategoryPath categoryPath;
 	protected final DataTypeManager dataMgr;
-	private DataOrganization dataOrganization;
 
 	protected AbstractDataType(CategoryPath path, String name, DataTypeManager dataTypeManager) {
 		if (path == null) {
@@ -52,6 +55,11 @@ public abstract class AbstractDataType implements DataType {
 	}
 
 	@Override
+	public TypeDefSettingsDefinition[] getTypeDefSettingsDefinitions() {
+		return EMPTY_TYPEDEF_DEFINITIONS;
+	}
+
+	@Override
 	public CategoryPath getCategoryPath() {
 		return categoryPath;
 	}
@@ -66,9 +74,20 @@ public abstract class AbstractDataType implements DataType {
 
 	@Override
 	public final DataOrganization getDataOrganization() {
-		if (dataOrganization != null) {
-			return dataOrganization;
-		}
+		return dataMgr != null ? dataMgr.getDataOrganization()
+				: DataOrganizationImpl.getDefaultOrganization();
+	}
+
+	/**
+	 * Get the {@link DataOrganization} which should be used by a {@link AbstractDataType} when 
+	 * associated with a specified {@link DataTypeManager dataMgr}.  If a null 
+	 * {@code dataMgr} is specified the default {@link DataOrganization} will be returned.
+	 * @param dataMgr datatype manager
+	 * @return the {@link DataOrganization} which should be used by a {@link AbstractDataType}
+	 * instance.
+	 */
+	protected static DataOrganization getDataOrganization(DataTypeManager dataMgr) {
+		DataOrganization dataOrganization = null;
 		if (dataMgr != null) {
 			dataOrganization = dataMgr.getDataOrganization();
 		}
@@ -80,7 +99,8 @@ public abstract class AbstractDataType implements DataType {
 
 	@Override
 	public DataTypePath getDataTypePath() {
-		return new DataTypePath(categoryPath, name);
+		// use methods instead of fields since they mey be overriden
+		return new DataTypePath(getCategoryPath(), getName());
 	}
 
 	@Override

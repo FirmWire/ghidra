@@ -18,11 +18,11 @@ package ghidra.framework.data;
 import java.beans.PropertyEditor;
 import java.io.IOException;
 import java.util.*;
+import java.util.Map.Entry;
 
 import db.*;
 import ghidra.framework.options.*;
-import ghidra.util.HelpLocation;
-import ghidra.util.SystemUtilities;
+import ghidra.util.*;
 import ghidra.util.exception.ClosedException;
 
 /**
@@ -174,9 +174,18 @@ class OptionsDB extends AbstractOptions {
 	}
 
 	synchronized void clearCache() {
-		for (Option option : valueMap.values()) {
-			DBOption dbOption = (DBOption) option;
+
+		Set<Entry<String, Option>> entries = valueMap.entrySet();
+		Iterator<Entry<String, Option>> it = entries.iterator();
+		while (it.hasNext()) {
+			Entry<String, Option> entry = it.next();
+			DBOption dbOption = (DBOption) entry.getValue();
 			dbOption.clearCache();
+
+			// remove any options that have disappeared during an undo operation
+			if (!dbOption.isValid()) {
+				it.remove();
+			}
 		}
 	}
 
@@ -196,6 +205,7 @@ class OptionsDB extends AbstractOptions {
 		catch (IOException e) {
 			domainObj.dbError(e);
 		}
+
 		List<String> optionNames = new ArrayList<>(names);
 		Collections.sort(optionNames);
 		return optionNames;
@@ -257,11 +267,30 @@ class OptionsDB extends AbstractOptions {
 		private Object value = null;
 		private boolean isCached = false;
 
+		// Once an option has its value set, it becomes 'registered'.  This seems conceptually 
+		// more like a 'has been used' concept, but it is the way things are currently coded. See
+		// Option.setCurrentValue().   This class is special in that undo/redo operations may cause
+		// option values to come and go from the database.  If we leave an option around that has
+		// been removed, it causes errors in the option UI when the value cannot be read.  We use
+		// this flag to know when an option was never registered.  In that case, if the db record
+		// goes away, then we will remove this options when our cache is cleared.
+		private boolean isRegisteredOriginally;
+
 		protected DBOption(String name, OptionType type, String description, HelpLocation help,
 				Object defaultValue, boolean isRegistered, PropertyEditor editor) {
 			super(name, type, description, help, defaultValue, isRegistered, editor);
 
+			isRegisteredOriginally = isRegistered;
 			getCurrentValue(); // initialize our defaults
+		}
+
+		boolean isValid() {
+			// all options registered by clients should stick around (see note above)
+			if (isRegisteredOriginally) {
+				return true;
+			}
+			DBRecord rec = getPropertyRecord(getName());
+			return rec != null;
 		}
 
 		@Override
@@ -279,6 +308,11 @@ class OptionsDB extends AbstractOptions {
 					// in the code. In that case, ignore the old value.
 					if (optionType == getOptionType()) {
 						value = optionType.convertStringToObject(rec.getString(VALUE_COL));
+					}
+					else {
+						Msg.info(this, "The type for '" + this.getName() +
+							"' has changed!  Using default value.");
+						value = getDefaultValue();
 					}
 				}
 			}

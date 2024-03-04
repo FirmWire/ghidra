@@ -21,9 +21,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import agent.dbgeng.manager.DbgCause;
+import agent.dbgeng.manager.DbgProcess;
 import agent.dbgeng.manager.breakpoint.DbgBreakpointInfo;
 import agent.dbgeng.manager.impl.DbgManagerImpl;
 import agent.dbgeng.model.iface2.*;
+import ghidra.dbg.DebuggerObjectModel.RefreshBehavior;
 import ghidra.dbg.target.TargetBreakpointSpec.TargetBreakpointKind;
 import ghidra.dbg.target.TargetObject;
 import ghidra.dbg.target.schema.*;
@@ -54,19 +56,34 @@ public class DbgModelTargetBreakpointContainerImpl extends DbgModelTargetObjectI
 		), "Initialized");
 	}
 
+	private boolean isMatch(DbgBreakpointInfo info) {
+		DbgProcess bptProc = info.getProc();
+		DbgModelTargetProcess parentProcess = getParentProcess();
+		return parentProcess.getProcess().equals(bptProc);
+	}
+
 	@Override
 	public void breakpointCreated(DbgBreakpointInfo info, DbgCause cause) {
+		if (!isMatch(info)) {
+			return;
+		}
 		changeElements(List.of(), List.of(getTargetBreakpointSpec(info)), Map.of(), "Created");
 	}
 
 	@Override
 	public void breakpointModified(DbgBreakpointInfo newInfo, DbgBreakpointInfo oldInfo,
 			DbgCause cause) {
+		if (!isMatch(newInfo)) {
+			return;
+		}
 		getTargetBreakpointSpec(oldInfo).updateInfo(oldInfo, newInfo, "Modified");
 	}
 
 	@Override
 	public void breakpointDeleted(DbgBreakpointInfo info, DbgCause cause) {
+		if (!isMatch(info)) {
+			return;
+		}
 		DbgModelImpl impl = (DbgModelImpl) model;
 		impl.deleteModelObject(info.getDebugBreakpoint());
 		changeElements(List.of( //
@@ -79,7 +96,7 @@ public class DbgModelTargetBreakpointContainerImpl extends DbgModelTargetObjectI
 		DbgModelTargetThread targetThread =
 			getParentProcess().getThreads().getTargetThread(getManager().getEventThread());
 		DbgModelTargetBreakpointSpec spec = getTargetBreakpointSpec(info);
-		listeners.fire.breakpointHit(getProxy(), targetThread, null, spec, spec);
+		broadcast().breakpointHit(getProxy(), targetThread, null, spec, spec);
 		spec.breakpointHit();
 	}
 
@@ -93,7 +110,7 @@ public class DbgModelTargetBreakpointContainerImpl extends DbgModelTargetObjectI
 	}
 
 	@Override
-	public CompletableFuture<Void> requestElements(boolean refresh) {
+	public CompletableFuture<Void> requestElements(RefreshBehavior refresh) {
 		DbgManagerImpl manager = getManager();
 		return manager.listBreakpoints().thenAccept(byNumber -> {
 			List<TargetObject> specs;

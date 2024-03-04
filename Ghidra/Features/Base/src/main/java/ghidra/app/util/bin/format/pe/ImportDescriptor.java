@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import ghidra.app.util.bin.*;
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
 import ghidra.program.model.data.*;
 import ghidra.util.DataConverter;
 import ghidra.util.exception.DuplicateNameException;
@@ -58,21 +57,18 @@ public class ImportDescriptor implements StructConverter, ByteArrayConverter {
 	private List<ThunkData> intList = new ArrayList<ThunkData>();
 	private List<ThunkData> iatList = new ArrayList<ThunkData>();
 
-    static ImportDescriptor createImportDescriptor(
-            FactoryBundledWithBinaryReader reader, int index)
-            throws IOException {
-        ImportDescriptor importDescriptor = (ImportDescriptor) reader.getFactory().create(ImportDescriptor.class);
-        importDescriptor.initImportDescriptor(reader, index);
-        return importDescriptor;
-    }
-
-    private void initImportDescriptor(FactoryBundledWithBinaryReader reader, int index) throws IOException {
-        characteristics    = reader.readInt(index); index += BinaryReader.SIZEOF_INT;
-        originalFirstThunk = characteristics;
-        timeDateStamp      = reader.readInt(index); index += BinaryReader.SIZEOF_INT;
-        forwarderChain     = reader.readInt(index); index += BinaryReader.SIZEOF_INT;
-        name               = reader.readInt(index); index += BinaryReader.SIZEOF_INT;
-        firstThunk         = reader.readInt(index); index += BinaryReader.SIZEOF_INT;
+	ImportDescriptor(BinaryReader reader, int index) throws IOException {
+		characteristics = reader.readInt(index);
+		index += BinaryReader.SIZEOF_INT;
+		originalFirstThunk = characteristics;
+		timeDateStamp = reader.readInt(index);
+		index += BinaryReader.SIZEOF_INT;
+		forwarderChain = reader.readInt(index);
+		index += BinaryReader.SIZEOF_INT;
+		name = reader.readInt(index);
+		index += BinaryReader.SIZEOF_INT;
+		firstThunk = reader.readInt(index);
+		index += BinaryReader.SIZEOF_INT;
     }
 
     /**
@@ -261,7 +257,7 @@ public class ImportDescriptor implements StructConverter, ByteArrayConverter {
 	}
 
 	/**
-	 * Sets the original first thunk to the specifed value. 
+	 * Sets the original first thunk to the specified value. 
 	 * @param i the new original first thunk value.
 	 * @see #getOriginalFirstThunk()
 	 */
@@ -270,7 +266,7 @@ public class ImportDescriptor implements StructConverter, ByteArrayConverter {
 	}
 
 	/**
-	 * Sets the time/date stamp to the specifed value. 
+	 * Sets the time/date stamp to the specified value. 
 	 * @param i the new time/date stamp value.
 	 * @see #getTimeDateStamp()
 	 */
@@ -279,7 +275,7 @@ public class ImportDescriptor implements StructConverter, ByteArrayConverter {
 	}
 
 	/**
-	 * Sets the forwarder to the specifed value. 
+	 * Sets the forwarder to the specified value. 
 	 * @param i the new forwarder value.
 	 * @see #getForwarderChain()
 	 */
@@ -288,7 +284,7 @@ public class ImportDescriptor implements StructConverter, ByteArrayConverter {
 	}
 
 	/**
-	 * Sets the name to the specifed value. 
+	 * Sets the name to the specified value. 
 	 * @param i the new name value.
 	 * @see #getName()
 	 */
@@ -297,7 +293,7 @@ public class ImportDescriptor implements StructConverter, ByteArrayConverter {
 	}
 
 	/**
-	 * Sets the first thunk to the specifed value. 
+	 * Sets the first thunk to the specified value. 
 	 * @param i the new first thunk value.
 	 * @see #getFirstThunk()
 	 */

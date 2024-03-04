@@ -30,7 +30,7 @@ import docking.widgets.label.GLabel;
 import docking.widgets.table.*;
 import docking.widgets.table.threaded.ThreadedTableModel;
 import docking.widgets.textfield.IntegerTextField;
-import ghidra.app.services.GoToService;
+import generic.theme.GIcon;
 import ghidra.app.util.HelpTopics;
 import ghidra.docking.settings.SettingsImpl;
 import ghidra.framework.model.DomainObjectChangedEvent;
@@ -40,7 +40,6 @@ import ghidra.program.model.data.StringDataInstance;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.DumbMemBufferImpl;
 import ghidra.program.model.mem.MemBuffer;
-import ghidra.program.util.ProgramSelection;
 import ghidra.program.util.string.FoundString;
 import ghidra.program.util.string.FoundString.DefinedState;
 import ghidra.util.*;
@@ -49,26 +48,26 @@ import ghidra.util.layout.VerticalLayout;
 import ghidra.util.table.*;
 import ghidra.util.table.actions.MakeProgramSelectionAction;
 import ghidra.util.task.TaskLauncher;
+import resources.Icons;
 import resources.ResourceManager;
 
 /**
  * Component provider for the Search -&gt; For Strings... result dialog.
  */
 public class StringTableProvider extends ComponentProviderAdapter implements DomainObjectListener {
-	private static final ImageIcon ICON = ResourceManager.loadImage("images/kmessedwords.png");
-	private static final Icon PARITALLY_DEFINED_ICON =
-		ResourceManager.loadImage("images/dialog-warning.png");
-	private static final Icon SHOW_UNDEFINED_ICON =
-		ResourceManager.loadImage("images/magnifier.png");
-	private static final Icon SHOW_DEFINED_ICON = ResourceManager.loadImage("images/font.png");
-	private static final Icon SHOW_WORDS_ICON = ResourceManager.loadImage("images/view-filter.png");
-	private static final Icon CONFLICTS_ICON =
-		ResourceManager.loadImage("images/dialog-warning_red.png");
-	private static final Icon REFRESH_ICON = ResourceManager.loadImage("images/reload.png");
-	private static final Icon REFRESH_NOT_NEEDED_ICON =
-		ResourceManager.getDisabledIcon(REFRESH_ICON);
-	private static final Icon EXPAND_ICON = ResourceManager.loadImage("images/expand.gif");
-	private static final Icon COLLAPSE_ICON = ResourceManager.loadImage("images/collapse.gif");
+
+	//@formatter:off
+	private static final Icon ICON = new GIcon("icon.plugin.stringtable.provider");
+	private static final Icon PARITALLY_DEFINED_ICON = new GIcon("icon.plugin.stringtable.defined.partial");
+	private static final Icon SHOW_UNDEFINED_ICON = new GIcon("icon.plugin.stringtable.undefined");
+	private static final Icon SHOW_DEFINED_ICON = new GIcon("icon.plugin.stringtable.defined");
+	private static final Icon SHOW_WORDS_ICON = new GIcon("icon.plugin.stringtable.words");
+	private static final Icon CONFLICTS_ICON = new GIcon("icon.plugin.stringtable.conflicts");
+	private static final Icon REFRESH_ICON = Icons.REFRESH_ICON;
+	private static final Icon REFRESH_NOT_NEEDED_ICON = ResourceManager.getDisabledIcon(REFRESH_ICON);
+	private static final Icon EXPAND_ICON = new GIcon("icon.toggle.expand");
+	private static final Icon COLLAPSE_ICON = new GIcon("icon.toggle.collapse");
+	//@formatter:off
 
 	private StringTablePlugin plugin;
 	private JPanel mainPanel;
@@ -302,19 +301,7 @@ public class StringTableProvider extends ComponentProviderAdapter implements Dom
 		makeCharArrayAction.setHelpLocation(makeStringHelp);
 		addLocalAction(makeCharArrayAction);
 
-		DockingAction selectAction = new MakeProgramSelectionAction(plugin, table) {
-			@Override
-			protected ProgramSelection makeSelection(ActionContext context) {
-				ProgramSelection selection = super.makeSelection(context);
-
-				// Also make sure this plugin keeps track of the new selection, since it will
-				// not receive this new event.
-				// TODO this should not be necessary; old code perhaps?
-				plugin.setSelection(selection);
-				return selection;
-			}
-		};
-
+		DockingAction selectAction = new MakeProgramSelectionAction(plugin, table);
 		selectionNavigationAction = new SelectionNavigationAction(plugin, table);
 
 		addLocalAction(selectionNavigationAction);
@@ -530,8 +517,7 @@ public class StringTableProvider extends ComponentProviderAdapter implements Dom
 
 		stringModel.addTableModelListener(e -> updateSubTitle());
 
-		GoToService goToService = tool.getService(GoToService.class);
-		table.installNavigation(goToService, goToService.getDefaultNavigatable());
+		table.installNavigation(tool);
 		table.setDefaultRenderer(FoundString.DefinedState.class, new DefinedColumnRenderer());
 
 		filterPanel = new GhidraTableFilterPanel<>(table, stringModel);

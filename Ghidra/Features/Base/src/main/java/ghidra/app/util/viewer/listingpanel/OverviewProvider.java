@@ -27,7 +27,8 @@ import ghidra.program.model.listing.Program;
  */
 public interface OverviewProvider {
 	/**
-	 * Returns the component to diplay in the right margin of the listing.
+	 * Returns the component to display in the right margin of the listing.
+	 * @return the component
 	 */
 	JComponent getComponent();
 
@@ -35,7 +36,7 @@ public interface OverviewProvider {
 	 * Sets the current program and associated address-index map
 	 * 
 	 * @param program the program to use.
-	 * @param addressIndexMap the address-index map to use.
+	 * @param map the address-index map to use.
 	 */
 	void setProgram(Program program, AddressIndexMap map);
 

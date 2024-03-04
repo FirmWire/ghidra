@@ -26,10 +26,9 @@ import javax.swing.event.ChangeListener;
 
 import docking.*;
 import docking.action.*;
-import docking.help.Help;
-import docking.help.HelpService;
 import docking.menu.ActionState;
 import docking.menu.MultiStateDockingAction;
+import docking.options.OptionsService;
 import docking.widgets.EventTrigger;
 import docking.widgets.fieldpanel.FieldPanel;
 import docking.widgets.fieldpanel.field.Field;
@@ -37,20 +36,22 @@ import docking.widgets.fieldpanel.internal.FieldPanelCoordinator;
 import docking.widgets.fieldpanel.listener.FieldLocationListener;
 import docking.widgets.fieldpanel.support.FieldLocation;
 import docking.widgets.fieldpanel.support.ViewerPosition;
+import generic.theme.GIcon;
+import generic.theme.GThemeDefaults.Colors.Palette;
 import ghidra.GhidraOptions;
 import ghidra.app.nav.Navigatable;
 import ghidra.app.plugin.core.codebrowser.MarkerServiceBackgroundColorModel;
 import ghidra.app.plugin.core.codebrowser.hover.*;
+import ghidra.app.plugin.core.functioncompare.actions.*;
 import ghidra.app.plugin.core.marker.MarkerManager;
 import ghidra.app.services.*;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
 import ghidra.app.util.SymbolPath;
 import ghidra.app.util.viewer.format.*;
 import ghidra.app.util.viewer.util.*;
 import ghidra.framework.options.*;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.ServiceProviderDecorator;
-import ghidra.framework.plugintool.util.OptionsService;
 import ghidra.program.model.address.*;
 import ghidra.program.model.correlate.HashedFunctionAddressCorrelation;
 import ghidra.program.model.listing.*;
@@ -61,8 +62,8 @@ import ghidra.program.util.*;
 import ghidra.util.*;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
-import resources.Icons;
-import resources.ResourceManager;
+import help.Help;
+import help.HelpService;
 
 /**
  * Panel that displays two listings for comparison.
@@ -71,6 +72,8 @@ import resources.ResourceManager;
 public class ListingCodeComparisonPanel
 		extends CodeComparisonPanel<ListingComparisonFieldPanelCoordinator> implements
 		FormatModelListener, CodeFormatService, ListingDiffChangeListener, OptionsChangeListener {
+
+	private static final Color FG_COLOR_TITLE = Palette.DARK_GRAY;
 
 	private static final String DUAL_LISTING_HEADER_SHOWING = "DUAL_LISTING_HEADER_SHOWING";
 	private static final String DUAL_LISTING_SIDE_BY_SIDE = "DUAL_LISTING_SIDE_BY_SIDE";
@@ -85,21 +88,23 @@ public class ListingCodeComparisonPanel
 	private static final String DIFF_NAVIGATE_GROUP = "A2_DiffNavigate";
 	private static final String HOVER_GROUP = "A5_Hovers";
 	private static final String PROPERTIES_GROUP = "B1_Properties";
-	private static final Icon NEXT_DIFF_ICON =
-		ResourceManager.loadImage("images/view-sort-ascending.png");
-	private static final Icon PREVIOUS_DIFF_ICON =
-		ResourceManager.loadImage("images/view-sort-descending.png");
-	private static final Icon bothIcon = ResourceManager.loadImage("images/text_list_bullets.png");
-	private static final Icon unmatchedIcon = Icons.NAVIGATE_ON_INCOMING_EVENT_ICON;
-	private static final Icon diffsIcon =
-		ResourceManager.loadImage("images/table_relationship.png");
+
+	//@formatter:off
+	private static final Icon NEXT_DIFF_ICON = new GIcon("icon.base.util.listingcompare.diff.next");
+	private static final Icon PREVIOUS_DIFF_ICON = new GIcon("icon.base.util.listingcompare.previous.next");
+	private static final Icon BOTH_VIEWS_ICON = new GIcon("icon.base.util.listingcompare.area.markers.all");
+	private static final Icon UNMATCHED_ICON = new GIcon("icon.base.util.listingcompare.area.markers.unmatched");
+	private static final Icon DIFF_ICON = new GIcon("icon.base.util.listingcompare.area.markers.diff");
+	private static final Icon CURSOR_LOC_ICON = new GIcon("icon.base.util.listingcompare.cursor");
+	//@formatter:on
+
+	private static final Icon HOVER_ON_ICON = new GIcon("icon.base.util.listingcompare.hover.on");
+	private static final Icon HOVER_OFF_ICON = new GIcon("icon.base.util.listingcompare.hover.off");
+
 	private static final String ALL_AREA_MARKERS = "All Area Markers";
 	private static final String UNMATCHED_AREA_MARKERS = "Unmatched Area Markers";
 	private static final String DIFF_AREA_MARKERS = "Diff Area Markers";
 	private String nextPreviousAreaType;
-
-	private static final Icon HOVER_ON_ICON = ResourceManager.loadImage("images/hoverOn.gif");
-	private static final Icon HOVER_OFF_ICON = ResourceManager.loadImage("images/hoverOff.gif");
 
 	private ListingPanel[] listingPanels = new ListingPanel[2];
 	private ListingDiff listingDiff;
@@ -116,8 +121,6 @@ public class ListingCodeComparisonPanel
 	private MarkerSet[] diffMarkers = new MarkerSet[2];
 	private MarkerSet[] currentCursorMarkers = new MarkerSet[2];
 	private static final Color CURSOR_LINE_COLOR = GhidraOptions.DEFAULT_CURSOR_LINE_COLOR;
-	private ImageIcon CURSOR_LOC_ICON =
-		ResourceManager.loadImage("images/cursor_arrow_flipped.gif");
 	private Color cursorHighlightColor;
 	private boolean isShowingEntireListing;
 	private boolean isSideBySide = true;
@@ -132,7 +135,9 @@ public class ListingCodeComparisonPanel
 	private PreviousDiffAction previousDiffAction;
 	private ListingCodeComparisonOptionsAction optionsAction;
 	private DockingAction[] diffActions;
-	private ApplyFunctionSignatureAction applyFunctionSignatureAction;
+	private FunctionNameApplyAction applyNameAction;
+	private EmptySignatureApplyAction applySignatureEmptyDatatypesAction;
+	private SignatureWithDatatypesApplyAction applySignatureWithDatatypesAction;
 	private JSplitPane splitPane;
 
 	private ListingDiffHighlightProvider leftDiffHighlightProvider;
@@ -149,7 +154,7 @@ public class ListingCodeComparisonPanel
 	FunctionNameListingHover functionNameHoverService;
 	private String leftTitle;
 	private String rightTitle;
-	private ListingCodeComparisonOptions comparisonOptions = new ListingCodeComparisonOptions();
+	private ListingCodeComparisonOptions comparisonOptions;
 	private Address[] coordinatorLockedAddresses;
 
 	/**
@@ -266,7 +271,7 @@ public class ListingCodeComparisonPanel
 		for (int i = 0; i < 2; i++) {
 			fieldPanels[i] = listingPanels[i].getFieldPanel();
 			fieldPanels[i].addFocusListener(this);
-			fieldPanels[i].addMouseListener(new DualListingMouseListener(fieldPanels[i], i));
+			fieldPanels[i].addMouseListener(new DualListingMouseListener(i));
 		}
 
 		leftLocationListener = new LeftLocationListener();
@@ -306,17 +311,17 @@ public class ListingCodeComparisonPanel
 	 * @param leftHighlightProvider the highlight provider for the left side's listing.
 	 * @param rightHighlightProvider the highlight provider for the right side's listing.
 	 */
-	public void addHighlightProviders(HighlightProvider leftHighlightProvider,
-			HighlightProvider rightHighlightProvider) {
+	public void addHighlightProviders(ListingHighlightProvider leftHighlightProvider,
+			ListingHighlightProvider rightHighlightProvider) {
 		addLeftHighlightProvider(leftHighlightProvider);
 		addRightHighlightProvider(rightHighlightProvider);
 	}
 
-	private void addLeftHighlightProvider(HighlightProvider leftHighlightProvider) {
+	private void addLeftHighlightProvider(ListingHighlightProvider leftHighlightProvider) {
 		listingPanels[LEFT].getFormatManager().addHighlightProvider(leftHighlightProvider);
 	}
 
-	private void addRightHighlightProvider(HighlightProvider rightHighlightProvider) {
+	private void addRightHighlightProvider(ListingHighlightProvider rightHighlightProvider) {
 		listingPanels[RIGHT].getFormatManager().addHighlightProvider(rightHighlightProvider);
 	}
 
@@ -326,17 +331,17 @@ public class ListingCodeComparisonPanel
 	 * @param leftHighlightProvider the highlight provider for the left side's listing.
 	 * @param rightHighlightProvider the highlight provider for the right side's listing.
 	 */
-	public void removeHighlightProviders(HighlightProvider leftHighlightProvider,
-			HighlightProvider rightHighlightProvider) {
+	public void removeHighlightProviders(ListingHighlightProvider leftHighlightProvider,
+			ListingHighlightProvider rightHighlightProvider) {
 		removeLeftHighlightProvider(leftHighlightProvider);
 		removeRightHighlightProvider(rightHighlightProvider);
 	}
 
-	private void removeLeftHighlightProvider(HighlightProvider leftHighlightProvider) {
+	private void removeLeftHighlightProvider(ListingHighlightProvider leftHighlightProvider) {
 		listingPanels[LEFT].getFormatManager().removeHighlightProvider(leftHighlightProvider);
 	}
 
-	private void removeRightHighlightProvider(HighlightProvider rightHighlightProvider) {
+	private void removeRightHighlightProvider(ListingHighlightProvider rightHighlightProvider) {
 		listingPanels[RIGHT].getFormatManager().removeHighlightProvider(rightHighlightProvider);
 	}
 
@@ -446,7 +451,9 @@ public class ListingCodeComparisonPanel
 		toggleHeaderAction = new ToggleHeaderAction();
 		toggleOrientationAction = new ToggleOrientationAction();
 		toggleHoverAction = new ToggleHoverAction();
-		applyFunctionSignatureAction = new ApplyFunctionSignatureAction(owner);
+		applyNameAction = new FunctionNameApplyAction(owner);
+		applySignatureEmptyDatatypesAction = new EmptySignatureApplyAction(owner);
+		applySignatureWithDatatypesAction = new SignatureWithDatatypesApplyAction(owner);
 		nextDiffAction = new NextDiffAction();
 		previousDiffAction = new PreviousDiffAction();
 		optionsAction = new ListingCodeComparisonOptionsAction();
@@ -463,7 +470,8 @@ public class ListingCodeComparisonPanel
 	public DockingAction[] getActions() {
 		DockingAction[] codeCompActions = super.getActions();
 		DockingAction[] otherActions = new DockingAction[] { toggleHeaderAction,
-			toggleOrientationAction, toggleHoverAction, applyFunctionSignatureAction,
+			toggleOrientationAction, toggleHoverAction, applyNameAction,
+			applySignatureEmptyDatatypesAction, applySignatureWithDatatypesAction,
 			nextPreviousAreaMarkerAction, nextDiffAction, previousDiffAction, optionsAction };
 		int compCount = codeCompActions.length;
 		int otherCount = otherActions.length;
@@ -514,7 +522,7 @@ public class ListingCodeComparisonPanel
 	class ToggleOrientationAction extends ToggleDockingAction {
 		ToggleOrientationAction() {
 			super("Dual Listing Toggle Orientation", owner);
-			setDescription("<HTML>Toggle the layout of the listings " +
+			setDescription("<html>Toggle the layout of the listings " +
 				"<BR>between side-by-side and one above the other.</HTML>");
 			setEnabled(true);
 			setSelected(isSideBySide);
@@ -663,7 +671,7 @@ public class ListingCodeComparisonPanel
 		public NextPreviousAreaMarkerAction(String owner) {
 			super("Dual Listing Next/Previous Area Marker", owner);
 
-			ToolBarData toolBarData = new ToolBarData(diffsIcon, DIFF_NAVIGATE_GROUP);
+			ToolBarData toolBarData = new ToolBarData(DIFF_ICON, DIFF_NAVIGATE_GROUP);
 			setToolBarData(toolBarData);
 
 			HelpLocation helpLocation =
@@ -672,13 +680,13 @@ public class ListingCodeComparisonPanel
 			setDescription("Set Navigate Next/Previous Area Marker options");
 
 			ActionState<String> allAreaMarkers =
-				new ActionState<>(ALL_AREA_MARKERS, bothIcon, ALL_AREA_MARKERS);
+				new ActionState<>(ALL_AREA_MARKERS, BOTH_VIEWS_ICON, ALL_AREA_MARKERS);
 			allAreaMarkers.setHelpLocation(helpLocation);
 			ActionState<String> unmatchedAreaMarkers =
-				new ActionState<>(UNMATCHED_AREA_MARKERS, unmatchedIcon, UNMATCHED_AREA_MARKERS);
+				new ActionState<>(UNMATCHED_AREA_MARKERS, UNMATCHED_ICON, UNMATCHED_AREA_MARKERS);
 			unmatchedAreaMarkers.setHelpLocation(helpLocation);
 			ActionState<String> diffAreaMarkers =
-				new ActionState<>(DIFF_AREA_MARKERS, diffsIcon, DIFF_AREA_MARKERS);
+				new ActionState<>(DIFF_AREA_MARKERS, DIFF_ICON, DIFF_AREA_MARKERS);
 			diffAreaMarkers.setHelpLocation(helpLocation);
 
 			addActionState(allAreaMarkers);
@@ -1063,7 +1071,7 @@ public class ListingCodeComparisonPanel
 		saveState.remove("_BYTE_ADDR");
 		Address desiredByteAddress = null;
 		if (byteAddress != null) {
-			// Try to get the indicated side's byte address using one of the address 
+			// Try to get the indicated side's byte address using one of the address
 			// correlators or by inferring it.
 			desiredByteAddress = inferDesiredByteAddress(address, desiredAddress, byteAddress,
 				programLocation.getProgram(), programs[leftOrRight]);
@@ -1406,7 +1414,7 @@ public class ListingCodeComparisonPanel
 
 			String programStr =
 				HTMLUtilities.friendlyEncodeHTML(program.getDomainFile().getPathname());
-			String specialProgramStr = HTMLUtilities.colorString(Color.DARK_GRAY, programStr);
+			String specialProgramStr = HTMLUtilities.colorString(FG_COLOR_TITLE, programStr);
 			buf.append(specialProgramStr);
 			buf.append(padStr);
 		}
@@ -1441,7 +1449,7 @@ public class ListingCodeComparisonPanel
 
 			String programStr =
 				HTMLUtilities.friendlyEncodeHTML(program.getDomainFile().getPathname());
-			String specialProgramStr = HTMLUtilities.colorString(Color.DARK_GRAY, programStr);
+			String specialProgramStr = HTMLUtilities.colorString(FG_COLOR_TITLE, programStr);
 			buf.append(specialProgramStr);
 			buf.append(padStr);
 		}
@@ -1461,7 +1469,7 @@ public class ListingCodeComparisonPanel
 		String padStr = HTMLUtilities.spaces(4);
 		buf.append(padStr);
 		String programStr = HTMLUtilities.friendlyEncodeHTML(program.getDomainFile().getPathname());
-		String specialProgramStr = HTMLUtilities.colorString(Color.DARK_GRAY, programStr);
+		String specialProgramStr = HTMLUtilities.colorString(FG_COLOR_TITLE, programStr);
 		buf.append(specialProgramStr);
 		buf.append(padStr);
 		return HTMLUtilities.wrapAsHTML(buf.toString());
@@ -1538,7 +1546,7 @@ public class ListingCodeComparisonPanel
 			MarginProvider marginProvider = markerManagers[leftOrRight].getMarginProvider();
 			JComponent providerComp = marginProvider.getComponent();
 			DualListingMouseListener providerMouseListener =
-				new DualListingMouseListener(providerComp, leftOrRight);
+				new DualListingMouseListener(leftOrRight);
 			providerComp.addMouseListener(providerMouseListener);
 			listingPanels[leftOrRight].addMarginProvider(marginProvider);
 
@@ -1546,7 +1554,7 @@ public class ListingCodeComparisonPanel
 			OverviewProvider overviewProvider = markerManagers[leftOrRight].getOverviewProvider();
 			JComponent overviewComp = overviewProvider.getComponent();
 			DualListingMouseListener overviewMouseListener =
-				new DualListingMouseListener(overviewComp, leftOrRight);
+				new DualListingMouseListener(leftOrRight);
 			overviewComp.addMouseListener(overviewMouseListener);
 			listingPanels[leftOrRight].addOverviewProvider(overviewProvider);
 		}
@@ -1559,8 +1567,8 @@ public class ListingCodeComparisonPanel
 		if (programs[LEFT] != null) {
 			AddressIndexMap indexMap = listingPanels[LEFT].getAddressIndexMap();
 			listingPanels[LEFT].getFieldPanel()
-					.setBackgroundColorModel(
-						new MarkerServiceBackgroundColorModel(markerManagers[LEFT], indexMap));
+					.setBackgroundColorModel(new MarkerServiceBackgroundColorModel(
+						markerManagers[LEFT], programs[LEFT], indexMap));
 			unmatchedCodeMarkers[LEFT] =
 				markerManagers[LEFT].createAreaMarker("Listing1 Unmatched Code",
 					"Instructions that are not matched to an instruction in the other function.",
@@ -1573,9 +1581,8 @@ public class ListingCodeComparisonPanel
 		if (programs[RIGHT] != null) {
 			AddressIndexMap rightIndexMap = listingPanels[RIGHT].getAddressIndexMap();
 			listingPanels[RIGHT].getFieldPanel()
-					.setBackgroundColorModel(
-						new MarkerServiceBackgroundColorModel(markerManagers[RIGHT],
-							rightIndexMap));
+					.setBackgroundColorModel(new MarkerServiceBackgroundColorModel(
+						markerManagers[RIGHT], programs[RIGHT], rightIndexMap));
 			unmatchedCodeMarkers[RIGHT] =
 				markerManagers[RIGHT].createAreaMarker("Listing2 Unmatched Code",
 					"Instructions that are not matched to an instruction in the other function.",
@@ -1675,8 +1682,8 @@ public class ListingCodeComparisonPanel
 		indexMaps[LEFT] = new AddressIndexMap(addressSets[LEFT]);
 		markerManagers[LEFT].getOverviewProvider().setProgram(getLeftProgram(), indexMaps[LEFT]);
 		listingPanels[LEFT].getFieldPanel()
-				.setBackgroundColorModel(
-					new MarkerServiceBackgroundColorModel(markerManagers[LEFT], indexMaps[LEFT]));
+				.setBackgroundColorModel(new MarkerServiceBackgroundColorModel(markerManagers[LEFT],
+					programs[LEFT], indexMaps[LEFT]));
 	}
 
 	private void updateRightAddressSet(Function rightFunction) {
@@ -1692,8 +1699,8 @@ public class ListingCodeComparisonPanel
 		indexMaps[RIGHT] = new AddressIndexMap(addressSets[RIGHT]);
 		markerManagers[RIGHT].getOverviewProvider().setProgram(getRightProgram(), indexMaps[RIGHT]);
 		listingPanels[RIGHT].getFieldPanel()
-				.setBackgroundColorModel(
-					new MarkerServiceBackgroundColorModel(markerManagers[RIGHT], indexMaps[RIGHT]));
+				.setBackgroundColorModel(new MarkerServiceBackgroundColorModel(
+					markerManagers[RIGHT], programs[RIGHT], indexMaps[RIGHT]));
 	}
 
 	@Override
@@ -1845,7 +1852,7 @@ public class ListingCodeComparisonPanel
 		titlePanels[LEFT] = new TitledPanel(leftProgramName, listingPanels[LEFT], 5);
 		titlePanels[RIGHT] = new TitledPanel(rightProgramName, listingPanels[RIGHT], 5);
 
-		// Set the MINIMUM_PANEL_WIDTH for the left and right panel to prevent the split pane's 
+		// Set the MINIMUM_PANEL_WIDTH for the left and right panel to prevent the split pane's
 		// divider from becoming locked (can't be moved) due to extra long title names.
 		titlePanels[LEFT].setMinimumSize(
 			new Dimension(MINIMUM_PANEL_WIDTH, titlePanels[LEFT].getMinimumSize().height));
@@ -1864,7 +1871,7 @@ public class ListingCodeComparisonPanel
 		if (!titlePrefix.isEmpty()) {
 			titlePrefix += " "; // Add a space between prefix and title.
 		}
-		String htmlPrefix = "<HTML>";
+		String htmlPrefix = "<html>";
 		if (title.startsWith(htmlPrefix)) {
 			titlePanel.setTitleName(htmlPrefix + HTMLUtilities.friendlyEncodeHTML(titlePrefix) +
 				title.substring(htmlPrefix.length()));
@@ -2071,9 +2078,7 @@ public class ListingCodeComparisonPanel
 		ListingCodeComparisonPanel dualListingPanel = this;
 
 		if (event == null) {
-			Navigatable focusedNavigatable = dualListingPanel.getFocusedNavigatable();
-			DualListingActionContext myActionContext =
-				new DualListingActionContext(provider, focusedNavigatable);
+			DualListingActionContext myActionContext = new DualListingActionContext(provider);
 			myActionContext.setContextObject(this);
 			myActionContext.setCodeComparisonPanel(this);
 			return myActionContext;
@@ -2084,23 +2089,21 @@ public class ListingCodeComparisonPanel
 
 		Object leftMarginContext = getContextForMarginPanels(leftPanel, event);
 		if (leftMarginContext != null) {
-			return new ActionContext(provider).setContextObject(leftMarginContext);
+			return new DefaultActionContext(provider).setContextObject(leftMarginContext);
 		}
 		Object rightMarginContext = getContextForMarginPanels(rightPanel, event);
 		if (rightMarginContext != null) {
-			return new ActionContext(provider).setContextObject(rightMarginContext);
+			return new DefaultActionContext(provider).setContextObject(rightMarginContext);
 		}
 
 		Object source = event.getSource();
 		if (source instanceof FieldHeaderComp) {
 			FieldHeaderLocation fieldHeaderLocation =
 				leftPanel.getFieldHeader().getFieldHeaderLocation(event.getPoint());
-			return new ActionContext(provider).setContextObject(fieldHeaderLocation);
+			return new DefaultActionContext(provider).setContextObject(fieldHeaderLocation);
 		}
 
-		Navigatable focusedNavigatable = dualListingPanel.getFocusedNavigatable();
-		DualListingActionContext myActionContext =
-			new DualListingActionContext(provider, focusedNavigatable);
+		DualListingActionContext myActionContext = new DualListingActionContext(provider);
 		myActionContext.setContextObject(this);
 		myActionContext.setCodeComparisonPanel(this);
 		myActionContext.setSourceObject(source);
@@ -2184,7 +2187,7 @@ public class ListingCodeComparisonPanel
 	 * @return the matching address in the indicated program or null.
 	 */
 	private Address getFunctionAddress(int leftOrRight, Address otherSidesAddress) {
-		// Try to get the address using the correlator. 
+		// Try to get the address using the correlator.
 		// If the correlator couldn't determine it, then try to infer it.
 		int otherSide = (leftOrRight == RIGHT) ? LEFT : RIGHT;
 		// Finding desired side's address.
@@ -2212,7 +2215,7 @@ public class ListingCodeComparisonPanel
 	}
 
 	private Address getDataAddress(int leftOrRight, Address otherSidesAddress) {
-		// Correlator doesn't handle data compare, so associate beginning of data and 
+		// Correlator doesn't handle data compare, so associate beginning of data and
 		// infer the others based on relative position.
 		Address leftDataAddress = getLeftDataAddress();
 		Address rightDataAddress = getRightDataAddress();
@@ -2578,11 +2581,6 @@ public class ListingCodeComparisonPanel
 		return data[RIGHT];
 	}
 
-	@Override
-	public Class<? extends CodeComparisonPanel<ListingComparisonFieldPanelCoordinator>> getPanelThisSupersedes() {
-		return null; // Doesn't supersede any other panel.
-	}
-
 	private class DualListingMarkerManager extends MarkerManager {
 
 		private DualListingServiceProvider serviceProvider;
@@ -2652,16 +2650,12 @@ public class ListingCodeComparisonPanel
 
 		private int leftOrRight;
 
-		@SuppressWarnings("unused")
-		private Component leftOrRightComponent;
-
-		DualListingMouseListener(Component leftOrRightComponent, int leftOrRight) {
-			this.leftOrRightComponent = leftOrRightComponent;
+		DualListingMouseListener(int leftOrRight) {
 			this.leftOrRight = leftOrRight;
 		}
 
 		@Override
-		public void mouseClicked(MouseEvent e) {
+		public void mousePressed(MouseEvent e) {
 			setDualPanelFocus(leftOrRight);
 		}
 	}
@@ -2688,13 +2682,15 @@ public class ListingCodeComparisonPanel
 			// Are we on a marker margin of the left listing? Return that margin's context.
 			Object sourceMarginContextObject = getContextObjectForMarginPanels(sourcePanel, event);
 			if (sourceMarginContextObject != null) {
-				return new ActionContext(provider).setContextObject(sourceMarginContextObject);
+				return new DefaultActionContext(provider)
+						.setContextObject(sourceMarginContextObject);
 			}
 			// Are we on a marker margin of the right listing? Return that margin's context.
 			Object destinationMarginContextObject =
 				getContextObjectForMarginPanels(destinationPanel, event);
 			if (destinationMarginContextObject != null) {
-				return new ActionContext(provider).setContextObject(destinationMarginContextObject);
+				return new DefaultActionContext(provider)
+						.setContextObject(destinationMarginContextObject);
 			}
 
 			// If the action is on the Field Header of the left listing panel return an
@@ -2702,7 +2698,7 @@ public class ListingCodeComparisonPanel
 			if (sourceComponent instanceof FieldHeaderComp) {
 				FieldHeaderLocation fieldHeaderLocation =
 					sourcePanel.getFieldHeader().getFieldHeaderLocation(event.getPoint());
-				return new ActionContext(provider).setContextObject(fieldHeaderLocation);
+				return new DefaultActionContext(provider).setContextObject(fieldHeaderLocation);
 			}
 		}
 		return null;

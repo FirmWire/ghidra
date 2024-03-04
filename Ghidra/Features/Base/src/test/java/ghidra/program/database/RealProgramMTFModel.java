@@ -1,6 +1,5 @@
 /* ###
  * IP: GHIDRA
- * REVIEWED: YES
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +15,7 @@
  */
 package ghidra.program.database;
 
+import db.Transaction;
 import ghidra.test.TestEnv;
 import ghidra.util.TestUniversalIdGenerator;
 import ghidra.util.exception.AssertException;
@@ -30,11 +30,7 @@ import ghidra.util.exception.AssertException;
 // TODO rename--this is no longer using real programs
 public class RealProgramMTFModel extends AbstractMTFModel {
 
-	/**
-	 * We install our test ID generator to ensure that all datatypes we create will share the 
-	 * same ID across all versions of the programs we create.  If we do not do this, then they will
-	 * be different, which breaks many tests.
-	 */
+	// Use simple ID generation
 	private TestUniversalIdGenerator universalIdGenerator = new TestUniversalIdGenerator();
 
 	RealProgramMTFModel(TestEnv env) {
@@ -46,13 +42,19 @@ public class RealProgramMTFModel extends AbstractMTFModel {
 		cleanup();
 
 		MergeProgramGenerator programGenerator = createProgramGenerator(programName);
-		generatePrograms(programName, programGenerator);
+		originalProgram = programGenerator.generateProgram(programName);
 
-		disableAutoAnalysis();
+		latestProgram = cloneProgram(originalProgram, this);
+		try (Transaction tx = latestProgram.openTransaction("Modify Latest Program")){
+			modifier.modifyLatest(latestProgram);
+		}
 
-		makeIncomingChanges(modifier);
-		makeLocalChanges(modifier);
+		resultProgram = cloneProgram(latestProgram, this);
 
+		privateProgram = cloneProgram(originalProgram, this);
+		try (Transaction tx = privateProgram.openTransaction("Modify Private Program")){
+			modifier.modifyPrivate(privateProgram);
+		}
 		recordChanges();
 		clearChanges();
 	}
@@ -63,34 +65,25 @@ public class RealProgramMTFModel extends AbstractMTFModel {
 		cleanup();
 
 		MergeProgramGenerator programGenerator = createProgramGenerator(programName);
-		generatePrograms(programName, programGenerator);
+		originalProgram = programGenerator.generateProgram(programName);
+		try (Transaction tx = originalProgram.openTransaction("Modify Original Program")){
+			modifier.modifyOriginal(originalProgram);
+		}
 
-		disableAutoAnalysis();
+		privateProgram = cloneProgram(originalProgram, this);
+		try (Transaction tx = privateProgram.openTransaction("Modify Private Program")){
+			modifier.modifyPrivate(privateProgram);
+		}
 
-		createCustomStartingProgram(modifier);
-		clearChanges();
+		latestProgram = cloneProgram(originalProgram, this);
+		try (Transaction tx = latestProgram.openTransaction("Modify Latest Program")){
+			modifier.modifyLatest(latestProgram);
+		}
 
-		makeIncomingChanges(modifier);
-		makeLocalChanges(modifier);
+		resultProgram = cloneProgram(latestProgram, this);
 
 		recordChanges();
 		clearChanges();
-	}
-
-	/**
-	 * Tests that use this method are creating a new 'original' program, rather than using 
-	 * a pre-fabricated one from a program builder.
-	 */
-	private void createCustomStartingProgram(OriginalProgramModifierListener modifier)
-			throws Exception {
-		universalIdGenerator.checkpoint();
-		modifier.modifyOriginal(originalProgram);
-		universalIdGenerator.restore();
-		modifier.modifyOriginal(privateProgram);
-		universalIdGenerator.restore();
-		modifier.modifyOriginal(latestProgram);
-		universalIdGenerator.restore();
-		modifier.modifyOriginal(resultProgram);
 	}
 
 	private MergeProgramGenerator createProgramGenerator(String programName) {
@@ -115,35 +108,6 @@ public class RealProgramMTFModel extends AbstractMTFModel {
 	@Override
 	public void initialize(String programName, MergeProgramModifier modifier) {
 		throw new UnsupportedOperationException();
-	}
-
-	private void disableAutoAnalysis() {
-		disableAutoAnalysis(privateProgram);
-		disableAutoAnalysis(resultProgram);
-		disableAutoAnalysis(latestProgram);
-	}
-
-	private void makeLocalChanges(ProgramModifierListener modifier) throws Exception {
-		modifier.modifyPrivate(privateProgram);
-	}
-
-	private void makeIncomingChanges(ProgramModifierListener modifier) throws Exception {
-		universalIdGenerator.checkpoint();
-		modifier.modifyLatest(latestProgram);
-		universalIdGenerator.restore();
-		modifier.modifyLatest(resultProgram);
-	}
-
-	private void generatePrograms(String programName, MergeProgramGenerator programGenerator)
-			throws Exception {
-		universalIdGenerator.checkpoint();
-		privateProgram = programGenerator.generateProgram(programName);
-		universalIdGenerator.restore();
-		originalProgram = programGenerator.generateProgram(programName);
-		universalIdGenerator.restore();
-		resultProgram = programGenerator.generateProgram(programName);
-		universalIdGenerator.restore();
-		latestProgram = programGenerator.generateProgram(programName);
 	}
 
 	private void recordChanges() {

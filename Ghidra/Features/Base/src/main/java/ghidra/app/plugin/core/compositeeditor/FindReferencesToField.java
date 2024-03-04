@@ -15,16 +15,13 @@
  */
 package ghidra.app.plugin.core.compositeeditor;
 
-import javax.swing.SwingUtilities;
-
 import docking.ActionContext;
 import docking.action.MenuData;
 import ghidra.app.plugin.core.navigation.FindAppliedDataTypesService;
 import ghidra.app.util.HelpTopics;
 import ghidra.program.model.data.Composite;
 import ghidra.program.model.data.DataTypeComponent;
-import ghidra.util.HelpLocation;
-import ghidra.util.Msg;
+import ghidra.util.*;
 
 /**
  * An action to show references to the field in the currently selected editor row
@@ -37,7 +34,7 @@ public class FindReferencesToField extends CompositeEditorTableAction {
 	private static String[] popupPath = new String[] { ACTION_NAME };
 
 	public FindReferencesToField(CompositeEditorProvider provider) {
-		super(provider, EDIT_ACTION_PREFIX + ACTION_NAME, GROUP_NAME, popupPath, null, null);
+		super(provider, ACTION_NAME, GROUP_NAME, popupPath, null, null);
 		setDescription(DESCRIPTION);
 		adjustEnablement();
 		setHelpLocation(new HelpLocation(HelpTopics.FIND_REFERENCES, "Data_Types"));
@@ -56,8 +53,7 @@ public class FindReferencesToField extends CompositeEditorTableAction {
 
 		String fieldName = getFieldName();
 		Composite composite = model.getOriginalComposite();
-		SwingUtilities.invokeLater(
-			() -> service.findAndDisplayAppliedDataTypeAddresses(composite, fieldName));
+		Swing.runLater(() -> service.findAndDisplayAppliedDataTypeAddresses(composite, fieldName));
 	}
 
 	private String getFieldName() {

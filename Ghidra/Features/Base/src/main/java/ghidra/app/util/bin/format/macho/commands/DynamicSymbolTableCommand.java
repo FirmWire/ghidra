@@ -19,23 +19,21 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
+import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.format.macho.*;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.program.flatapi.FlatProgramAPI;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
-import ghidra.program.model.listing.Data;
-import ghidra.program.model.listing.ProgramModule;
-import ghidra.program.model.symbol.RefType;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
+import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.task.TaskMonitor;
 
 /**
  * Represents a dysymtab_command structure.
- * 
- * @see <a href="https://opensource.apple.com/source/xnu/xnu-4570.71.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html">mach-o/loader.h</a> 
  */
 public class DynamicSymbolTableCommand extends LoadCommand {
 
@@ -65,84 +63,76 @@ public class DynamicSymbolTableCommand extends LoadCommand {
 	private List<RelocationInfo> externalRelocations = new ArrayList<RelocationInfo>();
 	private List<RelocationInfo> localRelocations = new ArrayList<RelocationInfo>();
 
-	static DynamicSymbolTableCommand createDynamicSymbolTableCommand(
-			FactoryBundledWithBinaryReader reader, MachHeader header) throws IOException {
-		DynamicSymbolTableCommand command =
-			(DynamicSymbolTableCommand) reader.getFactory().create(DynamicSymbolTableCommand.class);
-		command.initDynamicSymbolTableCommand(reader, header);
-		return command;
-	}
-
 	/**
-	 * DO NOT USE THIS CONSTRUCTOR, USE create*(GenericFactory ...) FACTORY METHODS INSTEAD.
+	 * Creates and parses a new {@link DynamicSymbolTableCommand}
+	 * 
+	 * @param loadCommandReader A {@link BinaryReader reader} that points to the start of the load
+	 *   command
+	 * @param dataReader A {@link BinaryReader reader} that can read the data that the load command
+	 *   references.  Note that this might be in a different underlying provider.
+	 * @param header The {@link MachHeader header} associated with this load command
+	 * @throws IOException if an IO-related error occurs while parsing
 	 */
-	public DynamicSymbolTableCommand() {
-	}
-
-	private void initDynamicSymbolTableCommand(FactoryBundledWithBinaryReader reader,
+	DynamicSymbolTableCommand(BinaryReader loadCommandReader, BinaryReader dataReader,
 			MachHeader header) throws IOException {
-		initLoadCommand(reader);
+		super(loadCommandReader);
 
-		ilocalsym = reader.readNextInt();
-		nlocalsym = reader.readNextInt();
-		iextdefsym = reader.readNextInt();
-		nextdefsym = reader.readNextInt();
-		iundefsym = reader.readNextInt();
-		nundefsym = reader.readNextInt();
-		tocoff = reader.readNextInt();
-		ntoc = reader.readNextInt();
-		modtaboff = reader.readNextInt();
-		nmodtab = reader.readNextInt();
-		extrefsymoff = reader.readNextInt();
-		nextrefsyms = reader.readNextInt();
-		indirectsymoff = reader.readNextInt();
-		nindirectsyms = reader.readNextInt();
-		extreloff = reader.readNextInt();
-		nextrel = reader.readNextInt();
-		locreloff = reader.readNextInt();
-		nlocrel = reader.readNextInt();
-
-		long index = reader.getPointerIndex();
+		ilocalsym = loadCommandReader.readNextInt();
+		nlocalsym = loadCommandReader.readNextInt();
+		iextdefsym = loadCommandReader.readNextInt();
+		nextdefsym = loadCommandReader.readNextInt();
+		iundefsym = loadCommandReader.readNextInt();
+		nundefsym = loadCommandReader.readNextInt();
+		tocoff = loadCommandReader.readNextInt();
+		ntoc = loadCommandReader.readNextInt();
+		modtaboff = loadCommandReader.readNextInt();
+		nmodtab = loadCommandReader.readNextInt();
+		extrefsymoff = loadCommandReader.readNextInt();
+		nextrefsyms = loadCommandReader.readNextInt();
+		indirectsymoff = loadCommandReader.readNextInt();
+		nindirectsyms = loadCommandReader.readNextInt();
+		extreloff = loadCommandReader.readNextInt();
+		nextrel = loadCommandReader.readNextInt();
+		locreloff = loadCommandReader.readNextInt();
+		nlocrel = loadCommandReader.readNextInt();
 
 		if (tocoff > 0) {
-			reader.setPointerIndex(header.getStartIndex() + tocoff);
+			dataReader.setPointerIndex(header.getStartIndex() + tocoff);
 			for (int i = 0; i < ntoc; ++i) {
-				tocList.add(TableOfContents.createTableOfContents(reader));
+				tocList.add(new TableOfContents(dataReader));
 			}
 		}
 		if (modtaboff > 0) {
-			reader.setPointerIndex(header.getStartIndex() + modtaboff);
+			dataReader.setPointerIndex(header.getStartIndex() + modtaboff);
 			for (int i = 0; i < nmodtab; ++i) {
-				moduleList.add(DynamicLibraryModule.createDynamicLibraryModule(reader, header));
+				moduleList.add(new DynamicLibraryModule(dataReader, header));
 			}
 		}
 		if (extrefsymoff > 0) {
-			reader.setPointerIndex(header.getStartIndex() + extrefsymoff);
+			dataReader.setPointerIndex(header.getStartIndex() + extrefsymoff);
 			for (int i = 0; i < nextrefsyms; ++i) {
-				referencedList.add(DynamicLibraryReference.createDynamicLibraryReference(reader));
+				referencedList.add(new DynamicLibraryReference(dataReader));
 			}
 		}
 		if (indirectsymoff > 0) {
-			reader.setPointerIndex(header.getStartIndex() + indirectsymoff);
+			dataReader.setPointerIndex(header.getStartIndex() + indirectsymoff);
 			indirectSymbols = new int[nindirectsyms];
 			for (int i = 0; i < nindirectsyms; ++i) {
-				indirectSymbols[i] = reader.readNextInt();
+				indirectSymbols[i] = dataReader.readNextInt();
 			}
 		}
 		if (extreloff > 0) {
-			reader.setPointerIndex(header.getStartIndex() + extreloff);
+			dataReader.setPointerIndex(header.getStartIndex() + extreloff);
 			for (int i = 0; i < nextrel; ++i) {
-				externalRelocations.add(RelocationInfo.createRelocationInfo(reader));
+				externalRelocations.add(new RelocationInfo(dataReader));
 			}
 		}
 		if (locreloff > 0) {
-			reader.setPointerIndex(header.getStartIndex() + locreloff);
+			dataReader.setPointerIndex(header.getStartIndex() + locreloff);
 			for (int i = 0; i < nlocrel; ++i) {
-				localRelocations.add(RelocationInfo.createRelocationInfo(reader));
+				localRelocations.add(new RelocationInfo(dataReader));
 			}
 		}
-
-		reader.setPointerIndex(index);
 	}
 
 	/**
@@ -314,6 +304,16 @@ public class DynamicSymbolTableCommand extends LoadCommand {
 	}
 
 	@Override
+	public int getLinkerDataOffset() {
+		return indirectsymoff;
+	}
+
+	@Override
+	public int getLinkerDataSize() {
+		return nindirectsyms * Integer.BYTES;
+	}
+
+	@Override
 	public DataType toDataType() throws DuplicateNameException, IOException {
 		StructureDataType struct = new StructureDataType(getCommandName(), 0);
 		struct.add(DWORD, "cmd", null);
@@ -346,22 +346,72 @@ public class DynamicSymbolTableCommand extends LoadCommand {
 	}
 
 	@Override
-	public void markup(MachHeader header, FlatProgramAPI api, Address baseAddress, boolean isBinary,
-			ProgramModule parentModule, TaskMonitor monitor, MessageLog log) {
-		updateMonitor(monitor);
-		try {
-			if (isBinary) {
-				createFragment(api, baseAddress, parentModule);
-				Address address = baseAddress.getNewAddress(getStartIndex());
-				api.createData(address, toDataType());
+	public void markup(Program program, MachHeader header, String source, TaskMonitor monitor,
+			MessageLog log) throws CancelledException {
+		markupIndirectSymbolTable(program, header, source, monitor, log);
 
-				markupTOC(header, api, baseAddress, parentModule, monitor);
-				markupModules(header, api, baseAddress, parentModule, monitor);
-				markupReferencedSymbolTable(header, api, baseAddress, parentModule, monitor);
-				makupIndirectSymbolTable(header, api, baseAddress, parentModule, monitor);
-				markupExternalRelocations(api, baseAddress, parentModule, monitor);
-				markupLocalRelocations(api, baseAddress, parentModule, monitor);
+		// TODO: Handle more than just the indirect symbol table
+
+	}
+
+	private void markupIndirectSymbolTable(Program program, MachHeader header, String source,
+			TaskMonitor monitor, MessageLog log) {
+		Address indirectSymbolTableAddr =
+			fileOffsetToAddress(program, header, indirectsymoff, nindirectsyms);
+		if (indirectSymbolTableAddr == null) {
+			return;
+		}
+
+		markupPlateComment(program, indirectSymbolTableAddr, source, "indirect");
+		
+		SymbolTableCommand symbolTable = header.getFirstLoadCommand(SymbolTableCommand.class);
+		Address symbolTableAddr = fileOffsetToAddress(program, header,
+			symbolTable.getSymbolOffset(), symbolTable.getNumberOfSymbols());
+		Address stringTableAddr = fileOffsetToAddress(program, header,
+			symbolTable.getStringTableOffset(), symbolTable.getStringTableSize());
+
+		ReferenceManager referenceManager = program.getReferenceManager();
+		try {
+			for (int i = 0; i < nindirectsyms; i++) {
+				int nlistIndex = indirectSymbols[i];
+				Address dataAddr = indirectSymbolTableAddr.add(i * DWORD.getLength());
+				DataUtilities.createData(program, dataAddr, DWORD, -1,
+					DataUtilities.ClearDataMode.CHECK_FOR_SPACE);
+				if (symbolTableAddr != null) {
+					NList nlist = symbolTable.getSymbolAt(nlistIndex);
+					if (nlist == null) {
+						continue;
+					}
+					Reference ref = referenceManager.addMemoryReference(dataAddr,
+						symbolTableAddr.add(nlistIndex * nlist.getSize()), RefType.DATA,
+						SourceType.IMPORTED, 0);
+					referenceManager.setPrimary(ref, true);
+					if (stringTableAddr != null) {
+						Address strAddr = stringTableAddr.add(nlist.getStringTableIndex());
+						referenceManager.addMemoryReference(dataAddr, strAddr, RefType.DATA,
+							SourceType.IMPORTED, 0);
+					}
+				}
 			}
+		}
+		catch (Exception e) {
+			log.appendMsg(DynamicSymbolTableCommand.class.getSimpleName(),
+				"Failed to markup: " + getContextualName(source, "indirect"));
+		}
+	}
+
+	@Override
+	public void markupRawBinary(MachHeader header, FlatProgramAPI api, Address baseAddress,
+			ProgramModule parentModule, TaskMonitor monitor, MessageLog log) {
+		try {
+			super.markupRawBinary(header, api, baseAddress, parentModule, monitor, log);
+
+			markupTOC(header, api, baseAddress, parentModule, monitor);
+			markupModules(header, api, baseAddress, parentModule, monitor);
+			markupReferencedSymbolTable(header, api, baseAddress, parentModule, monitor);
+			makupIndirectSymbolTable(header, api, baseAddress, parentModule, monitor);
+			markupExternalRelocations(api, baseAddress, parentModule, monitor);
+			markupLocalRelocations(api, baseAddress, parentModule, monitor);
 		}
 		catch (Exception e) {
 			log.appendMsg("Unable to create " + getCommandName());
