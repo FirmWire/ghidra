@@ -110,20 +110,23 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 					b = program.getMemory().getByte(addr.add(1));
 				}
 
+				// Either EXTEND is present (for MIPS16e2), or we need to be 32-bit aligned.
 				if ((addr.getOffset() & 0x3) != 0 && (b & 0b11110000) != 0b11110000) {
 					continue;
 				}
 			}
+			// These catch the case where we don't have enough bytes for EXTEND.
+			// TODO: Hacked this to just continue, since in that case you can't have enough bytes for a pair
 			catch (MemoryAccessException exc) {
-			if ((addr.getOffset() & 0x3) != 0) {
-				continue;
+				//if ((addr.getOffset() & 0x3) != 0) {
+					continue;
+				//}
 			}
-		}
-		catch (AddressOutOfBoundsException exc) {
-			if ((addr.getOffset() & 0x3) != 0) {
-				continue;
+			catch (AddressOutOfBoundsException exc) {
+				//if ((addr.getOffset() & 0x3) != 0) {
+					continue;
+				//}
 			}
-		}
 
 			if (pairSet.contains(addr)) {
 				continue;
@@ -160,6 +163,12 @@ public class MipsPreAnalyzer extends AbstractAnalyzer {
 				: program.getProgramContext().getValue(micro16bit, start_inst.getMinAddress(),
 					false));
 
+		// Nowadays, we handle paired instructions for mips16e too.
+		// TODO: Remove the code above and rename this function, then remove this.
+/*		if ((curval1 != null) && (curval4 != null) && (curval1.intValue() == 1) &&
+		  (curval4.intValue() == 1)) {
+			rval = true;
+		}*/
 		if ((curval2 != null) && (curval4 != null) && (curval2.intValue() == 1) &&
 			(curval4.intValue() == 1)) {
 			rval = true;
